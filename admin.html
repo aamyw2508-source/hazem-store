@@ -239,6 +239,14 @@ a{color:var(--brand)}
 .faq summary .i{transition:transform .2s;color:var(--muted)}
 .faq details[open] summary .i{transform:rotate(180deg)}
 .faq details p{margin:0 0 16px;color:var(--fg-2)}
+.seo{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:22px 20px;display:grid;gap:12px}
+.seo h2{margin:0;font:800 clamp(20px,4vw,26px)/1.35 var(--f-display)}
+.seo h2 span{color:var(--muted);font-weight:600}
+.seo p{margin:0;color:var(--fg-2);max-width:75ch}
+.seo-list{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.seo-list li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:7px 12px;font-size:13.5px}
+.seo-list b{font-weight:700}
+.seo-list span{color:var(--muted);font-size:12.5px}
 .cta{margin-top:60px;background:var(--navy);color:#fff;border-radius:26px;padding:28px 22px;display:grid;gap:18px;position:relative;overflow:hidden;isolation:isolate}
 .cta::before{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(520px 260px at 90% 0%,rgba(11,78,224,.6),transparent 70%)}
 .cta h2{margin:0;font:800 clamp(21px,4vw,28px)/1.35 var(--f-display);text-wrap:balance}
@@ -673,7 +681,8 @@ D.addEventListener('error',function(e){var t=e.target;if(!t||t.tagName!=='IMG'||
 /* ================= default data ================= */
 var NUM='0594826482',HOLDER='حازم محسن العشي';
 function DEFAULT_SETTINGS(){return {
-  storeName:'حازم ستور',tagline:'اشتراكات رقمية رسمية',
+  storeName:'حازم ستور',storeNameEn:'Hazem Store',tagline:'اشتراكات رقمية رسمية',
+  seoAbout:'حازم ستور (Hazem Store) متجر اشتراكات رقمية رسمية في فلسطين. بنوفّرلك اشتراك شات جي بي تي بلس (ChatGPT Plus) وكلود برو وجيميني برو وكانفا برو وكاب كات برو وأوفيس 365 وغيرها، بأسعار بالشيكل ودفع محلي عبر جوال باي وبال باي وبنك فلسطين، وتفعيل سريع على واتساب.',
   announce:'تفعيل رسمي خلال دقائق · دفع محلي عبر جوال باي وبال باي وبنك فلسطين',
   headline:'كل اشتراكاتك الرقمية الرسمية، بمكان واحد',
   sub:'ChatGPT وClaude وGemini وCanva وCapCut وغيرها بأسعار بالشيكل. اختار اشتراكك، ادفع بالطريقة اللي بتناسبك، واستلم التفعيل على واتساب.',
@@ -707,9 +716,11 @@ var SEED=[
  {id:'duolingo',name:'Duolingo Plus',cat:'study',domain:'duolingo.com',icon:'translate',tint:'green',desc:'تعلّم اللغات على Duolingo بدون إعلانات، مع مزايا التدريب والمراجعة الإضافية.',plans:[{id:'1y',name:'سنة كاملة',price:25}]},
  {id:'office',name:'Office 365 Plus',cat:'study',domain:'microsoft365.com',icon:'doc',tint:'rose',desc:'Microsoft 365: برامج Word وExcel وPowerPoint وOutlook مع مساحة OneDrive سحابية.',plans:[{id:'1y',name:'سنة كاملة',price:15}]}
 ];
+var KW={chatgpt:'شات جي بي تي بلس، شات بلس، تشات جي بي تي، ChatGPT Go',claude:'كلود برو، Claude AI',gemini:'جيميني برو، جوجل جيميني',grok:'جروك، إكس بريميوم بلس',canva:'كانفا برو',capcut:'كاب كات برو',autodesk:'أوتوديسك، أوتوكاد',duolingo:'دولينجو',office:'أوفيس 365، مايكروسوفت أوفيس'};
 function seedProducts(){return SEED.map(function(p,i){var x=clone(p);x.sort=i+1;x.active=true;return normProduct(x)})}
 function normProduct(p){
   p=Object.assign({name:'',cat:'',desc:'',note:'',badge:'',domain:'',img:'',icon:'star',tint:'blue',features:[],active:true,sort:0},p);
+  if(p.keywords==null)p.keywords=KW[p.id]||'';
   if(!Array.isArray(p.plans)||!p.plans.length)p.plans=[{id:'main',name:p.dur||'',price:+p.price||0}];
   p.plans=p.plans.map(function(x){return {id:String(x.id||uid().slice(0,6)),name:String(x.name||''),price:+x.price||0,compare:+x.compare||0}});
   if(!Array.isArray(p.features))p.features=String(p.features||'').split('\n').map(function(s){return s.trim()}).filter(Boolean);
@@ -868,7 +879,7 @@ function storeHref(){return B.page==='admin'?(B.storeUrl||'./'):'#'}
 function goStore(){if(location.hash)history.pushState('',D.title,location.pathname+location.search);S.view='store';closeAllSheets();render();window.scrollTo(0,0)}
 
 /* ================= STORE ================= */
-var NAV=[['top','الرئيسية'],['cats','الأقسام'],['products','الاشتراكات'],['pay','طرق الدفع'],['faq','الأسئلة الشائعة']];
+var NAV=[['top','الرئيسية'],['cats','الأقسام'],['products','الاشتراكات'],['pay','طرق الدفع'],['faq','الأسئلة الشائعة'],['about','عن المتجر']];
 function cartLines(){return CART.map(function(c){var p=product(c.pid);return {p:p,plan:planOf(p,c.plan),qty:c.qty||1,pid:c.pid,planId:c.plan}}).filter(function(x){return x.p&&x.plan&&x.p.active!==false})}
 function cartCount(){return cartLines().reduce(function(a,x){return a+x.qty},0)}
 function saveCart(){CART=cartLines().map(function(x){return {pid:x.pid,plan:x.planId,qty:x.qty}});store('hazem-cart-v2',CART);var b=$('#cbadge');if(b){var n=cartCount();b.textContent=n;b.hidden=!n}}
@@ -901,6 +912,7 @@ function renderStore(){
   if(revs.length)h+='<section class="sec" id="reviews"><div class="wrap"><div class="sec-h"><div><h2>آراء زباينّا</h2></div></div><div class="revgrid">'+revs.map(function(r){return '<figure class="rev"><blockquote>'+esc(r.text)+'</blockquote><figcaption><span class="av">'+esc(String(r.name||'?').trim().charAt(0))+'</span><span><b>'+esc(r.name)+'</b>'+(r.city?'<small>'+esc(r.city)+'</small>':'')+'</span></figcaption></figure>'}).join('')+'</div></div></section>';
   var faq=(st.faq||[]).filter(function(f){return f&&f.q});
   if(faq.length)h+='<section class="sec" id="faq"><div class="wrap"><div class="sec-h"><div><h2>الأسئلة الشائعة</h2></div></div><div class="faq">'+faq.map(function(f){return '<details><summary>'+esc(f.q)+svg('down',18)+'</summary><p>'+esc(f.a)+'</p></details>'}).join('')+'</div></div></section>';
+  if(st.seoAbout)h+='<section class="sec" id="about"><div class="wrap"><div class="seo"><h2>'+esc(st.storeName)+(st.storeNameEn?' <span dir="ltr">'+esc(st.storeNameEn)+'</span>':'')+'</h2><p>'+esc(st.seoAbout)+'</p>'+(vis.length?'<ul class="seo-list">'+vis.map(function(p){return '<li><b><bdi>'+esc(p.name)+'</bdi></b>'+(p.keywords?'<span>'+esc(p.keywords)+'</span>':'')+'</li>'}).join('')+'</ul>':'')+'</div></div></section>';
   h+='<div class="wrap"><section class="cta"><div><h2>ما لقيت الاشتراك اللي بدك ياه؟</h2><p>راسلنا على واتساب ومنحاول نوفّرلك ياه بأفضل سعر.</p></div><div class="cta-act"><a class="btn lg wa" href="'+esc(waLink('مرحباً '+st.storeName+'، بدي أسأل عن اشتراك'))+'" target="_blank" rel="noopener">'+svg('chat',18)+' راسلنا على واتساب</a></div></section></div>';
   h+='</main>';
   h+='<footer class="foot"><div class="wrap"><div class="foot-grid"><div><a class="brand" href="#top" data-act="nav" data-to="top"><span class="logo"><img src="'+LOGO+'" alt=""></span><span class="bname"><b>'+esc(st.storeName)+'</b><small>'+esc(st.tagline)+'</small></span></a><p>'+esc(st.about)+'</p></div>'+
@@ -914,7 +926,7 @@ function renderStore(){
 function filtered(){
   var list=visibleProducts(),q=S.q.trim().toLowerCase();
   if(S.cat!=='all')list=list.filter(function(p){return p.cat===S.cat});
-  if(q)list=list.filter(function(p){return (p.name+' '+(p.note||'')+' '+(p.desc||'')+' '+catName(p.cat)+' '+p.plans.map(function(x){return x.name}).join(' ')).toLowerCase().indexOf(q)>-1});
+  if(q)list=list.filter(function(p){return (p.name+' '+(p.keywords||'')+' '+(p.note||'')+' '+(p.desc||'')+' '+catName(p.cat)+' '+p.plans.map(function(x){return x.name}).join(' ')).toLowerCase().indexOf(q)>-1});
   var base=function(p){return p.plans[0]?p.plans[0].price:0};
   list=list.slice();
   if(S.sort==='low')list.sort(function(a,b){return base(a)-base(b)});
@@ -1213,12 +1225,13 @@ function planRowHTML(pl){var c=costOf(S.pf.id,pl.id);
    '<div class="row3"><label class="field"><span>سعر البيع</span><input class="inp ltr pl-price" inputmode="decimal" value="'+esc(pl.price||'')+'"></label><label class="field"><span>سعر الجملة</span><input class="inp ltr pl-cost" inputmode="decimal" value="'+(c!=null?c:'')+'"></label><label class="field"><span>قبل الخصم <em>(اختياري)</em></span><input class="inp ltr pl-cmp" inputmode="decimal" value="'+esc(pl.compare||'')+'"></label></div><div class="plcalc"></div></div>'}
 function productForm(p){
   var isNew=!p;
-  p=p?clone(p):{id:'',name:'',cat:(cats()[0]||{}).id||'',desc:'',note:'',badge:'',domain:'',img:'',icon:'star',tint:'blue',features:[],active:true,sort:S.products.length+1,plans:[{id:uid().slice(0,6),name:'شهر',price:0,compare:0}]};
+  p=p?clone(p):{id:'',name:'',cat:(cats()[0]||{}).id||'',desc:'',keywords:'',note:'',badge:'',domain:'',img:'',icon:'star',tint:'blue',features:[],active:true,sort:S.products.length+1,plans:[{id:uid().slice(0,6),name:'شهر',price:0,compare:0}]};
   S.pf=p;
   var h='<div class="preview" id="pf-prev"></div>'+
    '<label class="field"><span>اسم الاشتراك</span><input class="inp" id="pf-name" value="'+esc(p.name)+'" placeholder="مثال: ChatGPT Plus"></label>'+
    '<div class="row2"><label class="field"><span>القسم</span><select class="inp" id="pf-cat">'+cats().map(function(c){return '<option value="'+esc(c.id)+'"'+(c.id===p.cat?' selected':'')+'>'+esc(c.name)+'</option>'}).join('')+'<option value=""'+(!p.cat?' selected':'')+'>بدون قسم</option></select></label><label class="field"><span>شارة <em>(اختياري)</em></span><input class="inp" id="pf-badge" value="'+esc(p.badge)+'" placeholder="الأكثر طلباً"></label></div>'+
    '<label class="field"><span>سطر قصير تحت الاسم <em>(اختياري)</em></span><input class="inp" id="pf-note" value="'+esc(p.note)+'" placeholder="مثال: Education"></label>'+
+   '<label class="field"><span>كلمات البحث <em>(أسماء ثانية للاشتراك، بتساعد جوجل والبحث بالمتجر)</em></span><input class="inp" id="pf-kw" value="'+esc(p.keywords||'')+'" placeholder="مثال: شات جي بي تي بلس، شات بلس"></label>'+
    '<label class="field"><span>الوصف</span><textarea class="inp" id="pf-desc" placeholder="شو بياخد الزبون مع الاشتراك">'+esc(p.desc)+'</textarea></label>'+
    '<div class="fsec"><h3>المدد والأسعار</h3><p class="hint">سعر الجملة بيظهر إلك بس، والزبون ما بشوفه.</p><div class="stack" id="pf-plans">'+p.plans.map(planRowHTML).join('')+'</div><button type="button" class="btn" data-act="plAdd">'+svg('plus',18)+' إضافة مدة</button></div>'+
    '<div class="fsec"><h3>أيقونة التطبيق</h3><label class="field"><span>موقع التطبيق الرسمي</span><input class="inp ltr" id="pf-domain" value="'+esc(p.domain)+'" placeholder="chatgpt.com" inputmode="url" autocapitalize="off"></label><p class="hint">اكتب موقع التطبيق وبتظهر أيقونته الرسمية تلقائياً، أو ارفع صورة.</p>'+
@@ -1239,7 +1252,7 @@ function pfPreview(){var el=$('#pf-prev');if(!el)return;var p=S.pf;p.name=$('#pf
 function saveProduct(el){
   var p=S.pf,isNew=el.dataset.new==='1';var name=$('#pf-name').value.trim();if(!name){toast('اكتب اسم الاشتراك');$('#pf-name').focus();return}
   var pls=readPlans().filter(function(x){return x.name||x.price});if(!pls.length||pls.some(function(x){return x.price<=0})){toast('اكتب سعر البيع لكل مدة');return}
-  p.name=name;p.cat=$('#pf-cat').value;p.note=$('#pf-note').value.trim();p.badge=$('#pf-badge').value.trim();p.desc=$('#pf-desc').value.trim();p.domain=cleanDomain($('#pf-domain').value);
+  p.name=name;p.cat=$('#pf-cat').value;p.note=$('#pf-note').value.trim();p.badge=$('#pf-badge').value.trim();p.desc=$('#pf-desc').value.trim();p.keywords=$('#pf-kw').value.trim();p.domain=cleanDomain($('#pf-domain').value);
   p.features=$('#pf-feat').value.split('\n').map(function(s){return s.trim()}).filter(Boolean);p.sort=num($('#pf-sort').value)||0;p.active=$('#pf-active').checked;
   if(isNew){var base=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,24);p.id=(base||'p')+'-'+uid().slice(0,4)}
   var cm={};pls.forEach(function(x){if(x.cost!=null)cm[x.id]=x.cost});S.costs[p.id]=cm;
@@ -1282,6 +1295,8 @@ function settingsHTML(){
    '<label class="field"><span>الشريط العلوي <em>(عرض أو تنبيه، فاضي = مخفي)</em></span><input class="inp" id="st-ann" value="'+esc(st.announce)+'"></label>'+
    '<label class="field"><span>العنوان الرئيسي <em>(الجزء بعد الفاصلة بيظهر بلون مميز)</em></span><input class="inp" id="st-head" value="'+esc(st.headline)+'"></label><label class="field"><span>نص تحت العنوان</span><textarea class="inp" id="st-sub">'+esc(st.sub)+'</textarea></label>'+
    '<label class="field"><span>نبذة عن المتجر <em>(بالفوتر)</em></span><textarea class="inp" id="st-about">'+esc(st.about)+'</textarea></label>'+
+   '<div class="row2"><label class="field"><span>اسم المتجر بالإنجليزي</span><input class="inp ltr" id="st-en" value="'+esc(st.storeNameEn||'')+'"></label></div>'+
+   '<label class="field"><span>تعريف المتجر لمحركات البحث <em>(بيظهر بقسم "عن المتجر"، اكتب فيه الكلمات اللي بيدوّر عليها الناس)</em></span><textarea class="inp" id="st-seo">'+esc(st.seoAbout||'')+'</textarea></label>'+
    '<div class="row2"><label class="field"><span>رقم واتساب</span><input class="inp ltr" id="st-wa" type="tel" value="'+esc(st.whatsapp)+'"></label><label class="field"><span>رمز العملة</span><input class="inp" id="st-cur" value="'+esc(st.currency)+'"></label></div></section>'+
    '<section class="card"><h2>مميزات المتجر</h2><p class="hint">بتظهر تحت الواجهة الرئيسية.</p><div class="list-plain" id="st-feats">'+fs.map(function(f){return '<div class="lrow"><div class="row2"><input class="inp ft-t" value="'+esc(f.t)+'" placeholder="العنوان"><select class="inp ft-i">'+FEAT_ICONS.map(function(x){return '<option value="'+x[0]+'"'+(x[0]===f.icon?' selected':'')+'>أيقونة: '+x[1]+'</option>'}).join('')+'</select></div><input class="inp ft-d" value="'+esc(f.d)+'" placeholder="سطر توضيحي"></div>'}).join('')+'</div></section>'+
    '<section class="card"><div class="card-h"><h2>الأسئلة الشائعة</h2><button class="btn sm" data-act="faqAdd">'+svg('plus',16)+' سؤال</button></div><div class="list-plain" id="st-faq">'+(st.faq||[]).map(faqRowHTML).join('')+'</div></section>'+
@@ -1358,7 +1373,7 @@ var ACT={
   faqAdd:function(){var w=D.createElement('div');w.innerHTML=faqRowHTML({q:'',a:''});$('#st-faq').appendChild(w.firstChild);$$('#st-faq .f-q').pop().focus()},
   revAdd:function(){var w=D.createElement('div');w.innerHTML=revRowHTML({name:'',city:'',text:''});$('#st-rev').appendChild(w.firstChild);$$('#st-rev .r-name').pop().focus()},
   saveSettings:function(el){var st=S.settings;
-    st.storeName=$('#st-name').value.trim()||'حازم ستور';st.tagline=$('#st-tag').value.trim();st.announce=$('#st-ann').value.trim();st.headline=$('#st-head').value.trim();st.sub=$('#st-sub').value.trim();st.about=$('#st-about').value.trim();st.whatsapp=$('#st-wa').value.trim();st.currency=$('#st-cur').value.trim()||'₪';
+    st.storeName=$('#st-name').value.trim()||'حازم ستور';st.tagline=$('#st-tag').value.trim();st.announce=$('#st-ann').value.trim();st.headline=$('#st-head').value.trim();st.sub=$('#st-sub').value.trim();st.about=$('#st-about').value.trim();st.storeNameEn=$('#st-en').value.trim();st.seoAbout=$('#st-seo').value.trim();st.whatsapp=$('#st-wa').value.trim();st.currency=$('#st-cur').value.trim()||'₪';
     st.features=$$('#st-feats .lrow').map(function(r){return {t:$('.ft-t',r).value.trim(),d:$('.ft-d',r).value.trim(),icon:$('.ft-i',r).value}}).filter(function(f){return f.t});
     st.faq=$$('#st-faq .lrow').map(function(r){return {q:$('.f-q',r).value.trim(),a:$('.f-a',r).value.trim()}}).filter(function(f){return f.q});
     st.reviews=$$('#st-rev .lrow').map(function(r){return {name:$('.r-name',r).value.trim(),city:$('.r-city',r).value.trim(),text:$('.r-text',r).value.trim()}}).filter(function(r){return r.name&&r.text});
