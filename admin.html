@@ -102,6 +102,14 @@ a{color:var(--brand)}
 /* ---------- announce + header */
 .announce{background:var(--band);color:#fff;font-size:13px;font-weight:600}
 .announce .wrap{display:flex;align-items:center;justify-content:center;gap:8px;padding-block:7px;text-align:center}
+.announce .mq{overflow:hidden;direction:ltr;padding-block:7px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+.announce .mq-track{display:flex;width:max-content;direction:ltr;animation:mq 48s linear infinite;will-change:transform}
+.announce .mq-grp{display:flex;flex:none}
+.announce .mq-item{display:inline-flex;align-items:center;gap:8px;padding-inline:28px;white-space:nowrap;direction:rtl}
+.announce .mq-item .i{opacity:.85;flex:none}
+@media (hover:hover){.announce:hover .mq-track{animation-play-state:paused}}
+@keyframes mq{from{transform:translateX(-50%)}to{transform:translateX(0)}}
+@media (prefers-reduced-motion:reduce){.announce .mq{-webkit-mask-image:none;mask-image:none}.announce .mq-track{animation:none;width:auto;justify-content:center}.announce .dup{display:none}.announce .mq-item{white-space:normal;text-align:center}}
 .hdr{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;background:var(--glass);-webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line)}
 .hdr-in{display:flex;align-items:center;gap:12px;height:66px}
 .brand{flex:1;display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;min-width:0}
@@ -1073,7 +1081,8 @@ function heroTitle(t){t=String(t||'');var i=t.indexOf('،');if(i<0)i=t.indexOf('
 function renderStore(){
   var st=S.settings;var vis=visibleProducts();var ms=activeMethods();
   var h='';
-  if(st.announce)h+='<div class="announce"><div class="wrap">'+svg('bolt',15)+'<span>'+esc(st.announce)+'</span></div></div>';
+  if(st.announce){var ai='<span class="mq-item">'+svg('bolt',15)+'<span>'+esc(st.announce)+'</span></span>',ad='<span class="mq-item dup" aria-hidden="true">'+svg('bolt',15)+'<span>'+esc(st.announce)+'</span></span>',grp=function(first){var g='';for(var i=0;i<6;i++)g+=(first&&!i)?ai:ad;return '<span class="mq-grp'+(first?'':' dup')+'"'+(first?'':' aria-hidden="true"')+'>'+g+'</span>'};
+    h+='<div class="announce" role="note" aria-label="'+esc(st.announce)+'"><div class="mq"><div class="mq-track">'+grp(true)+grp(false)+'</div></div></div>'}
   var n=cartCount();
   h+='<header class="hdr"><div class="wrap hdr-in"><a class="brand" href="#top" data-act="nav" data-to="top"><span class="logo"><img src="'+LOGO+'" alt="شعار '+esc(st.storeName)+'"></span><span class="bname"><b>'+esc(st.storeName)+'</b><small>'+esc(st.tagline)+'</small></span></a>'+
     '<nav class="mainnav" aria-label="القائمة الرئيسية">'+NAV.map(function(x){return '<a href="#'+x[0]+'" data-act="nav" data-to="'+x[0]+'">'+x[1]+'</a>'}).join('')+'</nav>'+
