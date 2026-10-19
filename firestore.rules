@@ -1,0 +1,53 @@
+rules_version = '2';
+// قواعد حماية حازم ستور
+// غيّر YOUR_ADMIN_EMAIL@gmail.com لإيميل حساب الإدارة تبعك (نفس اللي بـ config.js)
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == "YOUR_ADMIN_EMAIL@gmail.com";
+    }
+
+    // إعدادات المتجر وطرق الدفع: الكل بيقرأ، الإدارة بس بتعدّل
+    match /settings/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // المنتجات وأسعار البيع: الكل بيقرأ، الإدارة بس بتعدّل
+    match /products/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // أسعار الجملة: مخفية عن الزبائن تماماً
+    match /private/{doc} {
+      allow read, write: if isAdmin();
+    }
+
+    // الطلبات والمبيعات والأرباح: الإدارة بس بتشوفها
+    match /orders/{doc} {
+      allow read, update, delete: if isAdmin();
+      allow create: if isAdmin() || validSiteOrder(request.resource.data);
+    }
+
+    // طلب الزبون من الموقع: طلب جديد "بانتظار التأكيد" بحقول محددة بس
+    function validSiteOrder(d) {
+      return d.keys().hasOnly(['orderNo','items','total','customer','phone','email','payment','proofText','proofImage','status','source','createdAt'])
+        && d.keys().hasAll(['orderNo','items','total','customer','payment','status','source','createdAt'])
+        && d.status == 'pending'
+        && d.source == 'site'
+        && d.createdAt == request.time
+        && d.orderNo is string && d.orderNo.size() <= 16
+        && d.items is list && d.items.size() >= 1 && d.items.size() <= 10
+        && d.total is number && d.total >= 0 && d.total < 100000
+        && d.customer is string && d.customer.size() >= 2 && d.customer.size() <= 60
+        && d.payment is string && d.payment.size() <= 60
+        && (!('phone' in d) || (d.phone is string && d.phone.size() <= 20))
+        && (!('email' in d) || (d.email is string && d.email.size() <= 100))
+        && (!('proofText' in d) || (d.proofText is string && d.proofText.size() <= 120))
+        && (!('proofImage' in d) || (d.proofImage is string && d.proofImage.size() <= 900000));
+    }
+  }
+}
