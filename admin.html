@@ -1036,21 +1036,24 @@ function lastPrice(name,phone,it,skip){var key=waKeyer(),k=key(name,phone),best=
   return best}
 /* ----- subscriptions: start/end dates + reminders ----- */
 var DURS=[['w1','أسبوع'],['w2','أسبوعين'],['m1','شهر'],['m2','شهرين'],['m3','3 أشهر'],['m6','6 أشهر'],['y1','سنة'],['none','بدون انتهاء']];
-function durLabel(c){var d=DURS.find(function(x){return x[0]===c});return d?d[1]:''}
-function guessDur(n){n=latin(n||'').toLowerCase();
-  if(/سن(ة|ه|وي)|year|annual|12\s*(شهر|أشهر|اشهر|شهور|month)/.test(n))return 'y1';
-  if(/(6|ست(ة|ه)?)\s*(أشهر|اشهر|شهور|month)/.test(n))return 'm6';
-  if(/(3|ثلاث(ة|ه)?)\s*(أشهر|اشهر|شهور|month)/.test(n))return 'm3';
-  if(/شهرين|2\s*(أشهر|اشهر|شهور|month)/.test(n))return 'm2';
-  if(/أسبوعين|اسبوعين|2\s*week/.test(n))return 'w2';
-  if(/أسبوع|اسبوع|week/.test(n))return 'w1';
-  if(/شهر|month/.test(n))return 'm1';
-  return ''}
+function durLabel(c){var d=DURS.find(function(x){return x[0]===c});if(d)return d[1];var m=/^([dwmy])(\d+)$/.exec(c||'');if(!m)return '';var n=+m[2],u=m[1];
+  if(u==='d')return n===1?'يوم':n===2?'يومين':n<=10?n+' أيام':n+' يوم';if(u==='w')return n===1?'أسبوع':n===2?'أسبوعين':n<=10?n+' أسابيع':n+' أسبوع';
+  if(u==='y')return n===1?'سنة':n===2?'سنتين':n<=10?n+' سنوات':n+' سنة';return n===1?'شهر':n===2?'شهرين':n<=10?n+' أشهر':n+' شهر'}
+function guessDur(n){n=latin(n||'').toLowerCase().replace(/[٫,]/g,'.');var m;
+  if((m=/(\d+)\s*(سنة|سنه|سنوات|سنين|years?)/.exec(n)))return 'y'+(+m[1]||1);
+  if((m=/(\d+)\s*(شهر|شهور|أشهر|اشهر|months?)/.exec(n))){var k=+m[1]||1;return k%12===0?'y'+k/12:'m'+k}
+  if((m=/(\d+)\s*(أسبوع|اسبوع|أسابيع|اسابيع|weeks?)/.exec(n)))return 'w'+(+m[1]||1);
+  if((m=/(\d+)\s*(يوم|أيام|ايام|days?)/.exec(n)))return 'd'+(+m[1]||1);
+  if(/سنتين/.test(n))return 'y2';if(/سن(ة|ه|وي)|year|annual/.test(n))return 'y1';
+  if(/ست(ة|ه)\s*(أشهر|اشهر|شهور)/.test(n))return 'm6';if(/ثلاث(ة|ه)?\s*(أشهر|اشهر|شهور)/.test(n))return 'm3';
+  if(/شهرين/.test(n))return 'm2';if(/أسبوعين|اسبوعين/.test(n))return 'w2';if(/أسبوع|اسبوع|week/.test(n))return 'w1';
+  if(/شهر|month/.test(n))return 'm1';return ''}
 function planDur(pid,planId,planName){var pl=planOf(product(pid),planId);var c=pl&&pl.dur?pl.dur:guessDur(pl?pl.name:planName);return c==='none'?'':c}
 function addDur(t,c){var d=new Date(t);d.setHours(12,0,0,0);var day=d.getDate();
-  if(c==='w1')d.setDate(day+7);else if(c==='w2')d.setDate(day+14);
-  else if(/^[my]\d$/.test(c)){var n=c[0]==='y'?12*+c[1]:+c[1];d.setDate(1);d.setMonth(d.getMonth()+n);var last=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();d.setDate(Math.min(day,last))}
-  else return 0;return d.getTime()}
+  var mm=/^([dwmy])(\d+)$/.exec(c||'');if(!mm)return 0;var k=+mm[2];
+  if(mm[1]==='d')d.setDate(day+k);else if(mm[1]==='w')d.setDate(day+7*k);
+  else{var n=mm[1]==='y'?12*k:k;d.setDate(1);d.setMonth(d.getMonth()+n);var last=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();d.setDate(Math.min(day,last))}
+  return d.getTime()}
 function dayMs(v){return v?new Date(v+'T12:00:00').getTime():0}
 function itemStart(o,i){return i.startAt||oDate(o)}
 function itemEnd(o,i){if(i.endsAt===0)return 0;if(i.endsAt)return i.endsAt;var c=planDur(i.productId,i.planId,i.planName);return c?addDur(itemStart(o,i),c):0}
