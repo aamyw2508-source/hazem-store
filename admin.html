@@ -563,7 +563,7 @@ select.inp{appearance:none;-webkit-appearance:none;background-image:linear-gradi
 @media (min-width:960px){.savebar{bottom:16px}}
 .skel{height:68px;border-radius:16px;background:linear-gradient(90deg,var(--surface) 0%,var(--surface-2) 50%,var(--surface) 100%);background-size:200% 100%;animation:sh 1.2s linear infinite;border:1px solid var(--line)}
 @keyframes sh{to{background-position:-200% 0}}
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
 
 /* ---------- accounts, balance & instant delivery */
 .udot{position:absolute;top:6px;left:6px;width:10px;height:10px;border-radius:50%;background:var(--good);border:2px solid var(--surface)}
@@ -823,15 +823,18 @@ body{font-size:15.5px;line-height:1.7;-webkit-font-smoothing:antialiased}
 /* ---------------------------------------------------------------- scroll reveal
    Each block rises 16px and fades in once, the first time it enters the screen.
    Items that enter together are staggered by 60ms in reading order. */
-.rv{opacity:0;transform:translate3d(0,16px,0);transition:opacity .6s cubic-bezier(.2,.7,.2,1) var(--rv-d,0ms),transform .7s cubic-bezier(.2,.7,.2,1) var(--rv-d,0ms)}
-.rv.rv-pop{transform:translate3d(0,10px,0) scale(.94)}
-.rv.rv-side{transform:translate3d(0,14px,0) scale(.97);transform-origin:100% 0}
-.rv.rv-fade{transform:none}
-.rv.in{opacity:1;transform:none}
-.hero-mark.rv{transform:translateY(-50%) scale(.9);transition-duration:1.4s,1.6s}
+.rv{opacity:0;transform:translate3d(0,44px,0) scale(.97);filter:blur(5px);transition:opacity .8s cubic-bezier(.2,.7,.2,1) var(--rv-d,0ms),transform 1s cubic-bezier(.16,1,.3,1) var(--rv-d,0ms),filter .8s ease var(--rv-d,0ms)}
+.rv.rv-pop{transform:translate3d(0,30px,0) scale(.86)}
+.rv.rv-side{transform:translate3d(0,38px,0) scale(.92) rotate(-1.5deg);transform-origin:100% 0}
+.rv.rv-fade{transform:none;filter:none}
+.rv.in{opacity:1;transform:none;filter:none}
+.hero-mark.rv{transform:translateY(-50%) scale(.82) rotate(-6deg);filter:none;transition-duration:1.4s,1.8s}
 .hero-mark.rv.in{transform:translateY(-50%)}
-@media (max-width:899px){.hero-mark.rv{transform:scale(.9)}.hero-mark.rv.in{transform:none}}
-@media (prefers-reduced-motion:reduce){.rv,.rv.rv-pop,.rv.rv-side{opacity:1;transform:none;transition:none}}
+@media (max-width:899px){.hero-mark.rv{transform:scale(.82) rotate(-6deg)}.hero-mark.rv.in{transform:none}}
+.rv.rv-soft,.hero-mark.rv.rv-soft{transform:none;filter:none;transition:opacity .9s ease var(--rv-d,0ms)}
+.rv.rv-soft.in{opacity:1}
+@media (prefers-reduced-motion:reduce){.hero-mark.rv.rv-soft{transform:translateY(-50%)}}
+@media (prefers-reduced-motion:reduce) and (max-width:899px){.hero-mark.rv.rv-soft{transform:none}}
 
 .only-d{display:none!important}
 @media (min-width:980px){.only-d{display:grid!important}}
@@ -1042,7 +1045,7 @@ function normSettings(s){
 var LS_KEY='hazem-store-v2';
 var LocalDB={
   data:null,user:null,authCb:null,ocb:null,
-  init:function(){var d=store(LS_KEY);if(!d||!d.settings)d={settings:DEFAULT_SETTINGS(),products:seedProducts(),costs:{},orders:[]};this.data=d;this.save();this.user=store('hazem-admin-local')?{email:''}:null;return Promise.resolve()},
+  init:function(){var d=store(LS_KEY);if(!d||!d.settings)d={settings:DEFAULT_SETTINGS(),products:seedProducts(),costs:{},orders:[]};this.data=d;this.save();this.user=null;try{localStorage.removeItem('hazem-admin-local')}catch(e){}return Promise.resolve()},
   save:function(){if(!store(LS_KEY,this.data)){var o=this.data.orders;for(var i=o.length-1;i>=0;i--){if(o[i].proofImage){o[i].proofImage='';if(store(LS_KEY,this.data))return}}}},
   loadPublic:function(){return Promise.resolve(clone({settings:this.data.settings,products:this.data.products}))},
   loadPrivate:function(){return Promise.resolve({costs:clone(this.data.costs||{})})},
@@ -1066,8 +1069,8 @@ var LocalDB={
   deleteReview:function(id){this.data.reviews=(this.data.reviews||[]).filter(function(x){return x.id!==id});if(this.data.shots)delete this.data.shots[id];this.remit();return Promise.resolve()},
   getShot:function(id){return Promise.resolve((this.data.shots||{})[id]||'')},
   onAuth:function(cb){this.authCb=cb;cb(this.user)},
-  login:function(){this.user={email:''};store('hazem-admin-local',1);if(this.authCb)this.authCb(this.user);return Promise.resolve()},
-  logout:function(){this.user=null;store('hazem-admin-local',0);if(this.authCb)this.authCb(null);return Promise.resolve()},
+  login:function(){return Promise.reject({code:'local-only'})},
+  logout:function(){this.user=null;if(this.authCb)this.authCb(null);return Promise.resolve()},
   reset:function(){return Promise.resolve()}
 };
 function loadScript(src){return new Promise(function(res,rej){var s=D.createElement('script');s.src=src;s.onload=res;s.onerror=function(){rej(new Error('load '+src))};D.head.appendChild(s)})}
@@ -1083,7 +1086,7 @@ function normOrder(id,d){
 }
 var CloudDB={
   db:null,auth:null,
-  init:function(){var self=this;return ['app','auth','firestore'].reduce(function(p,m){return p.then(function(){return loadScript('https://www.gstatic.com/firebasejs/'+FB_V+'/firebase-'+m+'-compat.js')})},Promise.resolve()).then(function(){firebase.initializeApp(CFG.firebase);self.db=firebase.firestore();self.auth=firebase.auth()})},
+  init:function(){var self=this;return ['app','auth','firestore'].reduce(function(p,m){return p.then(function(){return loadScript('https://www.gstatic.com/firebasejs/'+FB_V+'/firebase-'+m+'-compat.js')})},Promise.resolve()).then(function(){var app=B.page==='admin'?firebase.initializeApp(CFG.firebase,'hazem-admin'):firebase.initializeApp(CFG.firebase);self.db=app.firestore();self.auth=app.auth()})},
   TS:function(ms){return firebase.firestore.Timestamp.fromMillis(ms)},
   toFire:function(o){var x=clone(o);delete x.id;if(typeof x.createdAt==='number')x.createdAt=this.TS(x.createdAt);if(typeof x.doneAt==='number')x.doneAt=x.doneAt?this.TS(x.doneAt):null;return x},
   loadPublic:function(){var db=this.db;return Promise.all([db.doc('settings/main').get(),db.collection('products').get()]).then(function(r){return {settings:r[0].exists?r[0].data():null,products:r[1].docs.map(function(d){var x=d.data();x.id=d.id;return x})}})},
@@ -1314,7 +1317,7 @@ function readImage(file,o){o=o||{};var max=o.max||256,type=o.type||'image/webp',
     res(out)};img.src=fr.result};fr.readAsDataURL(file)})}
 
 /* ================= routing ================= */
-function wantView(){if(B.page==='admin')return 'admin';return (location.hash||'').slice(1)==='admin'?'admin':'store'}
+function wantView(){if(B.page==='admin')return 'admin';if(B.page==='store')return 'store';return (location.hash||'').slice(1)==='admin'?'admin':'store'}
 function route(){var v=wantView();if(v!==S.view){S.view=v;closeAllSheets();window.scrollTo(0,0);render()}else if(v==='store')handleStoreHash()}
 function render(){
   D.body.classList.toggle('is-admin',S.view==='admin');
@@ -1350,19 +1353,20 @@ function rvPrefix(){return S.view==='admin'?'a:'+S.tab+':'+S.ctab+':'+S.ofilter+
 function rvNoMotion(){try{return matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return false}}
 function rvScan(){
   var root=D.getElementById('root');if(!root)return;
-  if(!('IntersectionObserver' in window)||rvNoMotion())return;
+  if(!('IntersectionObserver' in window))return;var soft=rvNoMotion();
   if(!rvIO)rvIO=new IntersectionObserver(function(es){var vis=es.filter(function(e){return e.isIntersecting});
     vis.sort(function(a,b){return a.target.compareDocumentPosition(b.target)&4?-1:1});
-    vis.forEach(function(e,i){var el=e.target;rvIO.unobserve(el);el.style.setProperty('--rv-d',Math.min(i,7)*60+'ms');el.classList.add('in');rvSeen[el.dataset.rvk]=1;
-      setTimeout(function(){el.classList.remove('rv','in','rv-pop','rv-side','rv-fade');el.style.removeProperty('--rv-d')},1700+Math.min(i,7)*60)})},{rootMargin:'0px 0px -6% 0px',threshold:.08});
+    vis.forEach(function(e,i){var el=e.target;rvIO.unobserve(el);el.style.setProperty('--rv-d',Math.min(i,8)*90+'ms');el.classList.add('in');rvSeen[el.dataset.rvk]=1;
+      setTimeout(function(){el.classList.remove('rv','in','rv-pop','rv-side','rv-fade','rv-soft');el.style.removeProperty('--rv-d')},2000+Math.min(i,8)*90)})},{rootMargin:'0px 0px -8% 0px',threshold:.1});
   var pre=rvPrefix();
   RV.forEach(function(r,si){var list=root.querySelectorAll(r[0]);for(var i=0;i<list.length;i++){var el=list[i];if(el.dataset.rvk||el.closest('.ov'))continue;
     var k=pre+':'+si+':'+(r[0]==='.pcard'?S.cat+':'+S.sort+':':'')+i;el.dataset.rvk=k;if(rvSeen[k])continue;
-    el.classList.add('rv');if(r[1])el.classList.add(r[1]);rvIO.observe(el)}});
+    el.classList.add('rv');if(r[1])el.classList.add(r[1]);if(soft)el.classList.add('rv-soft');rvIO.observe(el)}});
 }
 function rvStart(){var root=D.getElementById('root');if(!root||rvMO||!('MutationObserver' in window))return;
   rvMO=new MutationObserver(function(){if(rvBusy)return;rvBusy=true;try{rvScan()}finally{rvBusy=false}});
-  rvMO.observe(root,{childList:true,subtree:true});rvScan()}
+  rvMO.observe(root,{childList:true,subtree:true});rvScan();
+  var t=0;window.addEventListener('scroll',function(){if(t)return;t=requestAnimationFrame(function(){t=0;$$('.rv:not(.in)').forEach(function(el){if(el.getBoundingClientRect().bottom<0){if(rvIO)rvIO.unobserve(el);el.classList.add('in');rvSeen[el.dataset.rvk]=1;setTimeout(function(){el.classList.remove('rv','in','rv-pop','rv-side','rv-fade','rv-soft')},1200)}})})},{passive:true})}
 
 /* ================= STORE ================= */
 var NAV=[['top','الرئيسية'],['cats','الأقسام'],['products','الاشتراكات'],['pay','طرق الدفع'],['reviews','تجارب الزبائن'],['faq','الأسئلة الشائعة'],['about','عن المتجر']];
@@ -1405,7 +1409,7 @@ function renderStore(){
     '<div><h3>روابط</h3><ul class="flinks">'+NAV.slice(1).map(function(x){return '<li><a href="#'+x[0]+'" data-act="nav" data-to="'+x[0]+'">'+x[1]+'</a></li>'}).join('')+'</ul></div>'+
     '<div><h3>تواصل معنا</h3><div class="contact"><span class="muted">واتساب:</span><span class="sel" dir="ltr">'+esc(waPretty())+'</span><button class="copy" data-act="copy" data-text="'+esc(waPretty())+'">'+svg('copy',15)+'<span>نسخ</span></button></div>'+
     (ms.length?'<div class="foot-pay">'+ms.map(function(m){return '<span title="'+esc(m.name)+'">'+tile(m,'sm','card')+'</span>'}).join('')+'</div>':'')+'</div></div>'+
-    '<div class="foot-bottom"><span>© '+new Date().getFullYear()+' '+esc(st.storeName)+'. جميع الحقوق محفوظة.</span><a class="admin-link" href="'+esc(B.adminUrl)+'">'+svg('lock',14)+' لوحة الإدارة</a></div></div></footer>';
+    '<div class="foot-bottom"><span>© '+new Date().getFullYear()+' '+esc(st.storeName)+'. جميع الحقوق محفوظة.</span></div></div></footer>';
   h+='<a class="fab" href="'+esc(waLink('مرحباً '+st.storeName+'، عندي استفسار'))+'" target="_blank" rel="noopener" aria-label="تواصل على واتساب">'+svg('chat',20)+'<span>واتساب</span></a>';
   root.innerHTML=h;loadShots();
 }
@@ -1763,9 +1767,10 @@ function renderNotAdmin(){
 }
 function renderLogin(){
   var st=S.settings;
-  root.innerHTML='<main class="login"><form class="login-card" id="login-f" novalidate><img class="login-ic" src="'+ADMIN_ICON+'" alt="لوحة تحكم '+esc(st.storeName)+'"><h1>لوحة تحكم '+esc(st.storeName)+'</h1>'+
-   (CLOUD?'<p class="muted">سجّل دخولك لإدارة المتجر والطلبات والأرباح.</p><label class="field"><span>الإيميل</span><input class="inp ltr" id="l-email" type="email" autocomplete="username" required></label><label class="field"><span>كلمة السر</span><input class="inp ltr" id="l-pass" type="password" autocomplete="current-password" required></label><p class="err" id="l-err" hidden></p><button class="btn primary block lg" type="submit">'+svg('lock',18)+' تسجيل الدخول</button><button type="button" class="btn block" data-act="resetPass">نسيت كلمة السر؟</button>'
-   :'<p class="alert info"><span>'+svg('cloud',18)+'اللوحة لسا مش مربوطة بقاعدة البيانات، فكل شي بينحفظ على هذا الجهاز. بعد الربط بيصير الدخول بالإيميل وكلمة السر.</span></p><button class="btn primary block lg" type="submit">'+svg('lock',18)+' دخول للوحة</button>')+
+  var note=CLOUD?'<p class="muted">سجّل دخولك بإيميل الإدارة وكلمة السر.</p>':'<p class="alert info"><span>'+svg('cloud',18)+(B.page==='admin'?'ما قدرنا نتصل بقاعدة البيانات. تأكد من الإنترنت وحدّث الصفحة.':'هذي نسخة معاينة للمتجر بس. لوحة الإدارة بتفتح من موقعك الرسمي، وبتحتاج إيميل الإدارة وكلمة السر.')+'</span></p>';
+  root.innerHTML='<main class="login"><form class="login-card" id="login-f" novalidate><img class="login-ic" src="'+ADMIN_ICON+'" alt="لوحة تحكم '+esc(st.storeName)+'"><h1>لوحة تحكم '+esc(st.storeName)+'</h1>'+note+
+   '<label class="field"><span>الإيميل</span><input class="inp ltr" id="l-email" type="email" autocomplete="username" required></label><label class="field"><span>كلمة السر</span><input class="inp ltr" id="l-pass" type="password" autocomplete="current-password" required></label><p class="err" id="l-err" hidden></p><button class="btn primary block lg" type="submit">'+svg('lock',18)+' تسجيل الدخول</button>'+
+   (CLOUD?'<button type="button" class="btn block" data-act="resetPass">نسيت كلمة السر؟</button>':'')+
    '<a class="btn block" href="'+esc(storeHref())+'" data-act="goStore">'+svg('store',18)+' الرجوع للمتجر</a></form><p class="login-foot">'+svg('shield',14)+' الدخول لإدارة المتجر فقط</p></main>';
   setTimeout(function(){var f=$('#l-email');if(f)f.focus()},50);
 }
@@ -2359,9 +2364,14 @@ D.addEventListener('submit',function(e){
     if(S.authMode==='signup'&&nm.length<2){ae.textContent='اكتب اسمك.';ae.hidden=false;return}
     ab.disabled=true;if(S.authMode==='signup')S.pendingName=nm;(S.authMode==='signup'?DB.signup(nm,em,pw):DB.login(em,pw)).catch(function(x){ab.disabled=false;authErr(x)});return}
   if(e.target.id!=='login-f')return;e.preventDefault();var btn=e.target.querySelector('[type=submit]');
-  if(!CLOUD){DB.login();return}
-  var em=$('#l-email'),pw=$('#l-pass'),err=$('#l-err');if(!em.value.trim()){em.focus();return}if(!pw.value){pw.focus();return}btn.disabled=true;err.hidden=true;
-  DB.login(em.value,pw.value).catch(function(x){btn.disabled=false;var c=x&&x.code||'';err.textContent=/wrong|invalid|not-found/.test(c)?'الإيميل أو كلمة السر غلط.':/too-many/.test(c)?'محاولات كثيرة، استنى شوي وجرّب.':'ما قدرنا ندخل، تأكد من الإنترنت.';err.hidden=false})});
+  var em=$('#l-email'),pw=$('#l-pass'),err=$('#l-err');err.hidden=true;
+  function bad(m,f){err.textContent=m;err.hidden=false;if(f)f.focus()}
+  if(!em.value.trim())return bad('اكتب إيميل الإدارة.',em);
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em.value.trim()))return bad('الإيميل مش مكتوب صح.',em);
+  if(!pw.value)return bad('اكتب كلمة السر.',pw);
+  if(!CLOUD)return bad(B.page==='admin'?'ما في اتصال بقاعدة البيانات، حدّث الصفحة وجرّب كمان مرة.':'الدخول للوحة متاح بس على موقعك الرسمي.');
+  btn.disabled=true;
+  Promise.resolve().then(function(){return DB.login(em.value,pw.value)}).catch(function(x){btn.disabled=false;var c=x&&x.code||'';bad(/wrong|invalid|not-found/.test(c)?'الإيميل أو كلمة السر غلط.':/too-many/.test(c)?'محاولات كثيرة، استنى شوي وجرّب.':'ما قدرنا ندخل، تأكد من الإنترنت.')})});
 window.addEventListener('hashchange',route);
 window.addEventListener('popstate',route);
 var rzT;window.addEventListener('resize',function(){clearTimeout(rzT);rzT=setTimeout(function(){if(S.view==='admin'&&S.user&&S.tab==='dash'&&!$('.ov'))renderAdminBody()},250)});
@@ -2384,7 +2394,7 @@ function startAdminData(){
 function onUser(u){
   S.uw=stopWatch(S.uw);S.aw=stopWatch(S.aw);S.adminOn=false;
   S.user=u;S.wallet=null;S.myOrders=[];S.myTopups=[];S.myReviews=[];
-  S.isAdmin=!!u&&(!CLOUD||!CFG.adminEmail||String(u.email||'').toLowerCase()===String(CFG.adminEmail).toLowerCase());
+  S.isAdmin=!!u&&CLOUD&&!!CFG.adminEmail&&String(u.email||'').toLowerCase()===String(CFG.adminEmail).toLowerCase();
   if(!u||!S.isAdmin){S.orders=[];S.costs={};S.topups=[];S.wallets=[];S.stock=[];S.reviewsA=[]}
   if(u&&walletOn()&&B.page!=='admin'){
     DB.ensureWallet(u).catch(function(e){console.warn('ensureWallet',e)});
