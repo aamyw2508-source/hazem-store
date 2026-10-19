@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /admin.html
 
-Sitemap: https://aamyw2508-source.github.io/hazem-store/sitemap.xml
+Sitemap: https://hazem-store.com/sitemap.xml
