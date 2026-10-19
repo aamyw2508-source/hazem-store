@@ -1,44 +1,38 @@
 rules_version = '2';
-// قواعد حماية حازم ستور
-// غيّر YOUR_ADMIN_EMAIL@gmail.com لإيميل حساب الإدارة تبعك (نفس اللي بـ config.js)
+// قواعد حماية حازم ستور: المتجر + حسابات الزبائن + الرصيد + التسليم الفوري
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function isAdmin() {
       return request.auth != null
-        && request.auth.token.email == "YOUR_ADMIN_EMAIL@gmail.com";
+        && request.auth.token.email == "aamyw2508@gmail.com";
+    }
+    function signedIn() { return request.auth != null; }
+    function isMe(uid) { return request.auth != null && request.auth.uid == uid; }
+
+    // ===== إعدادات المتجر والمنتجات: الكل بيقرأ، الإدارة بس بتعدّل
+    match /settings/{doc} { allow read: if true; allow write: if isAdmin(); }
+    match /products/{doc} { allow read: if true; allow write: if isAdmin(); }
+
+    // ===== أسعار الجملة: للإدارة بس
+    match /private/{doc} { allow read, write: if isAdmin(); }
+
+    // ===== الطلبات
+    match /orders/{oid} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow update, delete: if isAdmin();
+      allow create: if isAdmin()
+        || siteOrder(request.resource.data)
+        || walletOrder(oid, request.resource.data);
     }
 
-    // إعدادات المتجر وطرق الدفع: الكل بيقرأ، الإدارة بس بتعدّل
-    match /settings/{doc} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // المنتجات وأسعار البيع: الكل بيقرأ، الإدارة بس بتعدّل
-    match /products/{doc} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // أسعار الجملة: مخفية عن الزبائن تماماً
-    match /private/{doc} {
-      allow read, write: if isAdmin();
-    }
-
-    // الطلبات والمبيعات والأرباح: الإدارة بس بتشوفها
-    match /orders/{doc} {
-      allow read, update, delete: if isAdmin();
-      allow create: if isAdmin() || validSiteOrder(request.resource.data);
-    }
-
-    // طلب الزبون من الموقع: طلب جديد "بانتظار التأكيد" بحقول محددة بس
-    function validSiteOrder(d) {
-      return d.keys().hasOnly(['orderNo','items','total','customer','phone','email','payment','proofText','proofImage','status','source','createdAt'])
+    // طلب عادي من الموقع (تحويل + إثبات): بيدخل "بانتظار التأكيد"
+    function siteOrder(d) {
+      return d.keys().hasOnly(['orderNo','uid','items','total','customer','phone','email','payment','proofText','proofImage','status','source','createdAt'])
         && d.keys().hasAll(['orderNo','items','total','customer','payment','status','source','createdAt'])
-        && d.status == 'pending'
-        && d.source == 'site'
+        && d.status == 'pending' && d.source == 'site'
         && d.createdAt == request.time
+        && (!('uid' in d) || (signedIn() && d.uid == request.auth.uid))
         && d.orderNo is string && d.orderNo.size() <= 16
         && d.items is list && d.items.size() >= 1 && d.items.size() <= 10
         && d.total is number && d.total >= 0 && d.total < 100000
@@ -48,6 +42,114 @@ service cloud.firestore {
         && (!('email' in d) || (d.email is string && d.email.size() <= 100))
         && (!('proofText' in d) || (d.proofText is string && d.proofText.size() <= 120))
         && (!('proofImage' in d) || (d.proofImage is string && d.proofImage.size() <= 900000));
+    }
+
+    // طلب مدفوع من الرصيد: منتج واحد، بسعره الحقيقي من قاعدة البيانات،
+    // ولازم ينخصم من رصيد نفس الزبون بنفس العملية
+    function walletOrder(oid, d) {
+      let it = d.items[0];
+      let pl = get(/databases/$(database)/documents/products/$(it.productId)).data.plans[it.planIndex];
+      return signedIn()
+        && d.keys().hasOnly(['orderNo','uid','items','total','customer','phone','email','payment','status','source','stockIds','createdAt','doneAt'])
+        && d.keys().hasAll(['orderNo','uid','items','total','customer','payment','status','source','createdAt'])
+        && d.source == 'wallet' && d.uid == request.auth.uid && d.payment == 'رصيد'
+        && d.createdAt == request.time
+        && ((d.status == 'paid' && !('doneAt' in d)) || (d.status == 'done' && d.doneAt == request.time))
+        && d.items is list && d.items.size() == 1
+        && it.keys().hasOnly(['productId','productName','planId','planName','price','qty','planIndex'])
+        && it.qty == 1 && it.planIndex is int
+        && pl.id == it.planId && pl.price == it.price
+        && d.total == it.price && d.total > 0
+        && (!('stockIds' in d) || (d.stockIds is list && d.stockIds.size() <= 1))
+        && d.orderNo is string && d.orderNo.size() <= 16
+        && d.customer is string && d.customer.size() <= 60
+        && (!('phone' in d) || (d.phone is string && d.phone.size() <= 20))
+        && (!('email' in d) || (d.email is string && d.email.size() <= 100))
+        && get(/databases/$(database)/documents/wallets/$(request.auth.uid)).data.lastOrder != oid
+        && getAfter(/databases/$(database)/documents/wallets/$(request.auth.uid)).data.lastOrder == oid;
+    }
+
+    // ===== محافظ الزبائن (الرصيد)
+    match /wallets/{uid} {
+      allow read: if isAdmin() || isMe(uid);
+      allow create: if isAdmin() || (isMe(uid)
+        && request.resource.data.keys().hasOnly(['name','email','phone','balance','lastOrder','createdAt'])
+        && request.resource.data.balance == 0
+        && request.resource.data.lastOrder == ''
+        && profileOk(request.resource.data));
+      allow update: if isAdmin() || (isMe(uid) && (profileUpdate() || walletDebit(uid)));
+      allow delete: if isAdmin();
+    }
+    function profileOk(d) {
+      return d.name is string && d.name.size() <= 60
+        && d.phone is string && d.phone.size() <= 20
+        && d.email is string && d.email.size() <= 100;
+    }
+    function profileUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','phone'])
+        && profileOk(request.resource.data);
+    }
+    // الخصم مسموح بس مع إنشاء طلب رصيد جديد بنفس العملية، وبقيمته بالضبط
+    function walletDebit(uid) {
+      let d = request.resource.data;
+      let o = getAfter(/databases/$(database)/documents/orders/$(d.lastOrder)).data;
+      return d.diff(resource.data).affectedKeys().hasOnly(['balance','lastOrder'])
+        && d.lastOrder is string && d.lastOrder.size() > 0
+        && !exists(/databases/$(database)/documents/orders/$(d.lastOrder))
+        && o.uid == uid && o.source == 'wallet'
+        && d.balance == resource.data.balance - o.total
+        && d.balance >= 0;
+    }
+
+    // ===== طلبات شحن الرصيد: الزبون بيطلب، الإدارة بتأكد
+    match /topups/{tid} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isAdmin() || topupOk(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+    function topupOk(d) {
+      return signedIn()
+        && d.keys().hasOnly(['uid','name','email','phone','amount','payment','proofText','proofImage','status','createdAt'])
+        && d.uid == request.auth.uid && d.status == 'pending' && d.createdAt == request.time
+        && d.amount is number && d.amount >= 1 && d.amount <= 5000
+        && d.payment is string && d.payment.size() <= 60
+        && d.name is string && d.name.size() <= 60
+        && d.email is string && d.email.size() <= 100
+        && d.phone is string && d.phone.size() <= 20
+        && d.proofText is string && d.proofText.size() <= 120
+        && d.proofImage is string && d.proofImage.size() <= 900000;
+    }
+
+    // ===== مخزون التسليم الفوري (بدون الكود نفسه)
+    match /stock/{sid} {
+      allow read: if isAdmin();
+      allow list: if signedIn() && resource.data.owner == null;
+      allow get: if signedIn() && (resource.data.owner == null || resource.data.owner == request.auth.uid);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || stockClaim(sid);
+    }
+    // الزبون بياخد كود بس مع طلب رصيد جديد لنفس المنتج والمدة
+    function stockClaim(sid) {
+      let d = request.resource.data;
+      let o = getAfter(/databases/$(database)/documents/orders/$(d.order)).data;
+      return signedIn()
+        && resource.data.owner == null
+        && d.diff(resource.data).affectedKeys().hasOnly(['owner','order','claimedAt'])
+        && d.owner == request.auth.uid
+        && d.claimedAt == request.time
+        && d.order is string
+        && !exists(/databases/$(database)/documents/orders/$(d.order))
+        && o.uid == request.auth.uid && o.source == 'wallet'
+        && o.items[0].productId == resource.data.pid
+        && o.items[0].planId == resource.data.plan
+        && sid in o.stockIds;
+    }
+
+    // ===== الأكواد نفسها: بيشوفها بس صاحبها بعد ما ياخدها، والإدارة
+    match /codes/{sid} {
+      allow read: if isAdmin()
+        || (signedIn() && get(/databases/$(database)/documents/stock/$(sid)).data.owner == request.auth.uid);
+      allow write: if isAdmin();
     }
   }
 }
