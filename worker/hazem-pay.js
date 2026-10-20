@@ -2,9 +2,17 @@
 // Gives every USDT payment its own exact amount, watches BNB Smart Chain (BEP20) and Tron (TRC20),
 // and when the money arrives it confirms the order or top-up by itself and hands out instant codes.
 //
+// It also sends notifications: new orders to Hazem, and "payment received" to the customer.
+//
 // Secrets (Cloudflare → the Worker → Settings → Variables and Secrets):
 //   SA_JSON       the Firebase service-account key file (paste the whole JSON text)   [required]
 //   TRONGRID_KEY  a free TronGrid API key (more Tron requests per day)                [optional]
+// Notifications (all optional, set the ones you want):
+//   RESEND_KEY + ADMIN_EMAIL   email to Hazem (resend.com)
+//   MAIL_FROM                  e.g. "حازم ستور <orders@hazem-store.com>" after verifying the domain in Resend → emails to customers too
+//   WA_PHONE + WA_KEY          WhatsApp to Hazem's own number (callmebot.com)
+//   TG_TOKEN + TG_CHAT         Telegram bot to Hazem
+// Cron trigger (Settings → Triggers → Cron): */2 * * * *  → checks waiting payments + new orders even with no page open.
 
 const ORIGINS = ['https://hazem-store.com', 'https://www.hazem-store.com'];
 const USDT_BSC = '0x55d398326f99059ff775485246999027b3197955';
@@ -15,8 +23,12 @@ const PAY_MIN = 60;             // minutes the customer is asked to pay within
 const HOLD_H = 24;              // hours an exact amount belongs to one payment, and we keep accepting it
 const CHUNK = 2000, CHUNKS = 8; // BSC blocks per getLogs call, calls per check
 
+const SITE = 'https://hazem-store.com';
+const STORE = 'حازم ستور';
+
 export default {
-  async fetch(req, env) {
+  async scheduled(event, env, ctx) { ctx.waitUntil(cron(env).catch(e => console.error('cron', e && e.message))); },
+  async fetch(req, env, ctx) {
     const origin = req.headers.get('origin') || '';
     const allowed = ORIGINS.concat(String(env.EXTRA_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean));
     const cors = {
@@ -35,7 +47,8 @@ export default {
       try { body = JSON.parse(await req.text() || '{}'); } catch (e) { throw fail('bad json'); }
       const fs = await firestore(env);
       if (url.pathname === '/pay/start') return json(await start(fs, env, body), 200, cors);
-      if (url.pathname === '/pay/check') return json(await check(fs, env, body), 200, cors);
+      if (url.pathname === '/pay/check') return json(await check(fs, env, body, ctx), 200, cors);
+      if (url.pathname === '/notify/test') return json(await notifyTest(fs, env), 200, cors);
       return json({ error: 'not found' }, 404, cors);
     } catch (e) {
       return json({ error: e && e.message ? e.message : String(e) }, e && e.status ? e.status : 500, cors);
@@ -47,11 +60,12 @@ function fail(msg, status) { const e = new Error(msg); e.status = status || 400;
 
 // GET / : is the server set up and can it read the store?
 async function health(env) {
-  if (!env.SA_JSON) return { ok: false, service: 'hazem-pay', error: 'SA_JSON missing' };
+  if (!env.SA_JSON) return { ok: false, service: 'hazem-pay', error: 'SA_JSON missing', notify: channels(env) };
   const fs = await firestore(env);
   const s = await fs.get('settings/main');
   const m = s && (s.data.payments || []).find(isUsdt);
-  return { ok: true, service: 'hazem-pay', project: fs.project, usdt: m ? { auto: !!m.auto, bsc: validAddr('bsc', m.number), tron: validAddr('tron', m.tron) } : null };
+  const st = await fs.get('payState/main');
+  return { ok: true, service: 'hazem-pay', project: fs.project, usdt: m ? { auto: !!m.auto, bsc: validAddr('bsc', m.number), tron: validAddr('tron', m.tron) } : null, notify: channels(env), cron: st && st.data.cronAt ? st.data.cronAt : 0 };
 }
 
 // ---------------------------------------------------------------- /pay/start : reserve an exact amount
@@ -80,9 +94,11 @@ async function start(fs, env, b) {
       if (lock && lock.data.exp > now && lock.data.ref !== ref) continue;
       const pay = { net, amt, addr, ils, rate, exp: now + PAY_MIN * 60e3, lockExp: now + HOLD_H * 3600e3, startBlock: head ? head - 20 : 0, startTs: now - 120e3, scanned: 0, lock: lockId };
       try {
+        const wk = watchKey(kind, id);
         await fs.commit([
           fs.wUpdate(`payLocks/${lockId}`, { ref, exp: pay.lockExp }, null, lock ? { updateTime: lock.updateTime } : { exists: false }),
           fs.wUpdate(ref, { pay }, ['pay'], { updateTime: doc.updateTime }),
+          fs.wUpdate('payState/main', { w: { [wk]: pay.lockExp } }, ['w.' + fp(wk)]), // the cron keeps checking it
         ]);
         return payOut(pay, d);
       } catch (e) {
@@ -96,7 +112,7 @@ async function start(fs, env, b) {
 function payOut(p, d) { return { status: 'pending', net: p.net, amt: p.amt, addr: p.addr, exp: p.exp, ils: p.ils, rate: p.rate, no: d.orderNo || '' }; }
 
 // ---------------------------------------------------------------- /pay/check : look for the payment on the chain
-async function check(fs, env, b) {
+async function check(fs, env, b, ctx, chunks) {
   const kind = b.kind === 'topup' ? 'topup' : 'order', id = cleanId(b.id);
   const col = kind === 'topup' ? 'topups' : 'orders', ref = `${col}/${id}`;
   const doc = await fs.get(ref);
@@ -108,13 +124,13 @@ async function check(fs, env, b) {
   let hits = [], scanned = p.scanned || 0;
   if (p.net === 'bsc') {
     const latest = (await bscBlock()) - 2, from = scanned ? scanned + 1 : p.startBlock;
-    const to = Math.min(latest, from + CHUNK * CHUNKS - 1);
+    const to = Math.min(latest, from + CHUNK * (chunks || CHUNKS) - 1);
     if (to >= from) { hits = await bscFind(p.addr, p.amt, from, to); scanned = to; }
   } else {
     hits = await tronFind(env, p.addr, p.amt, p.startTs);
   }
   for (const h of hits) {
-    const res = await settle(fs, kind, ref, id, h);
+    const res = await settle(fs, env, kind, ref, id, h, ctx);
     if (res) return res;
   }
   if (p.net === 'bsc' && scanned !== p.scanned) {
@@ -138,7 +154,7 @@ async function readCodes(fs, d) {
   return out;
 }
 
-async function settle(fs, kind, ref, id, hit) {
+async function settle(fs, env, kind, ref, id, hit, ctx) {
   const doc = await fs.get(ref);
   if (!doc) return null;
   const d = doc.data;
@@ -148,7 +164,7 @@ async function settle(fs, kind, ref, id, hit) {
   const proof = `${d.pay.amt} USDT ${d.pay.net === 'tron' ? 'TRC20' : 'BEP20'} · ${hit.tx}`.slice(0, 120);
   const pay = { ...d.pay, tx: hit.tx, paidAmt: hit.amt };
   const used = fs.wUpdate(`usedTx/${txKey}`, { ref, amt: hit.amt, at: Date.now() }, null, { exists: false });
-  const unlock = d.pay.lock ? [{ delete: fs.name(`payLocks/${d.pay.lock}`) }] : [];
+  const unlock = (d.pay.lock ? [{ delete: fs.name(`payLocks/${d.pay.lock}`) }] : []).concat([fs.wUpdate('payState/main', {}, ['w.' + fp(watchKey(kind, id))])]);
   const writes = [used];
   let status, claims = null;
   if (kind === 'topup') {
@@ -170,14 +186,129 @@ async function settle(fs, kind, ref, id, hit) {
     if (claims && again) { // a code was taken at the same moment: confirm the payment, deliver by hand
       try {
         await fs.commit([used, fs.wUpdate(ref, { status: 'paid', proofText: proof, pay }, ['status', 'proofText', 'pay'], { updateTime: again.updateTime }, [{ fieldPath: 'paidAt', setToServerValue: 'REQUEST_TIME' }])].concat(unlock));
-        return { status: 'paid', tx: hit.tx, net: d.pay.net, amt: hit.amt };
+        const out2 = { status: 'paid', tx: hit.tx, net: d.pay.net, amt: hit.amt };
+        await later(ctx, notifyPaid(fs, env, kind, id, d, out2));
+        return out2;
       } catch (e2) {}
     }
     return null;
   }
   const out = { status, tx: hit.tx, net: d.pay.net, amt: hit.amt };
   if (claims) out.codes = await readCodes(fs, { ...d, stockIds: claims.map(c => c.id) });
+  await later(ctx, notifyPaid(fs, env, kind, id, d, out));
   return out;
+}
+// in a request: send after answering; in the cron: wait for it
+function later(ctx, p) { const q = p.catch(e => console.error('notify', e && e.message)); if (ctx && ctx.waitUntil) { ctx.waitUntil(q); return Promise.resolve(); } return q; }
+function watchKey(kind, id) { return (kind === 'topup' ? 't_' : 'o_') + id; }
+function fp(seg) { return /^[A-Za-z_][A-Za-z0-9_]*$/.test(seg) ? seg : '`' + seg.replace(/[`\\]/g, '\\$&') + '`'; }
+
+// ---------------------------------------------------------------- cron: every 2 minutes
+async function cron(env) {
+  const fs = await firestore(env), now = Date.now();
+  const st = await fs.get('payState/main'), s = (st && st.data) || {};
+  const fields = { cronAt: now }, mask = ['cronAt'];
+  // 1. payments still waiting: keep checking them even if the customer closed the page
+  const w = s.w || {};
+  for (const key of shuffle(Object.keys(w)).slice(0, 4)) {
+    let done = w[key] < now;
+    if (!done) {
+      try {
+        const r = await check(fs, env, { kind: key[0] === 't' ? 'topup' : 'order', id: key.slice(2) }, null, 2);
+        done = r.status !== 'pending' || r.nopay || r.expired;
+      } catch (e) { done = e.status === 404 || e.status === 400; }
+    }
+    if (done) mask.push('w.' + fp(key));
+  }
+  // 2. new orders, top-ups and support tickets → tell Hazem
+  const cur = { ...(s.cur || {}) };
+  for (const col of ['orders', 'topups', 'tickets']) {
+    if (!cur[col]) { cur[col] = now; continue; } // first run: start from now, no flood of old orders
+    const rows = await fs.query(col, [['createdAt', 'GREATER_THAN', new Date(cur[col])]], 10, 'createdAt');
+    for (const r of rows) {
+      cur[col] = Math.max(cur[col], (r.data.createdAt || 0) + 1); // +1 ms: stored times are finer than ms
+      const msg = newItemMsg(col, r.data);
+      if (msg) await notifyAdmin(env, msg.title, msg.lines, SITE + '/admin.html').catch(e => console.error('notify', e && e.message));
+    }
+  }
+  fields.cur = cur; mask.push('cur');
+  await fs.commit([fs.wUpdate('payState/main', fields, mask)]);
+  return { checked: Object.keys(w).length };
+}
+
+// ---------------------------------------------------------------- notifications
+function channels(env) {
+  return { email: !!(env.RESEND_KEY && env.ADMIN_EMAIL), customers: !!(env.RESEND_KEY && env.MAIL_FROM), whatsapp: !!(env.WA_PHONE && env.WA_KEY), telegram: !!(env.TG_TOKEN && env.TG_CHAT) };
+}
+const money = n => (Math.round((+n || 0) * 100) / 100) + ' ₪';
+function itemLines(d) { return (d.items || []).map(i => '• ' + (i.productName || '') + (i.planName ? ' (' + i.planName + ')' : '') + ((+i.qty || 1) > 1 ? ' ×' + i.qty : '') + ' — ' + money((+i.price || 0) * (+i.qty || 1))); }
+function who(d) { return [d.customer || d.name || '', d.phone || ''].filter(Boolean).join(' · '); }
+function newItemMsg(col, d) {
+  if (col === 'orders') {
+    if (d.source !== 'site' && d.source !== 'wallet') return null;      // your own WhatsApp sales
+    if (/usdt/i.test(d.payment || '') && d.pay) return null;            // told when the payment arrives
+    const st = d.source === 'wallet' ? (d.status === 'done' ? 'دفع من رصيده وتسلّم تلقائياً بكود' : 'دفع من رصيده – سلّمه الاشتراك') : 'بانتظار تأكيدك للحوالة';
+    return { title: '🛒 طلب جديد ' + (d.orderNo || ''), lines: [...itemLines(d), 'المجموع: ' + money(d.total), 'الدفع: ' + (d.payment || ''), 'الزبون: ' + who(d), 'الحالة: ' + st] };
+  }
+  if (col === 'topups') {
+    if (d.source === 'admin' || (/usdt/i.test(d.payment || '') && d.pay)) return null;
+    return { title: '💳 طلب شحن رصيد ' + money(d.amount), lines: ['الدفع: ' + (d.payment || ''), 'الزبون: ' + who(d) + (d.email ? ' · ' + d.email : ''), 'الحالة: بانتظار تأكيدك'] };
+  }
+  if (col === 'tickets') return { title: '🎧 تذكرة دعم جديدة', lines: ['الموضوع: ' + (d.topic || ''), d.orderNo ? 'رقم الطلب: ' + d.orderNo : '', 'الزبون: ' + who(d), d.last ? 'الرسالة: ' + String(d.last).slice(0, 300) : ''].filter(Boolean) };
+  return null;
+}
+async function notifyPaid(fs, env, kind, id, d, r) {
+  const n = r.net === 'tron' ? 'TRC20' : 'BEP20', paid = r.amt + ' USDT (' + n + ')';
+  if (kind === 'topup') {
+    await notifyAdmin(env, '✅ انشحن رصيد ' + money(d.amount) + ' تلقائياً', ['وصل: ' + paid, 'الزبون: ' + who(d) + (d.email ? ' · ' + d.email : '')], SITE + '/admin.html');
+    if (d.email) await mailCustomer(env, d.email, 'انضاف ' + money(d.amount) + ' لرصيدك ✓', d.name, ['وصلت دفعتك ' + paid + ' وتأكدت، وانضاف <b>' + esc(money(d.amount)) + '</b> لرصيدك.', 'هلأ فيك تشتري أي اشتراك بضغطة من رصيدك.']);
+    return;
+  }
+  const done = r.status === 'done';
+  await notifyAdmin(env, '✅ وصلت دفعة USDT — طلب ' + (d.orderNo || ''), [...itemLines(d), 'وصل: ' + paid, 'الزبون: ' + who(d) + (d.email ? ' · ' + d.email : ''), done ? 'الحالة: تسلّم تلقائياً بكود ✓' : 'الحالة: قيد التسليم — سلّمه الاشتراك'], SITE + '/admin.html');
+  let to = d.email || '';
+  if (!to && d.uid) { const w = await fs.get('wallets/' + d.uid); to = (w && w.data.email) || ''; }
+  if (!to) return;
+  const items = (d.items || []).map(i => esc(i.productName + (i.planName ? ' (' + i.planName + ')' : ''))).join('<br>');
+  if (done) {
+    const codes = (r.codes || []).map(c => '<div style="margin:8px 0;padding:10px 12px;border:1px dashed #16a34a;border-radius:10px;background:#f0fdf4"><div style="font-size:12px;color:#15803d">' + esc(c.name) + '</div><pre dir="ltr" style="margin:4px 0 0;font:600 14px/1.5 monospace;white-space:pre-wrap;text-align:left">' + esc(c.value) + '</pre></div>').join('');
+    await mailCustomer(env, to, 'تم تسليم طلبك ' + (d.orderNo || '') + ' ✓', d.customer, ['وصلت دفعتك ' + paid + ' وتأكدت، وهاي بيانات التفعيل:', items, codes, 'احفظها عندك. إذا احتجت أي إشي راسلنا برقم الطلب <b dir="ltr">' + esc(d.orderNo || '') + '</b>.']);
+  } else {
+    await mailCustomer(env, to, 'وصلت دفعتك ✓ طلبك ' + (d.orderNo || '') + ' قيد التجهيز', d.customer, ['وصلت دفعتك ' + paid + ' وتأكدت.', items, 'طلبك رقم <b dir="ltr">' + esc(d.orderNo || '') + '</b> قيد التجهيز، ورح نبعتلك التفاصيل على واتساب بأقرب وقت.']);
+  }
+}
+async function notifyAdmin(env, title, lines, link) {
+  const text = title + '\n' + lines.join('\n'), jobs = [];
+  if (env.WA_PHONE && env.WA_KEY) jobs.push(fetch('https://api.callmebot.com/whatsapp.php?phone=' + encodeURIComponent(env.WA_PHONE) + '&text=' + encodeURIComponent(text) + '&apikey=' + encodeURIComponent(env.WA_KEY)));
+  if (env.TG_TOKEN && env.TG_CHAT) jobs.push(fetch('https://api.telegram.org/bot' + env.TG_TOKEN + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: env.TG_CHAT, text: text + (link ? '\n' + link : ''), disable_web_page_preview: true }) }));
+  if (env.RESEND_KEY && env.ADMIN_EMAIL) jobs.push(sendMail(env, env.ADMIN_EMAIL, title, mailHTML(title, null, lines.map(esc), link, 'افتح لوحة الإدارة')));
+  const res = await Promise.allSettled(jobs);
+  return res.filter(x => x.status === 'fulfilled' && x.value && x.value.ok).length;
+}
+async function mailCustomer(env, to, subject, name, paras) {
+  if (!(env.RESEND_KEY && env.MAIL_FROM) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return;
+  await sendMail(env, to, subject, mailHTML(subject, name, paras, SITE, 'زور المتجر'));
+}
+function sendMail(env, to, subject, html) {
+  return fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + env.RESEND_KEY, 'content-type': 'application/json' }, body: JSON.stringify({ from: env.MAIL_FROM || STORE + ' <onboarding@resend.dev>', to: [to], subject, html }) });
+}
+function mailHTML(title, name, paras, link, linkLabel) {
+  return '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;background:#f4f6fb;padding:24px 12px"><div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;padding:22px 20px;border:1px solid #e4e8f2;color:#1b2440;line-height:1.8;font-size:15px">' +
+    '<div style="font-weight:800;font-size:18px;color:#1d4ed8;margin-bottom:6px">' + STORE + '</div><h2 style="margin:0 0 10px;font-size:18px">' + esc(title) + '</h2>' +
+    (name ? '<p style="margin:0 0 8px">مرحباً ' + esc(name) + '،</p>' : '') + paras.filter(Boolean).map(p => '<div style="margin:0 0 10px">' + p + '</div>').join('') +
+    (link ? '<a href="' + link + '" style="display:inline-block;margin-top:6px;background:#1d4ed8;color:#fff;text-decoration:none;padding:10px 18px;border-radius:10px;font-weight:700">' + linkLabel + '</a>' : '') +
+    '</div></div>';
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+// a test message from the admin panel, at most once a minute
+async function notifyTest(fs, env) {
+  const ch = channels(env);
+  if (!ch.email && !ch.whatsapp && !ch.telegram) return { sent: 0, notify: ch };
+  const st = await fs.get('payState/main'), last = (st && st.data.testAt) || 0;
+  if (Date.now() - last < 60e3) return { sent: 0, wait: true, notify: ch };
+  await fs.commit([fs.wUpdate('payState/main', { testAt: Date.now() }, ['testAt'])]);
+  const sent = await notifyAdmin(env, '🔔 تجربة إشعارات ' + STORE, ['هيك رح توصلك الطلبات الجديدة والدفعات.'], SITE + '/admin.html');
+  return { sent, notify: ch };
 }
 
 // instant codes: every unit in the order must be an instant plan with a free code
@@ -284,9 +415,10 @@ async function firestore(env) {
       if (!r.ok) throw fail('firestore get ' + r.status, 502);
       return parse(await r.json());
     },
-    async query(col, filters, limit) {
+    async query(col, filters, limit, orderBy) {
       const fl = filters.map(([f, op, v]) => op === 'IS_NULL' ? { unaryFilter: { op: 'IS_NULL', field: { fieldPath: f } } } : { fieldFilter: { field: { fieldPath: f }, op, value: toValue(v) } });
       const body = { structuredQuery: { from: [{ collectionId: col }], where: fl.length > 1 ? { compositeFilter: { op: 'AND', filters: fl } } : fl[0], limit } };
+      if (orderBy) body.structuredQuery.orderBy = [{ field: { fieldPath: orderBy }, direction: 'ASCENDING' }];
       const r = await fetch(api + root + ':runQuery', { method: 'POST', headers: H, body: JSON.stringify(body) });
       if (!r.ok) throw fail('firestore query ' + r.status, 502);
       return (await r.json()).filter(x => x.document).map(x => parse(x.document));
@@ -329,6 +461,7 @@ function toValue(v) {
   if (typeof v === 'boolean') return { booleanValue: v };
   if (typeof v === 'number') return num(v);
   if (typeof v === 'string') return { stringValue: v };
+  if (v instanceof Date) return { timestampValue: v.toISOString() };
   if (Array.isArray(v)) return { arrayValue: { values: v.map(toValue) } };
   if (typeof v === 'object') return { mapValue: { fields: toFields(v) } };
   return { stringValue: String(v) };
