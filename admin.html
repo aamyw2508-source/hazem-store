@@ -988,6 +988,23 @@ small.ci-war{display:flex;margin-top:3px}
 .fine a{color:inherit;text-decoration:underline}
 
 .seo-list a{color:inherit;text-decoration:none}.seo-list a:hover{color:var(--brand);text-decoration:underline}
+
+/* ---------- USDT box */
+.usdt-box{display:grid;gap:12px;padding:14px;border:1px solid var(--line);border-radius:16px;background:var(--surface-2)}
+.usdt-amt{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 14px;border-radius:14px;background:var(--surface);border:1.5px solid color-mix(in srgb,var(--brand) 40%,var(--line))}
+.usdt-amt span{font-size:13px;color:var(--muted);font-weight:600}
+.usdt-amt b{font:800 24px/1.1 var(--f-display);color:var(--price);font-variant-numeric:tabular-nums}
+.usdt-qr{justify-self:center;width:190px;max-width:70%;aspect-ratio:1;background:#fff;border-radius:14px;border:1px solid var(--line);overflow:hidden}
+.usdt-qr svg{display:block;width:100%;height:100%}
+.usdt-box .kv{background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.usdt-box .kv .v{font-size:13.5px;direction:ltr;text-align:left}
+.usdt-tips{margin:0;padding:0 18px 0 0;font-size:12.5px;line-height:1.7;color:var(--fg-2)}
+.usdt-st{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:10px 12px;border-radius:12px;background:var(--surface);border:1px dashed var(--line-2);font-size:13.5px;font-weight:600}
+.usdt-st span{display:flex;align-items:center;gap:8px}
+.usdt-st .ok{color:var(--good)} .usdt-st .bad{color:var(--warn)} .usdt-st .wait{color:var(--fg-2)}
+.usdt-st a{font-size:12.5px}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--line-2);border-top-color:var(--brand);animation:spin 1s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -1146,7 +1163,7 @@ function DEFAULT_SETTINGS(){return {
    {id:'jawwal',name:'جوال باي',domain:'jawwalpay.ps',icon:'phone',tint:'green',logo:'',numberLabel:'رقم المحفظة',number:NUM,holder:HOLDER,note:'',proofLabel:'رقم الجوال اللي حوّلت منه',proofType:'tel',active:true},
    {id:'palpay',name:'بال باي',domain:'palpay.ps',icon:'wallet',tint:'blue',logo:'',numberLabel:'رقم الدفع',number:NUM,holder:HOLDER,note:'',proofLabel:'الاسم اللي حوّلت منه',proofType:'name',active:true},
    {id:'bop',name:'بنك فلسطين',domain:'bankofpalestine.com',icon:'bank',tint:'cyan',logo:'',numberLabel:'رقم الدفع',number:NUM,holder:HOLDER,note:'',proofLabel:'الاسم اللي حوّلت منه',proofType:'name',active:true},
-   {id:'usdt',name:'USDT',domain:'tether.to',icon:'coin',tint:'green',logo:'',numberLabel:'عنوان المحفظة',number:'',holder:'',note:'الشبكة: TRC20',proofLabel:'رقم العملية (TXID)',proofType:'text',active:true}
+   {id:'usdt',name:'USDT',domain:'tether.to',icon:'coin',tint:'green',logo:'',numberLabel:'عنوان المحفظة (BEP20)',number:'0x289B2eae953DBaa04ba59EED4694B6b2919cFEf5',holder:'',note:'الشبكة: BNB Smart Chain (BEP20) بس',proofLabel:'رقم المعاملة TXID',proofType:'text',auto:true,rate:3.1,active:true}
   ],
   faq:[
    {q:'كيف بطلب اشتراك؟',a:'اختار الاشتراك والمدة، حوّل المبلغ على وحدة من طرق الدفع، اكتب بيانات الحوالة أو ارفع سكرين، وبعدين أرسل الطلب على واتساب.'},
@@ -1936,6 +1953,75 @@ function acctErrors(){var t=acctNeed(),o=S.co,e=[];if(!t)return e;var em=String(
   if(!em)e.push(t==='login'?'اكتب إيميل حسابك.':'اكتب الإيميل اللي بدك تفعّل عليه.');else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em))e.push('الإيميل مش مكتوب صح.');
   if(t==='login'&&!String(o.pass||''))e.push('اكتب كلمة سر حسابك.');return e}
 function acctText(o){var t=acctNeed(),L=[];if(!t)return L;if(String(o.email||'').trim())L.push((t==='login'?'إيميل الحساب: ':'إيميل التفعيل: ')+o.email.trim());if(t==='login'&&o.pass)L.push('كلمة السر: '+o.pass);return L}
+/* ================= USDT on BNB Smart Chain: exact amount + QR, payment found on-chain automatically ================= */
+var USDT_BSC='0x55d398326f99059ff775485246999027b3197955',TR_TOPIC='0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+var USDT_ADDR='0x289B2eae953DBaa04ba59EED4694B6b2919cFEf5';
+var BSC_RPC=['https://bsc-rpc.publicnode.com','https://bsc.drpc.org','https://1rpc.io/bnb','https://bsc-dataseed.bnbchain.org'],rpcI=0;
+function isUsdtM(m){return !!m&&(m.id==='usdt'||/usdt/i.test(m.name||''))}
+function isAutoUsdt(m){return !!(m&&m.auto&&/^0x[0-9a-fA-F]{40}$/.test(String(m.number||'').trim()))}
+function usdtRate(m){var r=+(m&&m.rate);return r>0?r:3.1}
+function r3(v){return Math.round(v*1000)/1000}
+function usdtAmt(o,m,ils){if(!o.usdt)o.usdt={tag:1+Math.floor(Math.random()*99)};var u=o.usdt,base=Math.ceil(ils/usdtRate(m)*100-1e-9)/100,amt=ils>0?r3(base+u.tag/1000):0;
+  if(amt!==u.amt){u.amt=amt;u.next=0;u.found=null}u.addr=String(m.number).trim();return amt}
+function rpc(method,params,k){k=k||0;var url=BSC_RPC[(rpcI+k)%BSC_RPC.length],ctl=typeof AbortController!=='undefined'?new AbortController():null,tm=setTimeout(function(){if(ctl)ctl.abort()},9000);
+  return fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:method,params:params}),signal:ctl?ctl.signal:undefined})
+   .then(function(r){return r.json()}).then(function(j){clearTimeout(tm);if(j.error)throw j.error;rpcI=(rpcI+k)%BSC_RPC.length;return j.result})
+   .catch(function(e){clearTimeout(tm);if(k+1<BSC_RPC.length)return rpc(method,params,k+1);throw e})}
+function hx(n){return '0x'+n.toString(16)}
+function topicAddr(a){return '0x000000000000000000000000'+String(a).toLowerCase().replace(/^0x/,'')}
+function logVal(l){return parseInt(l.data,16)/1e18}
+function findUsdt(addr,amt,from,to,skip){var cs=[],a=Math.max(0,from);while(a<=to){var b=Math.min(to,a+1999);cs.push([a,b]);a=b+1}var hit=null;
+  return cs.reduce(function(p,c){return p.then(function(){if(hit)return;return rpc('eth_getLogs',[{address:USDT_BSC,fromBlock:hx(c[0]),toBlock:hx(c[1]),topics:[TR_TOPIC,null,topicAddr(addr)]}]).then(function(ls){
+    (ls||[]).some(function(l){if(Math.abs(logVal(l)-amt)<0.0005&&!(skip&&skip(l.transactionHash))){hit={tx:l.transactionHash,block:parseInt(l.blockNumber,16),amt:r3(logVal(l))};return true}})})})},Promise.resolve()).then(function(){return hit})}
+function loadQR(){return window.qrcode?Promise.resolve():loadScript('qr.js')}
+function usdtQR(box,addr){var el=box&&box.querySelector('.usdt-qr');if(!el||el.dataset.done===addr)return;el.dataset.done=addr;
+  loadQR().then(function(){var q=qrcode(0,'M');q.addData(addr);q.make();el.innerHTML=q.createSvgTag({cellSize:4,margin:4,scalable:true})}).catch(function(){el.hidden=true})}
+function usdtBoxHTML(m,ils,ctx){var o=ctx==='tp'?S.tp:S.co;if(!o)return '';var amt=usdtAmt(o,m,ils),addr=o.usdt.addr;setTimeout(usdtKick,40);
+  if(!amt)return '<h3><span class="sn">٢</span>حوّل على USDT (BEP20)</h3><p class="hint">اكتب المبلغ وبيطلعلك قديش تحوّل USDT بالظبط.</p>';
+  return '<h3><span class="sn">٢</span>حوّل <bdi dir="ltr">'+amt+' USDT</bdi> على شبكة BNB Smart Chain</h3><div class="usdt-box" data-ctx="'+ctx+'">'+
+   '<div class="usdt-amt"><span>المبلغ بالظبط</span><b dir="ltr">'+amt+' USDT</b><button class="copy" data-act="copy" data-text="'+amt+'">'+svg('copy',15)+'<span>نسخ</span></button></div>'+
+   '<div class="usdt-qr" aria-label="رمز QR لعنوان المحفظة"></div>'+
+   kv('عنوان المحفظة · BNB Smart Chain (BEP20)',addr,true)+
+   '<ul class="usdt-tips"><li>حوّل على شبكة <b>BNB Smart Chain (BEP20)</b> بس، وإلا بتضيع الدفعة.</li><li>حوّل <b>'+amt+'</b> بالظبط لآخر رقم، هيك بنعرف دفعتك لحالها.</li><li>إذا بتحوّل من منصة زي بينانس، تأكد إنه المبلغ اللي بيوصل هو نفسه بعد الرسوم.</li></ul>'+
+   '<div class="usdt-st" id="'+ctx+'-usdt-st">'+usdtStHTML(o.usdt)+'</div></div><p class="fine">≈ '+fmt(ils)+' '+cur()+' على سعر '+usdtRate(m)+' '+cur()+' للدولار</p>'}
+function usdtStHTML(u){if(u.found)return '<span class="ok">'+svg('check',16)+'وصلتنا دفعتك <bdi dir="ltr">'+u.found.amt+' USDT</bdi></span><a href="https://bscscan.com/tx/'+esc(u.found.tx)+'" target="_blank" rel="noopener">شوف المعاملة</a>';
+  if((u.err||0)>=3)return '<span class="bad">'+svg('alert',16)+'ما قدرنا نفحص الدفعة تلقائياً هلأ. إذا حوّلت، الصق رقم المعاملة TXID تحت.</span>';
+  return '<span class="wait"><i class="spin"></i>بنستنى دفعتك… بنفحص الشبكة لحالنا كل كم ثانية</span>'}
+var usdtT=null;
+function usdtCtx(){var box=$('.usdt-box');if(!box)return null;var k=box.dataset.ctx,o=k==='tp'?S.tp:S.co;return o&&o.usdt?{k:k,o:o,box:box}:null}
+function usdtKick(){clearTimeout(usdtT);usdtT=setTimeout(usdtPoll,60)}
+function usdtPoll(){clearTimeout(usdtT);var c=usdtCtx();if(!c)return;var u=c.o.usdt;usdtQR(c.box,u.addr);if(!u.amt)return;
+  function show(){var st=$('#'+c.k+'-usdt-st');if(st)st.innerHTML=usdtStHTML(u)}
+  if(u.found){show();return}
+  var amt=u.amt;
+  rpc('eth_blockNumber',[]).then(function(b){b=parseInt(b,16);if(!u.start)u.start=b-400;var from=u.next||u.start;if(b<from)return null;
+    return findUsdt(u.addr,amt,from,b).then(function(hit){if(u.amt!==amt)return null;u.next=b+1;return hit})})
+  .then(function(hit){u.err=0;if(hit){u.found=hit;c.o.proof=hit.tx;var pi=$('#'+c.k+'-proof-t');if(pi)pi.value=hit.tx;if(c.k==='tp')updateTopupHref();else updateSendHref();toast('وصلتنا دفعتك، كمّل الطلب')}show()},
+    function(e){u.err=(u.err||0)+1;console.warn('usdt',e);show()})
+  .then(function(){if(!u.found&&usdtCtx())usdtT=setTimeout(usdtPoll,12000)})}
+function usdtProofText(m,o,proof){return (isAutoUsdt(m)&&o.usdt&&o.usdt.amt?o.usdt.amt+' USDT · ':'')+String(proof||'')}
+/* ----- admin: check a USDT order or top-up on the chain ----- */
+function parseUsdtProof(t){t=String(t||'');var a=/([0-9]+(?:\.[0-9]+)?)\s*USDT/i.exec(t),x=/0x[0-9a-fA-F]{64}/.exec(t);return {amt:a?+a[1]:0,tx:x?x[0].toLowerCase():''}}
+var usdtV={};
+function usdtUsedElsewhere(tx,selfId){tx=String(tx).toLowerCase();return S.orders.some(function(o){return o.id!==selfId&&String(o.proofText||'').toLowerCase().indexOf(tx)>-1})||(S.topups||[]).some(function(t){return t.id!==selfId&&String(t.proofText||'').toLowerCase().indexOf(tx)>-1})}
+function usdtVerify(id,proofText,createdAt){var m=(S.settings.payments||[]).find(isAutoUsdt),p=parseUsdtProof(proofText);
+  if(!m||(!p.tx&&!p.amt))return Promise.resolve(null);if(usdtV[id]&&usdtV[id].st!=='err')return Promise.resolve(usdtV[id]);var addr=String(m.number).trim();
+  var job=p.tx?rpc('eth_getTransactionReceipt',[p.tx]).then(function(r){if(!r)return {st:'wait'};var l=(r.logs||[]).find(function(l){return String(l.address).toLowerCase()===USDT_BSC&&l.topics&&l.topics[0]===TR_TOPIC&&String(l.topics[2]).toLowerCase()===topicAddr(addr)});
+      if(!l)return {st:'no',why:'المعاملة مش تحويل USDT على عنوانك'};var v=r3(logVal(l));if(p.amt&&Math.abs(v-p.amt)>=0.0005)return {st:'no',why:'المبلغ اللي وصل '+v+' USDT مش '+p.amt};return {st:'ok',amt:v,tx:p.tx}})
+   :rpc('eth_blockNumber',[]).then(function(b){b=parseInt(b,16);var back=Math.ceil((Date.now()-createdAt)/750)+1200;return findUsdt(addr,p.amt,Math.max(b-Math.min(back,40000),0),b,function(tx){return usdtUsedElsewhere(tx,id)}).then(function(h){return h?{st:'ok',amt:h.amt,tx:h.tx}:{st:'no',why:'ما لقينا تحويل بمبلغ '+p.amt+' USDT'}})});
+  return job.then(function(r){if(r.st==='ok'&&usdtUsedElsewhere(r.tx,id))r={st:'dup',tx:r.tx,why:'نفس المعاملة مستعملة بطلب ثاني'};usdtV[id]=r;return r},function(e){console.warn('verify',e);return usdtV[id]={st:'err'}})}
+function usdtVHTML(r){if(!r)return '<span class="muted">جاري الفحص على الشبكة…</span>';
+  if(r.st==='ok')return '<span class="good-t">'+svg('check',14)+' الدفعة وصلت: <bdi dir="ltr">'+r.amt+' USDT</bdi></span> <a href="https://bscscan.com/tx/'+esc(r.tx)+'" target="_blank" rel="noopener">المعاملة</a>';
+  if(r.st==='wait')return '<span class="warn-t">المعاملة لسا ما تأكدت على الشبكة</span>';
+  if(r.st==='err')return '<span class="warn-t">ما قدرنا نفحص هلأ، جرّب بعد شوي</span>';
+  return '<span class="bad-t">'+svg('alert',14)+' '+esc(r.why||'ما لقينا الدفعة')+'</span>'+(r.tx?' <a href="https://bscscan.com/tx/'+esc(r.tx)+'" target="_blank" rel="noopener">المعاملة</a>':'')}
+function usdtRowKick(id,proofText,createdAt){setTimeout(function(){usdtVerify(id,proofText,createdAt).then(function(r){var el=$('#uv-'+id);if(el)el.innerHTML=usdtVHTML(r)})},30)}
+/* one-time setup: the wallet address Hazem sent */
+function usdtMigrate(){if(!S.isAdmin||!CLOUD||S.settings.usdtV===1||!S.loaded)return;var a=S.settings.payments=S.settings.payments||[],m=a.find(isUsdtM);
+  if(!m){m={id:'usdt',name:'USDT',domain:'tether.to',icon:'coin',tint:'green',logo:'',holder:'',active:true};a.push(m)}
+  m.number=USDT_ADDR;m.numberLabel='عنوان المحفظة (BEP20)';m.note='الشبكة: BNB Smart Chain (BEP20) بس';m.proofLabel='رقم المعاملة TXID';m.proofType='text';m.auto=true;if(!(+m.rate>0))m.rate=3.1;
+  S.settings.usdtV=1;DB.saveSettings(S.settings).then(function(){cachePublic();toast('انضاف عنوان USDT (BEP20) والفحص التلقائي');adminRefresh()},function(e){S.settings.usdtV=0;console.warn('usdt setup',e)})}
+
 function checkoutHTML(){
   var o=S.co,m=curMethod(),lines=coLines(),total=coTotal(),wal=isWalletPay();
   var h='<div class="co-sum">'+lines.map(function(x){return '<div class="co-item">'+tile(x.p,'sm')+'<span class="ci-info"><b><bdi>'+esc(x.p.name)+'</bdi></b><small>'+esc(x.plan.name)+(x.qty>1?' · ×'+x.qty:'')+warSuffix(x.plan,' · ')+'</small></span>'+money(x.plan.price*x.qty)+'</div>'}).join('')+'<div class="co-total"><span>المجموع</span>'+money(total)+'</div></div>'+askHTML()+acctHTML();
@@ -1948,7 +2034,7 @@ function checkoutHTML(){
     h+='<p class="err" id="co-err" hidden></p><button class="btn primary block lg" id="co-wpay" data-act="walletPay"'+(can?'':' disabled')+'>'+svg('wallet',18)+' ادفع '+money(total)+' من رصيدك</button><p class="fine">المبلغ بينخصم من رصيدك فوراً، والاشتراكات الفورية بتظهرلك مباشرة.</p>';
     return h;
   }
-  h+='<div class="ostep" id="co-pay">'+payDetailsHTML(m,total)+'</div>';
+  h+='<div class="ostep" id="co-pay">'+payDetailsHTML(m,total,'co')+'</div>';
   h+='<div class="ostep" id="co-proof">'+proofHTML(m,S.co,'co')+'</div>';
   h+='<div class="ostep"><h3><span class="sn">٤</span>بياناتك</h3><label class="field"><span>الاسم</span><input class="inp" id="co-name" autocomplete="name" value="'+esc(o.name)+'" placeholder="الاسم الكامل"></label>'+(acctNeed()?'<label class="field"><span>رقم واتساب <em>(اختياري)</em></span><input class="inp ltr" id="co-phone" type="tel" inputmode="tel" autocomplete="tel" value="'+esc(o.phone)+'" placeholder="059xxxxxxx"></label>':'<div class="row2"><label class="field"><span>رقم واتساب <em>(اختياري)</em></span><input class="inp ltr" id="co-phone" type="tel" inputmode="tel" autocomplete="tel" value="'+esc(o.phone)+'" placeholder="059xxxxxxx"></label><label class="field"><span>إيميل التفعيل <em>(إذا بلزم)</em></span><input class="inp ltr" id="co-email" type="email" inputmode="email" autocomplete="email" value="'+esc(o.email)+'" placeholder="name@gmail.com"></label></div>')+'</div>';
   h+='<p class="err" id="co-err" hidden></p><a class="btn wa block lg" id="co-send" href="#" target="_blank" rel="noopener" data-act="sendOrder">'+svg('chat')+' أرسل الطلب عبر واتساب</a><p class="fine">رقم الطلب <span dir="ltr">'+esc(o.no)+'</span> · بعد ما نتأكد من الحوالة بنفعّلك الاشتراك ونبعتلك التفاصيل.</p><p class="fine">بإرسال الطلب بتوافق على <a href="terms.html">شروط الاستخدام</a> و<a href="guarantee.html">سياسة الضمان</a>.</p>';
@@ -1958,8 +2044,8 @@ function methodsHTML(){var wal=isWalletPay(),m=wal?null:curMethod();
   var w=walletOn()?'<button class="method" data-act="pickMethod" data-id="wallet" aria-pressed="'+wal+'">'+tile({icon:'wallet',tint:'violet'},'sm')+'<span>رصيدي'+(S.user&&S.wallet?' · '+fmt(S.wallet.balance||0)+cur():'')+'</span></button>':'';
   return w+activeMethods().map(function(x){return '<button class="method" data-act="pickMethod" data-id="'+esc(x.id)+'" aria-pressed="'+(!!m&&x.id===m.id)+'">'+tile(x,'sm','card')+'<span>'+esc(x.name)+'</span></button>'}).join('')}
 function kv(label,value,ltr){return '<div class="kv"><span class="k">'+esc(label)+'</span><span class="v"'+(ltr?' dir="ltr" style="text-align:right"':'')+'>'+esc(value)+'</span><button class="copy" data-act="copy" data-text="'+esc(value)+'">'+svg('copy',15)+'<span>نسخ</span></button></div>'}
-function payDetailsHTML(m,amount){
-  if(!m)return '';
+function payDetailsHTML(m,amount,ctx){
+  if(!m)return '';if(isAutoUsdt(m))return usdtBoxHTML(m,amount,ctx||'co');
   var h='<h3><span class="sn">٢</span>حوّل '+money(amount)+' على '+esc(m.name)+'</h3><div class="paybox">';
   if(m.number)h+=kv(m.numberLabel||'رقم الدفع',m.number,true);else h+='<p class="paynote">اطلب '+esc(m.numberLabel||'تفاصيل الدفع')+' منّا على واتساب قبل التحويل.</p>';
   if(m.holder)h+=kv('اسم صاحب الحساب',m.holder,false);
@@ -1969,7 +2055,7 @@ function payDetailsHTML(m,amount){
 function proofHTML(m,o,pre){
   if(!m)return '';o=o||S.co;pre=pre||'co';var t=m.proofType||'text';
   var ph=t==='tel'?'059xxxxxxx':t==='name'?'الاسم كما هو بالحوالة':'اكتب هون';
-  return '<h3><span class="sn">٣</span>أثبت التحويل</h3><p class="hint">اكتب '+esc(m.proofLabel||'تفاصيل الحوالة')+'، أو ارفع سكرين للحوالة. لازم واحد منهم على الأقل.</p>'+
+  return '<h3><span class="sn">٣</span>أثبت التحويل</h3>'+(isAutoUsdt(m)?'<p class="hint">'+svg('bolt',14)+' أول ما تكشف الدفعة، رقم المعاملة بينكتب هون لحاله.</p>':'')+'<p class="hint">اكتب '+esc(m.proofLabel||'تفاصيل الحوالة')+'، أو ارفع سكرين للحوالة. لازم واحد منهم على الأقل.</p>'+
    '<label class="field"><span>'+esc(m.proofLabel||'تفاصيل الحوالة')+'</span><input class="inp'+(t!=='name'?' ltr':'')+'" id="'+pre+'-proof-t" '+(t==='tel'?'type="tel" inputmode="tel"':'type="text"')+' value="'+esc(o.proof)+'" placeholder="'+esc(ph)+'"></label>'+
    '<div class="or">أو</div><div class="upl" id="'+pre+'-upl">'+uplHTML(o,pre)+'</div>';
 }
@@ -1982,6 +2068,7 @@ function orderText(){
   lines.forEach(function(x){L.push('- '+x.p.name+' ('+x.plan.name+warSuffix(x.plan,'، ')+')'+(x.qty>1?' ×'+x.qty:'')+': '+fmt(x.plan.price*x.qty)+' '+cur());askText(x.p.id,o.ans).forEach(function(t){L.push('   • '+t)})});
   L.push('المجموع: '+fmt(coTotal())+' '+cur());
   if(m)L.push('طريقة الدفع: '+m.name);
+  if(isAutoUsdt(m)&&o.usdt&&o.usdt.amt)L.push('المبلغ المحوّل: '+o.usdt.amt+' USDT (BNB Smart Chain)'+(o.usdt.found?' · وصلت ✓':''));
   if(m&&o.proof.trim())L.push((m.proofLabel||'تفاصيل الحوالة')+': '+o.proof.trim());
   if(o.img)L.push(CLOUD&&logsOrders()?'رفعت سكرين الحوالة مع الطلب على الموقع.':'رح أبعت سكرين الحوالة هون بالمحادثة.');
   if(o.name.trim())L.push('الاسم: '+o.name.trim());
@@ -2005,7 +2092,7 @@ function sendOrder(el,ev){
   var m=curMethod(),href=el.href,lines=coLines();
   store('hazem-me',{name:o.name.trim(),phone:o.phone.trim()});
   if(logsOrders()){
-    var rec={orderNo:o.no,items:lines.map(function(x){var it={productId:x.p.id,productName:String(x.p.name).slice(0,100),planId:x.plan.id,planName:String(x.plan.name).slice(0,60),price:+x.plan.price||0,qty:x.qty},inf=askText(x.p.id,o.ans).join(' | ').slice(0,600);if(inf)it.info=inf;return it}),total:coTotal(),customer:o.name.trim().slice(0,60),phone:o.phone.trim().slice(0,20),email:o.email.trim().slice(0,100),payment:m?String(m.name).slice(0,60):'',proofText:o.proof.trim().slice(0,120),proofImage:o.img||'',status:'pending',source:'site'};
+    var rec={orderNo:o.no,items:lines.map(function(x){var it={productId:x.p.id,productName:String(x.p.name).slice(0,100),planId:x.plan.id,planName:String(x.plan.name).slice(0,60),price:+x.plan.price||0,qty:x.qty},inf=askText(x.p.id,o.ans).join(' | ').slice(0,600);if(inf)it.info=inf;return it}),total:coTotal(),customer:o.name.trim().slice(0,60),phone:o.phone.trim().slice(0,20),email:o.email.trim().slice(0,100),payment:m?String(m.name).slice(0,60):'',proofText:usdtProofText(m,o,o.proof.trim()).slice(0,120),proofImage:o.img||'',status:'pending',source:'site'};
     if(CLOUD&&S.user&&S.user.uid)rec.uid=S.user.uid;
     DB.createSiteOrder(rec).catch(function(e){console.warn('order log failed',e)});
   }
@@ -2096,13 +2183,13 @@ function topupHTML(){
   var h='<div class="ostep"><h3><span class="sn">١</span>المبلغ وطريقة الدفع</h3><label class="field"><span>كم بدك تشحن؟ <em>(أقل شي '+fmt(minTopup())+esc(cur())+')</em></span><input class="inp ltr" id="tp-amount" inputmode="decimal" value="'+esc(t.amount)+'" placeholder="50"></label>'+
    '<div class="chips">'+[20,50,100,200].filter(function(v){return v>=minTopup()}).map(function(v){return '<button class="fchip" data-act="tpAmt" data-v="'+v+'" aria-pressed="'+(amt===v)+'">'+v+esc(cur())+'</button>'}).join('')+'</div>'+
    '<div class="methods">'+activeMethods().map(function(x){return '<button class="method" data-act="tpMethod" data-id="'+esc(x.id)+'" aria-pressed="'+(x.id===m.id)+'">'+tile(x,'sm','card')+'<span>'+esc(x.name)+'</span></button>'}).join('')+'</div></div>';
-  h+='<div class="ostep" id="tp-pay">'+payDetailsHTML(m,amt||0)+'</div>';
+  h+='<div class="ostep" id="tp-pay">'+payDetailsHTML(m,amt||0,'tp')+'</div>';
   h+='<div class="ostep" id="tp-proof">'+proofHTML(m,t,'tp')+'</div>';
   h+='<p class="err" id="tp-err" hidden></p><a class="btn wa block lg" id="tp-send" href="#" target="_blank" rel="noopener" data-act="sendTopup">'+svg('chat',18)+' أرسل طلب الشحن</a><p class="fine">بعد ما نتأكد من الحوالة بينضاف المبلغ لرصيدك، وبتشوف الحالة بحسابك.</p>';
   return h;
 }
 function rerenderTopup(){if(S.tpsheet&&!S.tpsheet.closed){S.tpsheet.set(topupHTML(),null,true);updateTopupHref()}}
-function topupText(){var t=S.tp,m=tpMethod(),w=S.wallet||{};var L=['مرحباً '+S.settings.storeName+'، طلب شحن رصيد رقم '+t.no+':','المبلغ: '+fmt(num(t.amount))+' '+cur(),'طريقة الدفع: '+m.name];
+function topupText(){var t=S.tp,m=tpMethod(),w=S.wallet||{};var L=['مرحباً '+S.settings.storeName+'، طلب شحن رصيد رقم '+t.no+':','المبلغ: '+fmt(num(t.amount))+' '+cur(),'طريقة الدفع: '+m.name];if(isAutoUsdt(m)&&t.usdt&&t.usdt.amt)L.push('المبلغ المحوّل: '+t.usdt.amt+' USDT (BNB Smart Chain)'+(t.usdt.found?' · وصلت ✓':''));
   if(t.proof.trim())L.push((m.proofLabel||'تفاصيل الحوالة')+': '+t.proof.trim());
   if(t.img)L.push('رفعت سكرين الحوالة على الموقع.');
   L.push('الحساب: '+(S.user&&S.user.email||''));if(w.name)L.push('الاسم: '+w.name);return L.join('\n')}
@@ -2116,7 +2203,7 @@ function sendTopup(el,ev){
   else if(pr&&m.proofType==='tel'&&!t.img&&latin(pr).replace(/\D/g,'').length<9)e.push('رقم الجوال لازم يكون 10 أرقام، مثل 0599123456.');
   if(e.length){ev.preventDefault();box.innerHTML=e.map(esc).join('<br>');box.hidden=false;return}
   box.hidden=true;updateTopupHref();var href=el.href,w=S.wallet||{};
-  DB.createTopup({uid:S.user.uid,name:String(w.name||S.user.name||'').slice(0,60),email:String(S.user.email||'').slice(0,100),phone:String(w.phone||'').slice(0,20),amount:amt,payment:String(m.name).slice(0,60),proofText:pr.slice(0,120),proofImage:t.img||'',status:'pending'}).catch(function(err){console.warn(err);toast('ما قدرنا نسجّل طلب الشحن بالموقع، بس رسالتك على واتساب بتوصل')});
+  DB.createTopup({uid:S.user.uid,name:String(w.name||S.user.name||'').slice(0,60),email:String(S.user.email||'').slice(0,100),phone:String(w.phone||'').slice(0,20),amount:amt,payment:String(m.name).slice(0,60),proofText:usdtProofText(m,t,pr).slice(0,120),proofImage:t.img||'',status:'pending'}).catch(function(err){console.warn(err);toast('ما قدرنا نسجّل طلب الشحن بالموقع، بس رسالتك على واتساب بتوصل')});
   var sh=S.tpsheet;setTimeout(function(){if(!sh||sh.closed)return;S.tp=null;sh.set('<div class="done"><div class="done-ic">'+svg('check',32)+'</div><h3>انبعت طلب الشحن</h3><p>أول ما نتأكد من الحوالة بينضاف '+money(amt)+' لرصيدك، وبتشوف الحالة بحسابك.</p><a class="btn wa block lg" href="'+esc(href)+'" target="_blank" rel="noopener">'+svg('chat')+' افتح واتساب مرة ثانية</a><button class="btn block" data-act="account" data-tab="topups" data-close>عرض عمليات الشحن</button></div>','تم إرسال الطلب')},60);
 }
 /* ----- pay from balance ----- */
@@ -2350,6 +2437,7 @@ function openOrder(id){
   if(o.status==='done')rows.push(['التكلفة (جملة)',money(cost)],['صافي الربح','<span class="'+(rev-cost>=0?'good-t':'bad-t')+'">'+money(rev-cost)+'</span>']);
   if(o.customer)rows.push(['الزبون',esc(o.customer)]);if(o.phone)rows.push(['رقم واتساب','<span dir="ltr">'+esc(o.phone)+'</span>']);if(o.email)rows.push([o.items.some(function(i){var p=product(i.productId);return p&&planAcct(p,planOf(p,i.planId))==='login'})?'إيميل حساب الزبون':'إيميل التفعيل','<span dir="ltr">'+esc(o.email)+'</span>']);
   if(o.payment)rows.push(['طريقة الدفع',esc(o.payment)]);if(o.proofText)rows.push([esc((m&&m.proofLabel)||'إثبات الدفع'),'<span dir="auto">'+esc(o.proofText)+'</span>']);
+  if(isAutoUsdt(m)&&o.proofText){rows.push(['فحص الدفعة','<span id="uv-'+esc(o.id)+'">'+usdtVHTML(usdtV[o.id])+'</span>']);usdtRowKick(o.id,o.proofText,o.createdAt)}
   if(o.note)rows.push(['ملاحظة',esc(o.note)]);rows.push(['المصدر',o.source==='site'?'طلب من الموقع':o.source==='wallet'?'دفع من رصيد الزبون':'بيعة واتساب (تسجيل يدوي)']);
   if(o.stockIds&&o.stockIds.length)rows.push(['التسليم','تلقائي بكود <button class="mini-link" style="color:var(--brand)" data-act="showCode" data-id="'+esc(o.stockIds[0])+'">عرض الكود</button>']);
   h+='<div class="kvlist">'+rows.map(function(r){return '<div><span>'+r[0]+'</span><b>'+r[1]+'</b></div>'}).join('')+'</div>';
@@ -2530,6 +2618,7 @@ function payForm(m){
    '<div class="fsec"><h3>بيانات التحويل</h3><div class="row2"><label class="field"><span>عنوان الرقم</span><input class="inp" id="pm-nl" value="'+esc(m.numberLabel)+'" placeholder="رقم المحفظة"></label><label class="field"><span>الرقم / العنوان</span><input class="inp ltr" id="pm-num" value="'+esc(m.number)+'"></label></div>'+
    '<label class="field"><span>اسم صاحب الحساب</span><input class="inp" id="pm-holder" value="'+esc(m.holder)+'"></label><label class="field"><span>ملاحظة للزبون <em>(اختياري)</em></span><input class="inp" id="pm-note" value="'+esc(m.note)+'" placeholder="مثال: الشبكة TRC20"></label></div>'+
    '<div class="fsec"><h3>إثبات الدفع</h3><div class="row2"><label class="field"><span>شو لازم يكتب الزبون</span><input class="inp" id="pm-pl" value="'+esc(m.proofLabel)+'"></label><label class="field"><span>نوعه</span><select class="inp" id="pm-pt"><option value="tel"'+(m.proofType==='tel'?' selected':'')+'>رقم جوال</option><option value="name"'+(m.proofType==='name'?' selected':'')+'>اسم</option><option value="text"'+(m.proofType==='text'?' selected':'')+'>نص (مثل TXID)</option></select></label></div></div>'+
+   (isUsdtM(m)?'<div class="fsec"><h3>الفحص التلقائي (BNB Smart Chain)</h3><label class="check"><input type="checkbox" id="pm-auto"'+(m.auto?' checked':'')+'> افحص الدفعات لحالها على شبكة BEP20</label><p class="hint">الزبون بيشوف QR والعنوان ومبلغ بالظبط بأرقام عشرية مميّزة، والموقع بيكتشف التحويل لحاله، وبتشوف باللوحة إذا الدفعة وصلت. العنوان لازم يكون BEP20 ويبدأ بـ 0x.</p><label class="field"><span>سعر USDT بالشيكل</span><input class="inp ltr" id="pm-rate" inputmode="decimal" value="'+esc(m.rate||3.1)+'"></label></div>':'')+
    '<label class="check"><input type="checkbox" id="pm-active"'+(m.active!==false?' checked':'')+'> متاحة للزبائن</label>'+
    '<button class="btn primary block lg" data-act="savePay" data-new="'+(isNew?1:0)+'">'+svg('check',18)+' حفظ</button>'+(isNew?'':'<button class="btn danger block" data-act="deletePay" data-id="'+esc(m.id)+'">'+svg('trash',18)+' حذف طريقة الدفع</button>');
   S.pmsheet=openSheet({title:isNew?'طريقة دفع جديدة':'تعديل '+m.name,body:h});pmPreview();
@@ -2615,6 +2704,7 @@ function openTopupA(id){
   var rows=[['الحالة','<span class="pill '+tpill(t.status)+'">'+(TSTATUS[t.status]||t.status)+'</span>'],['المبلغ',money(t.amount)],['الزبون',esc(t.name||'—')],['الإيميل','<span dir="ltr">'+esc(t.email||'')+'</span>']];
   if(t.phone)rows.push(['واتساب','<span dir="ltr">'+esc(t.phone)+'</span>']);rows.push(['طريقة الدفع',esc(t.payment||'')]);
   if(t.proofText)rows.push([esc((m&&m.proofLabel)||'إثبات الدفع'),'<span dir="auto">'+esc(t.proofText)+'</span>']);
+  if(isAutoUsdt(m)&&t.proofText){rows.push(['فحص الدفعة','<span id="uv-'+esc(t.id)+'">'+usdtVHTML(usdtV[t.id])+'</span>']);usdtRowKick(t.id,t.proofText,t.createdAt)}
   rows.push(['الوقت',esc(dayLabel(t.createdAt))+' · '+ftime(t.createdAt)]);if(t.note)rows.push(['ملاحظة',esc(t.note)]);if(w)rows.push(['رصيده الحالي',money(+w.balance||0)]);
   var h='<div class="kvlist">'+rows.map(function(r){return '<div><span>'+r[0]+'</span><b>'+r[1]+'</b></div>'}).join('')+'</div>';
   if(t.proofImage)h+='<div class="stack"><b>سكرين الحوالة</b><img class="big-img" src="'+t.proofImage+'" alt="سكرين الحوالة"></div>';
@@ -2815,7 +2905,7 @@ var ACT={
   pmTint:function(el){S.pm.tint=el.dataset.id;$$('[data-act=pmTint]').forEach(function(b){b.setAttribute('aria-pressed',b===el)});pmPreview()},
   pmLogoRm:function(){S.pm.logo='';pmPreview()},
   savePay:function(el){var m=S.pm,isNew=el.dataset.new==='1';m.name=$('#pm-name').value.trim();if(!m.name){toast('اكتب اسم طريقة الدفع');return}
-    m.domain=cleanDomain($('#pm-domain').value);m.numberLabel=$('#pm-nl').value.trim()||'رقم الدفع';m.number=$('#pm-num').value.trim();m.holder=$('#pm-holder').value.trim();m.note=$('#pm-note').value.trim();m.proofLabel=$('#pm-pl').value.trim()||'تفاصيل الحوالة';m.proofType=$('#pm-pt').value;m.active=$('#pm-active').checked;
+    m.domain=cleanDomain($('#pm-domain').value);m.numberLabel=$('#pm-nl').value.trim()||'رقم الدفع';m.number=$('#pm-num').value.trim();m.holder=$('#pm-holder').value.trim();m.note=$('#pm-note').value.trim();m.proofLabel=$('#pm-pl').value.trim()||'تفاصيل الحوالة';m.proofType=$('#pm-pt').value;m.active=$('#pm-active').checked;if($('#pm-auto')){m.auto=$('#pm-auto').checked;m.rate=num($('#pm-rate').value)||3.1;if(m.auto&&!/^0x[0-9a-fA-F]{40}$/.test(m.number)){toast('عنوان المحفظة لازم يكون BEP20 ويبدأ بـ 0x');return}}
     var a=S.settings.payments;if(isNew){m.id='pm-'+uid().slice(0,6);a.push(clone(m))}else{var i=a.findIndex(function(x){return x.id===m.id});a[i]=clone(m)}
     el.disabled=true;DB.saveSettings(S.settings).then(function(){cachePublic();toast('انحفظت طريقة الدفع');S.pmsheet.close(true);renderAdminBody()}).catch(function(e){el.disabled=false;fail(e)})},
   deletePay:function(el){var id=el.dataset.id;ask({title:'حذف طريقة الدفع',text:'ما رح تظهر للزبائن بعد الحذف.',ok:'حذف',danger:true}).then(function(ok){if(!ok)return;S.settings.payments=S.settings.payments.filter(function(m){return m.id!==id});DB.saveSettings(S.settings).then(function(){cachePublic();toast('انحذفت');S.pmsheet.close(true);renderAdminBody()}).catch(fail)})},
@@ -2846,7 +2936,7 @@ D.addEventListener('input',function(e){var t=e.target,id=t.id||'';
   if(id==='oq'){S.oq=t.value;$('#olist').innerHTML=orderListHTML();return}
   if(S.co&&id==='co-proof-t'){S.co.proof=t.value;updateSendHref();return}
   if(S.tp&&id==='tp-proof-t'){S.tp.proof=t.value;updateTopupHref();return}
-  if(S.tp&&id==='tp-amount'){S.tp.amount=t.value;var tp=$('#tp-pay');if(tp)tp.innerHTML=payDetailsHTML(tpMethod(),num(t.value)||0);$$('[data-act=tpAmt]').forEach(function(b){b.setAttribute('aria-pressed',num(b.dataset.v)===num(t.value))});updateTopupHref();return}
+  if(S.tp&&id==='tp-amount'){S.tp.amount=t.value;var tp=$('#tp-pay');if(tp)tp.innerHTML=payDetailsHTML(tpMethod(),num(t.value)||0,'tp');$$('[data-act=tpAmt]').forEach(function(b){b.setAttribute('aria-pressed',num(b.dataset.v)===num(t.value))});updateTopupHref();return}
   if(id==='subq'){S.subq=t.value;var sl=$('#sublist');if(sl)sl.innerHTML=subListHTML();return}
   if(id==='cq'){S.cq=t.value;var cl=$('#clist');if(cl)cl.innerHTML=S.ctab==='wa'?waListHTML():custListHTML();return}
   if(id==='sf-cust'&&S.sf&&S.sf.manual){var pe=$('#sf-phone'),mc=waCustomers().find(function(c){return c.name&&normName(c.name)===normName(t.value)});if(pe&&(!pe.value.trim()||pe.dataset.auto)){pe.value=mc&&mc.phone?mc.phone:'';if(mc&&mc.phone)pe.dataset.auto='1';else delete pe.dataset.auto}sfHints(true);return}
@@ -2901,7 +2991,7 @@ var rzT;window.addEventListener('resize',function(){clearTimeout(rzT);rzT=setTim
 function stopWatch(arr){(arr||[]).forEach(function(f){try{if(typeof f==='function')f()}catch(e){}});return []}
 function adminRefresh(){if(S.view==='admin'&&$('#abody'))renderAdminBody()}
 function startAdminData(){
-  if(S.adminOn||!S.user||!S.isAdmin)return;S.adminOn=true;
+  if(S.adminOn||!S.user||!S.isAdmin)return;S.adminOn=true;setTimeout(usdtMigrate,1500);
   DB.seedIfEmpty().then(function(seeded){if(seeded){toast('تجهّز المتجر بالبيانات الأساسية');return DB.loadPublic().then(function(pub){applyPublic(pub);cachePublic()})}}).catch(function(e){console.warn(e)}).then(function(){
     return DB.loadPrivate().then(function(p){S.costs=p.costs||{};adminRefresh()})}).catch(fail);
   DB.loadPeople().then(function(m){S.people=m||{};adminRefresh()},function(e){console.warn('people',e)});
