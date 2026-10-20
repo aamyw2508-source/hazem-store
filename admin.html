@@ -14,6 +14,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="إدارة حازم ستور">
 <script src="config.js"></script>
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin><link rel="preconnect" href="https://www.gstatic.com" crossorigin><link rel="dns-prefetch" href="https://www.google.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
@@ -968,6 +969,7 @@ body{font-size:15.5px;line-height:1.7;-webkit-font-smoothing:antialiased}
 .sp-pl em{grid-column:1/-1;font-style:normal;font-size:12.5px;font-weight:600}
 .sp-pr .inp{padding:9px 10px;text-align:center}
 .sp-rate{max-width:220px}
+.sp-desc{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;color:var(--muted);font-size:12.5px;line-height:1.6}
 </style>
 </head>
 <body>
@@ -1789,45 +1791,63 @@ var READY=[
 var USD_RATE=3.1;
 var DEV_CAT={id:'dev',name:'البرمجة',icon:'code'};
 var SUPPLY=[
- {merge:{pid:'gemini',re:/18/},tid:'gemini-18',name:'Gemini Pro',plans:[{name:'18 شهر',usd:.4}]},
+ {merge:{pid:'gemini',re:/18/,upd:true},tid:'gemini-18',name:'Gemini Pro',
+  desc:'اشتراك Google AI Pro (Gemini Pro) لمدة 18 شهر، بيتفعّل على حساب Gmail تبعك وبدون بطاقة. حساب عائلي كامل مش دعوة، وبتقدر تضيف معك لحد 5 أشخاص، ومعه مساحة تخزين 5 تيرابايت.',
+  features:['Gemini بأقوى نماذجه وحدود استخدام أعلى','مساحة تخزين 5 تيرابايت على Drive وGmail والصور','حساب عائلي كامل وبتضيف معك لحد 5 أشخاص','بيتفعّل على Gmail تبعك وبدون بطاقة','بيشتغل بأي دولة وبدون تحقق'],
+  plans:[{name:'18 شهر',usd:.4}]},
  {tid:'perplexity-max',name:'Perplexity Max',cat:'ai',domain:'perplexity.ai',icon:'search',tint:'cyan',note:'كود تفعيل',
-  desc:'اشتراك Perplexity Max، أعلى باقة بمحرك البحث بالذكاء الاصطناعي، بيوصلك كود تفعيل بتفعّله على حسابك.',keywords:'بربلكسيتي، Perplexity، بيربلكسيتي ماكس',
-  features:['أعلى باقة من Perplexity','بحث بالذكاء الاصطناعي مع مصادر لكل جواب','وصول لأقوى النماذج المتاحة بالمنصة','بحث معمّق وتقارير مفصّلة','كود تفعيل بتفعّله على حسابك'],plans:[{name:'شهر',usd:22,dur:'m1',acct:'none'}]},
- {tid:'lovable-pro',name:'Lovable Pro',cat:'ai',domain:'lovable.dev',icon:'code',tint:'rose',note:'بناء مواقع بالذكاء الاصطناعي',
-  desc:'اشتراك Lovable Pro لبناء مواقع وتطبيقات كاملة بالكتابة بالذكاء الاصطناعي.',keywords:'لوفابل، Lovable، بناء موقع بالذكاء الاصطناعي',
-  features:['بناء مواقع وتطبيقات كاملة بالكتابة','رصيد رسائل أكثر بكتير من المجاني','ربط دومين خاص بموقعك','مشاريع خاصة ونشر بضغطة','تعديل الكود ومزامنة مع GitHub'],plans:[{name:'شهر',usd:1.5,dur:'m1',acct:'email'}]},
- {tid:'wispr-flow',name:'Wispr Flow Pro',cat:'ai',domain:'wisprflow.ai',icon:'headphones',tint:'violet',note:'Education',
-  desc:'اشتراك Wispr Flow Pro للكتابة بالصوت بأي تطبيق، بنسخة التعليم لمدة 12 شهر.',keywords:'ويسبر فلو، Wispr Flow، كتابة بالصوت',
-  features:['كتابة بالصوت بأي تطبيق على الكمبيوتر والجوال','بيرتب الكلام وبيصححه تلقائياً','بيدعم لغات كثير منها العربي','أسرع من الكتابة بالكيبورد بمرات','كلمات بدون حدود بالنسخة المدفوعة'],plans:[{name:'12 شهر',usd:5.99,dur:'y1',acct:'email'}]},
- {tid:'muse-ai',name:'MUSE AI',cat:'ai',icon:'sparkle',tint:'violet',note:'حساب جاهز',
-  desc:'حساب MUSE AI جاهز، وفي أكثر من باقة حسب احتياجك.',keywords:'ميوز، MUSE AI',
-  features:['حساب جاهز ومفعّل','بتستلم بيانات الدخول مباشرة','أكثر من باقة حسب احتياجك','مساعدة بالتفعيل على واتساب','سعر مناسب'],plans:[{name:'حساب',usd:.76,dur:'',acct:'none'}]},
+  desc:'أعلى باقة من Perplexity، محرك البحث بالذكاء الاصطناعي، وسعرها الأصلي 200$ بالشهر. بيوصلك كود تفعيل بتفعّله على حسابك، وبينفع لاشتراك جديد أو تجديد. مهم: لازم يكون حسابك على الباقة المجانية وما عليه فواتير، وإذا عندك اشتراك شغّال استنى لحد ما يخلص.',
+  keywords:'بربلكسيتي، بيربلكسيتي ماكس، Perplexity Max',
+  features:['أعلى باقة من Perplexity بقيمة 200$ بالشهر','أقوى نماذج الذكاء الاصطناعي بمكان واحد','بحث بالذكاء الاصطناعي مع مصادر لكل جواب','كود تفعيل على حسابك، لاشتراك جديد أو تجديد','الباقة بدون رصيد إضافي (credits)'],
+  plans:[{name:'شهر',usd:22,dur:'m1',acct:'none'}]},
+ {tid:'lovable-pro',name:'Lovable Pro',cat:'ai',domain:'lovable.dev',icon:'code',tint:'rose',note:'حساب جاهز',
+  desc:'حساب Lovable Pro جاهز لمدة شهر، لبناء مواقع وتطبيقات كاملة بالكتابة بالذكاء الاصطناعي. فيه 100 رصيد بالشهر و5 أرصدة إضافية كل يوم، وهي باقة الـ 25$.',
+  keywords:'لوفابل، Lovable، بناء موقع بالذكاء الاصطناعي',
+  features:['بناء مواقع وتطبيقات كاملة بالكتابة','100 رصيد بالشهر و5 أرصدة إضافية كل يوم','باقة Pro الأصلية بقيمة 25$','حساب جاهز بتستلم بياناته مباشرة','نشر مشاريعك على النت بضغطة'],
+  plans:[{name:'شهر',usd:1.5,dur:'m1',acct:'none'}]},
+ {tid:'wispr-flow',name:'Wispr Flow',cat:'ai',domain:'wisprflow.ai',icon:'headphones',tint:'violet',note:'Education · سنة',
+  desc:'حساب Wispr Flow لمدة سنة، للكتابة بالصوت بأي تطبيق على الكمبيوتر والجوال. بتحكي وهو بيكتب وبيرتب الكلام لحاله.',
+  keywords:'ويسبر فلو، Wispr Flow، كتابة بالصوت',
+  features:['كتابة بالصوت بدون حدود بأي تطبيق','بيتعرّف على اللغة وبيترجم لأكثر من 100 لغة','ترتيب تلقائي للكلام وحذف الكلمات الزايدة','قاموس خاص فيك وأسلوب كتابة حسب ذوقك','أوامر بالذكاء الاصطناعي لإعادة الصياغة والتنسيق'],
+  plans:[{name:'سنة',usd:5.99,dur:'y1',acct:'none'}]},
+ {tid:'muse-ai',name:'MUSE AI',cat:'ai',icon:'sparkle',tint:'violet',note:'رصيد توكنز',
+  desc:'حساب MUSE AI جاهز برصيد توكنز، وفي أكثر من باقة حسب استخدامك: من مليار لحد 31 مليار توكن.',
+  keywords:'ميوز، MUSE AI، توكنز',
+  features:['حساب جاهز ومفعّل','رصيد توكنز حسب الباقة اللي بتختارها','باقات من مليار لحد 31 مليار توكن','بتستلم بيانات الدخول مباشرة','مساعدة بالتفعيل على واتساب'],
+  plans:[{name:'مليار توكن',usd:null,dur:'none',acct:'none'},{name:'2 مليار توكن',usd:null,dur:'none',acct:'none'},{name:'3 مليار توكن',usd:null,dur:'none',acct:'none'},{name:'5 مليار توكن',usd:null,dur:'none',acct:'none'},{name:'31 مليار توكن',usd:6.49,dur:'none',acct:'none'}]},
  {tid:'adobe-express',name:'Adobe Express Premium',cat:'design',domain:'adobe.com',icon:'palette',tint:'rose',note:'رابط تفعيل',
-  desc:'اشتراك Adobe Express Premium لمدة 12 شهر، بيوصلك رابط تفعيل على حسابك.',keywords:'ادوبي اكسبريس، Adobe Express، تصميم',
-  features:['كل القوالب والخطوط والصور المدفوعة','إزالة خلفية الصور بضغطة','أدوات Adobe Firefly للذكاء الاصطناعي','تصميم بوستات وفيديوهات للسوشال ميديا','تفعيل برابط لمدة 12 شهر'],plans:[{name:'12 شهر',usd:.29,dur:'y1',acct:'none'}]},
+  desc:'اشتراك Adobe Express Premium أصلي لمدة 12 شهر، بيوصلك رابط تفعيل. الأفضل تفعّله على إيميل جديد ما انربط بأدوبي قبل، وبتعمل كلمة سر جديدة وبيتفعّل الاشتراك فوراً. وإذا بدك تفعّله على حساب أدوبي موجود عندك، لازم تغيّر بلد الحساب للهند قبل التفعيل.',
+  keywords:'ادوبي اكسبريس، أدوبي، Adobe Express، تصميم',
+  features:['250 رصيد للذكاء الاصطناعي','أكثر من 350 ألف قالب مدفوع','أكثر من 200 مليون صورة وعنصر','إزالة الخلفية وتعديل الفيديو','كل مزايا Premium لمدة 12 شهر'],
+  plans:[{name:'12 شهر',usd:.29,dur:'y1',acct:'none'}]},
  {tid:'miro',name:'Miro',cat:'design',domain:'miro.com',icon:'cube',tint:'amber',note:'دعوة مدى الحياة',
-  desc:'دعوة على إيميلك لمساحة Miro مدفوعة مدى الحياة، للتخطيط والعصف الذهني والشغل الجماعي.',keywords:'ميرو، Miro، سبورة اونلاين',
-  features:['لوح أبيض أونلاين للأفكار والتخطيط','قوالب جاهزة للعصف الذهني والخرائط','شغل جماعي مع فريقك بنفس الوقت','بيشتغل على الكمبيوتر والجوال','دعوة على إيميلك مدى الحياة'],plans:[{name:'دعوة مدى الحياة',usd:.09,dur:'none',acct:'email'}]},
- {tid:'notion',name:'Notion',cat:'study',domain:'notion.so',icon:'doc',tint:'slate',note:'رابط تفعيل',
-  desc:'اشتراك Notion المدفوع، بيوصلك رابط تفعيل على حسابك.',keywords:'نوشن، Notion',
-  features:['مساحة شغل لا محدودة للملاحظات والمشاريع','رفع ملفات بحجم أكبر','سجل تعديلات الصفحات لفترة أطول','مشاركة وشغل جماعي مع فريقك','تفعيل برابط على حسابك'],plans:[{name:'Business · 3 أشهر',usd:.9,dur:'m3',acct:'none'},{name:'Plus · سنة (طلب مسبق)',usd:.99,dur:'y1',acct:'none'}]},
- {tid:'ilovepdf',name:'iLovePDF Premium',cat:'study',domain:'ilovepdf.com',icon:'doc',tint:'rose',note:'سنة كاملة',
-  desc:'اشتراك iLovePDF Premium لمدة سنة لكل أدوات ملفات PDF.',keywords:'اي لاف بي دي اف، iLovePDF، تحويل PDF',
-  features:['كل أدوات PDF بدون حدود: دمج، تقسيم، ضغط، تحويل','تحويل PDF لـ Word وExcel وPowerPoint والعكس','قراءة النص من الصور OCR','توقيع ملفات PDF إلكترونياً','بدون إعلانات وبملفات أكبر'],plans:[{name:'سنة',usd:.59,dur:'y1',acct:'none'}]},
- {tid:'jetbrains',name:'JetBrains All Products',cat:'dev',domain:'jetbrains.com',icon:'code',tint:'violet',note:'سنة كاملة',
-  desc:'ترخيص JetBrains لكل برامجهم لمدة سنة، على حساب JetBrains تبعك.',keywords:'جيت برينز، JetBrains، IntelliJ، PyCharm',
-  features:['كل برامج JetBrains: IntelliJ وPyCharm وWebStorm وغيرها','النسخ الكاملة المدفوعة','بيشتغل على ويندوز وماك ولينكس','تحديثات رسمية طول السنة','الترخيص على حساب JetBrains تبعك'],plans:[{name:'سنة',usd:2.79,dur:'y1',acct:'email'}]},
- {tid:'telegram-us',name:'حساب تيليجرام برقم أمريكي',cat:'social',domain:'telegram.org',icon:'chat',tint:'cyan',note:'رقم +1',
-  desc:'حساب تيليجرام جديد ومفعّل على رقم أمريكي، بتستلمه جاهز للاستخدام.',keywords:'حساب تلجرام، رقم امريكي، تيليجرام امريكي، Telegram',
-  features:['حساب تيليجرام جديد ومفعّل','رقم أمريكي بيبدأ بـ +1','بتستلم بيانات الدخول جاهزة','بتقدر تغيّر الاسم والصورة واليوزر','مساعدة بتسجيل الدخول على واتساب'],plans:[{name:'حساب واحد',usd:.99,dur:'none',acct:'none'}]}
+  desc:'دعوة على إيميلك لمساحة Miro مدفوعة مدى الحياة، للتخطيط والعصف الذهني والشغل الجماعي. للاستخدام التعليمي، والمزايا حسب سياسة Miro الحالية.',
+  keywords:'ميرو، Miro، سبورة اونلاين',
+  features:['لوح أبيض أونلاين للأفكار والتخطيط','قوالب جاهزة للعصف الذهني والخرائط الذهنية','شغل جماعي مع فريقك بنفس الوقت','بيشتغل من المتصفح والجوال','دعوة على إيميلك مدى الحياة'],
+  plans:[{name:'دعوة مدى الحياة',usd:.089,dur:'none',acct:'email'}]},
+ {tid:'notion',name:'Notion',cat:'study',domain:'notion.so',icon:'doc',tint:'slate',note:'Business أو Plus',
+  desc:'اشتراك Notion المدفوع بباقتين: Business لمدة 3 أشهر، بيوصلك رابط بتفعّله على حسابك وبحتاج بطاقة بنكية وقت التفعيل. أو Plus التعليمي لمدة سنة على حساب جاهز.',
+  keywords:'نوشن، Notion',
+  features:['مساحة شغل لا محدودة للملاحظات والمشاريع','رفع ملفات بحجم أكبر','سجل تعديلات أطول للصفحات','مشاركة وشغل جماعي مع فريقك','باقة Business أو Plus حسب اللي بتختاره'],
+  plans:[{name:'Business · 3 أشهر',usd:.9,dur:'m3',acct:'none'},{name:'Plus تعليمي · سنة',usd:.99,dur:'y1',acct:'none'}]},
+ {tid:'ilovepdf',name:'iLovePDF Premium',cat:'study',domain:'ilovepdf.com',icon:'doc',tint:'rose',note:'حساب جاهز · سنة',
+  desc:'حساب iLovePDF Premium جاهز لمدة سنة لكل أدوات ملفات PDF. بتستلم الإيميل وكلمة السر، بتفوت على موقع iLovePDF وبتغيّر كلمة السر.',
+  keywords:'اي لاف بي دي اف، iLovePDF، تحويل PDF',
+  features:['كل أدوات PDF بدون حدود: دمج، تقسيم، ضغط وتحويل','بيشتغل على الموقع والجوال والكمبيوتر','توقيع الملفات إلكترونياً','بدون إعلانات','2000 رصيد للذكاء الاصطناعي'],
+  plans:[{name:'سنة',usd:.59,dur:'y1',acct:'none'}]},
+ {tid:'jetbrains',name:'JetBrains All Products',cat:'dev',domain:'jetbrains.com',icon:'code',tint:'violet',note:'رخصة طالب',
+  desc:'رخصة JetBrains الطلابية الأصلية على حساب خاص فيك، بتفتحلك 18 برنامج مدفوع زي IntelliJ IDEA وPyCharm وWebStorm. الرخصة بتخلص تقريباً بآب 2027 وبتنمدّد.',
+  keywords:'جيت برينز، JetBrains، IntelliJ، PyCharm، WebStorm',
+  features:['18 برنامج مدفوع من JetBrains','رخصة أصلية وقانونية','حساب خاص فيك','بيشتغل على ويندوز وماك ولينكس','قابلة للتمديد بعد ما تخلص'],
+  plans:[{name:'سنة',usd:2.79,dur:'y1',acct:'none'}]}
 ];
 function r1(v){return Math.round(v*10)/10}
 function supplyLeft(){return SUPPLY.filter(function(t){if(t.merge){var p=product(t.merge.pid),pl=p&&p.plans.find(function(x){return t.merge.re.test(x.name)});return !!pl&&costOf(p.id,pl.id)==null}
   return !product(t.tid)&&!S.products.some(function(p){return normName(p.name)===normName(t.name)})})}
-function supplyTpl(t,rate){var x=clone(t);delete x.merge;x.plans=t.plans.map(function(pl){return {name:pl.name,price:0,dur:pl.dur||'',acct:pl.acct||'none',_cost:r1(pl.usd*rate)}});return x}
+function supplyTpl(t,rate){var x=clone(t);delete x.merge;x.plans=t.plans.map(function(pl){return {name:pl.name,price:0,dur:pl.dur||'',acct:pl.acct||'none',_cost:pl.usd==null?null:r1(pl.usd*rate)}});return x}
 function supplyRowHTML(t,rate){var mp=t.merge&&product(t.merge.pid);
-  return '<div class="sprow" data-tid="'+esc(t.tid)+'">'+tile(mp||t,'lg')+'<div class="sp-info"><b><bdi>'+esc(t.name)+'</bdi></b>'+
-   t.plans.map(function(pl,i){return '<div class="sp-pl"><span>'+esc(pl.name)+'<small>جملة <bdi dir="ltr">$'+pl.usd+'</bdi> ≈ <bdi><span class="sp-ils" data-usd="'+pl.usd+'">'+fmt(r1(pl.usd*rate))+'</span> '+cur()+'</bdi></small></span>'+(t.merge?'<em class="good-t">موجود بالمتجر، بنحط سعر الجملة بس</em>':'<label class="sp-pr"><span class="vh">سعر البيع</span><input class="inp ltr sp-price" inputmode="decimal" data-i="'+i+'" placeholder="سعر البيع"></label>')+'</div>'}).join('')+
+  return '<div class="sprow" data-tid="'+esc(t.tid)+'">'+tile(mp||t,'lg')+'<div class="sp-info"><b><bdi>'+esc(t.name)+'</bdi></b>'+(t.desc?'<small class="sp-desc">'+esc(t.desc)+'</small>':'')+
+   t.plans.map(function(pl,i){return '<div class="sp-pl"><span>'+esc(pl.name)+'<small>'+(pl.usd==null?'سعر الجملة: اكتبه بعدين':'جملة <bdi dir="ltr">$'+pl.usd+'</bdi> ≈ <bdi><span class="sp-ils" data-usd="'+pl.usd+'">'+fmt(r1(pl.usd*rate))+'</span> '+cur()+'</bdi>')+'</small></span>'+(t.merge?'<em class="good-t">موجود بالمتجر: بنحط سعر الجملة'+(t.merge.upd?' وبنحدّث الوصف والمزايا':'')+'</em>':'<label class="sp-pr"><span class="vh">سعر البيع</span><input class="inp ltr sp-price" inputmode="decimal" data-i="'+i+'" placeholder="سعر البيع"></label>')+'</div>'}).join('')+
    '</div>'+(t.merge?'':'<button class="icon-btn sm" data-act="supplyEdit" data-id="'+esc(t.tid)+'" aria-label="تعديل قبل الإضافة" title="تعديل قبل الإضافة">'+svg('edit',16)+'</button>')+'</div>'}
 function supplyHTML(){var l=supplyLeft();if(!l.length)return '';var rate=S.usdRate||USD_RATE;
   return '<div class="stack"><b>اشتراكات من المورّد</b><p class="hint">اكتب سعر البيع لكل اشتراك بدك تضيفه، وسعر الجملة بينحسب بالشيكل من سعر الدولار. اللي ما بتكتبله سعر ما بينضاف، وبتقدر تضيفه بعدين. وبزر القلم بتعدّل الوصف والمزايا قبل الإضافة.</p>'+
@@ -1835,18 +1855,18 @@ function supplyHTML(){var l=supplyLeft();if(!l.length)return '';var rate=S.usdRa
    '<div class="list-plain">'+l.map(function(t){return supplyRowHTML(t,rate)}).join('')+'</div><button class="btn primary block lg" data-act="supplyAdd">'+svg('plus',18)+' أضف المنتجات اللي كتبتلها سعر</button></div>'}
 function supplyAdd(el){var rate=num($('#sp-rate').value)||USD_RATE,rows=$$('.sprow'),prods=[],costsCh=false,newCats=[];
   rows.forEach(function(r){var t=SUPPLY.find(function(x){return x.tid===r.dataset.tid});if(!t)return;
-    if(t.merge){var p=product(t.merge.pid),pl=p&&p.plans.find(function(x){return t.merge.re.test(x.name)});if(pl&&costOf(p.id,pl.id)==null){setCost(p.id,pl.id,r1(t.plans[0].usd*rate));costsCh=true}return}
+    if(t.merge){var p=product(t.merge.pid),pl=p&&p.plans.find(function(x){return t.merge.re.test(x.name)});if(pl&&costOf(p.id,pl.id)==null){setCost(p.id,pl.id,r1(t.plans[0].usd*rate));costsCh=true;if(t.merge.upd){p.desc=t.desc;p.features=t.features.slice();prods.push(p)}}return}
     var pr=$$('.sp-price',r).map(function(i){return num(i.value)});if(!pr.some(function(v){return v>0}))return;
     var p=normProduct(Object.assign({id:t.tid,badge:'',img:'',active:true,sort:S.products.length+prods.length+1},clone(t)));delete p.tid;
-    var cm={};p.plans=t.plans.map(function(pl,i){if(!(pr[i]>0))return null;var id=uid().slice(0,6);cm[id]=r1(pl.usd*rate);return {id:id,name:pl.name,price:pr[i],compare:0,instant:false,dur:pl.dur||'',acct:pl.acct&&pl.acct!=='none'?pl.acct:''}}).filter(Boolean);
+    var cm={};p.plans=t.plans.map(function(pl,i){if(!(pr[i]>0))return null;var id=uid().slice(0,6);if(pl.usd!=null)cm[id]=r1(pl.usd*rate);return {id:id,name:pl.name,price:pr[i],compare:0,instant:false,dur:pl.dur||'',acct:pl.acct&&pl.acct!=='none'?pl.acct:''}}).filter(Boolean);
     S.costs[p.id]=cm;costsCh=true;prods.push(p);
     if(!cats().some(function(c){return c.id===p.cat})&&newCats.indexOf(p.cat)<0)newCats.push(p.cat)});
   if(!prods.length&&!costsCh){toast('اكتب سعر البيع لاشتراك واحد على الأقل');return}
   el.disabled=true;S.usdRate=rate;
   var add=newCats.map(function(id){return id==='social'?clone(SOCIAL_CAT):id==='dev'?clone(DEV_CAT):{id:id,name:id,icon:'star'}});
   var job=add.length?(S.settings.categories=cats().concat(add),DB.saveSettings(S.settings)):Promise.resolve();
-  job.then(function(){return prods.reduce(function(a,p){return a.then(function(){return DB.saveProduct(p).then(function(){S.products.push(p)})})},Promise.resolve())})
-   .then(function(){return costsCh?DB.saveCosts(S.costs):null}).then(function(){cachePublic();toast(prods.length?'انضاف '+prods.length+' '+(prods.length===1?'منتج':'منتجات'):'انحفظ سعر الجملة');if(S.rdsheet)S.rdsheet.close(true);renderAdminBody()},function(e){el.disabled=false;fail(e)})}
+  job.then(function(){return prods.reduce(function(a,p){return a.then(function(){return DB.saveProduct(p).then(function(){if(!product(p.id))S.products.push(p)})})},Promise.resolve())})
+   .then(function(){return costsCh?DB.saveCosts(S.costs):null}).then(function(){cachePublic();toast(prods.length?'انحفظ '+prods.length+' '+(prods.length===1?'منتج':'منتجات'):'انحفظ سعر الجملة');if(S.rdsheet)S.rdsheet.close(true);renderAdminBody()},function(e){el.disabled=false;fail(e)})}
 function openTpl(t){var need=t.cat&&!cats().some(function(c){return c.id===t.cat});
   (need?(S.settings.categories=cats().concat([t.cat==='dev'?clone(DEV_CAT):clone(SOCIAL_CAT)]),DB.saveSettings(S.settings).then(cachePublic)):Promise.resolve()).then(function(){if(S.rdsheet)S.rdsheet.close(true);productForm(null,t)},fail)}
 function readyLeft(){return READY.filter(function(t){return !product(t.tid)&&!S.products.some(function(p){return normName(p.name)===normName(t.name)})})}
