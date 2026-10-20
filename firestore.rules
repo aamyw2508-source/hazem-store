@@ -1,5 +1,5 @@
 rules_version = '2';
-// قواعد حماية حازم ستور: المتجر + حسابات الزبائن + الرصيد + التسليم الفوري
+// قواعد حماية حازم ستور: المتجر + حسابات الزبائن + الرصيد + التسليم الفوري + الدعم الفني
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -170,6 +170,48 @@ service cloud.firestore {
       allow read: if isAdmin()
         || get(/databases/$(database)/documents/reviews/$(rid)).data.status == 'approved';
       allow write: if isAdmin();
+    }
+
+    // ===== الدعم الفني: الزبون بيفتح تذكرة ويرد عليها، والإدارة بترد وبتسكّر
+    match /tickets/{tid} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isAdmin() || ticketNew(request.resource.data);
+      allow update: if isAdmin() || ticketByOwner();
+      allow delete: if isAdmin();
+    }
+    function ticketNew(d) {
+      return signedIn()
+        && d.keys().hasOnly(['uid','name','email','phone','topic','orderNo','status','last','createdAt','updatedAt'])
+        && d.uid == request.auth.uid && d.status == 'open'
+        && d.createdAt == request.time && d.updatedAt == request.time
+        && d.name is string && d.name.size() <= 60
+        && d.email is string && d.email.size() <= 100
+        && d.phone is string && d.phone.size() <= 20
+        && d.topic is string && d.topic.size() >= 1 && d.topic.size() <= 60
+        && d.orderNo is string && d.orderNo.size() <= 16
+        && d.last is string && d.last.size() <= 200;
+    }
+    function ticketByOwner() {
+      let d = request.resource.data;
+      return signedIn() && resource.data.uid == request.auth.uid
+        && d.diff(resource.data).affectedKeys().hasOnly(['status','last','updatedAt'])
+        && d.status in ['open','closed'] && d.updatedAt == request.time
+        && d.last is string && d.last.size() <= 200;
+    }
+    match /ticketMsgs/{mid} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isAdmin() || ticketMsgOk(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+    function ticketMsgOk(d) {
+      return signedIn()
+        && d.keys().hasOnly(['tid','uid','from','text','img','createdAt'])
+        && d.uid == request.auth.uid && d.from == 'c' && d.createdAt == request.time
+        && d.tid is string
+        && getAfter(/databases/$(database)/documents/tickets/$(d.tid)).data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/tickets/$(d.tid)).data.status == 'open'
+        && d.text is string && d.text.size() >= 1 && d.text.size() <= 2000
+        && (!('img' in d) || (d.img is string && d.img.size() <= 700000));
     }
 
     // ===== الأكواد نفسها: بيشوفها بس صاحبها بعد ما ياخدها، والإدارة
