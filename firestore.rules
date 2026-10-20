@@ -149,8 +149,29 @@ service cloud.firestore {
     match /reviews/{rid} {
       allow read: if isAdmin() || resource.data.status == 'approved'
         || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create: if isAdmin() || reviewOk(rid, request.resource.data);
+      allow create: if isAdmin() || reviewOk(rid, request.resource.data) || inviteReview(rid, request.resource.data);
       allow update, delete: if isAdmin();
+    }
+    // تقييم من رابط بيبعته حازم للزبون على واتساب (بدون حساب، مرة وحدة لكل رابط)
+    function inviteReview(rid, d) {
+      return exists(/databases/$(database)/documents/reviewInvites/$(rid))
+        && get(/databases/$(database)/documents/reviewInvites/$(rid)).data.used == false
+        && getAfter(/databases/$(database)/documents/reviewInvites/$(rid)).data.used == true
+        && d.keys().hasOnly(['name','rating','text','product','orderNo','status','source','createdAt'])
+        && d.status == 'pending' && d.source == 'invite' && d.createdAt == request.time
+        && d.rating is int && d.rating >= 1 && d.rating <= 5
+        && d.name is string && d.name.size() >= 1 && d.name.size() <= 40
+        && d.text is string && d.text.size() >= 2 && d.text.size() <= 600
+        && d.product is string && d.product.size() <= 100
+        && d.orderNo is string && d.orderNo.size() <= 16;
+    }
+    match /reviewInvites/{tk} {
+      allow get: if true;
+      allow list, create, delete: if isAdmin();
+      allow update: if isAdmin() || (resource.data.used == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used'])
+        && request.resource.data.used == true
+        && getAfter(/databases/$(database)/documents/reviews/$(tk)).data.source == 'invite');
     }
     function reviewOk(rid, d) {
       let o = get(/databases/$(database)/documents/orders/$(rid)).data;
