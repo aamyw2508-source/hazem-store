@@ -26,13 +26,15 @@ const HOLD_H = 24;              // hours an exact amount belongs to one payment,
 const CHUNKS = 8; // getLogs calls per check (each covers SPAN blocks, SPAN shrinks by itself if a node refuses)
 
 const SITE = 'https://hazem-store.com';
-const VERSION = 5;
+let BUDGET = 45; // outside calls left in this run (Cloudflare allows 50 on the free plan)
+function xf(url, init) { if (BUDGET <= 0) { const e = fail('busy, try again', 503); e.budget = true; throw e; } BUDGET--; return fetch(url, init); }
+const VERSION = 6;
 const STORE = 'حازم ستور';
 
 export default {
-  async scheduled(event, env, ctx) { useRpcs(env); ctx.waitUntil(cron(env).catch(e => cronFailed(env, e))); },
+  async scheduled(event, env, ctx) { BUDGET = 45; useRpcs(env); ctx.waitUntil(cron(env).catch(e => cronFailed(env, e))); },
   async fetch(req, env, ctx) {
-    useRpcs(env);
+    BUDGET = 45; useRpcs(env);
     const origin = req.headers.get('origin') || '';
     const allowed = ORIGINS.concat(String(env.EXTRA_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean));
     const cors = {
@@ -133,7 +135,7 @@ async function check(fs, env, b, ctx, chunks) {
   if (p.net === 'bsc') {
     const latest = (await bscBlock()) - 2, from = scanned ? scanned + 1 : p.startBlock;
     const to = Math.min(latest, from + SPAN * (chunks || CHUNKS) - 1);
-    if (to >= from) { hits = await bscFind(p.addr, p.amt, from, to); scanned = to; }
+    if (to >= from) { const r = await bscFind(p.addr, p.amt, from, to); hits = r.hits; if (r.upto >= from) scanned = r.upto; }
   } else {
     hits = await tronFind(env, p.addr, p.amt, p.startTs);
   }
@@ -219,6 +221,7 @@ async function cron(env) {
   // 1. payments still waiting: keep checking them even if the customer closed the page
   const w = s.w || {};
   for (const key of shuffle(Object.keys(w)).slice(0, 4)) {
+    if (BUDGET < 22) break; // keep enough for new-order messages and saving
     let done = w[key] < now;
     if (!done) {
       try {
@@ -303,8 +306,8 @@ async function notifyPaid(fs, env, kind, id, d, r) {
 }
 async function notifyAdmin(env, title, lines, link) {
   const text = title + '\n' + lines.join('\n'), jobs = [], names = [];
-  if (env.WA_PHONE && env.WA_KEY) names.push('whatsapp'), jobs.push(fetch('https://api.callmebot.com/whatsapp.php?phone=' + encodeURIComponent(env.WA_PHONE) + '&text=' + encodeURIComponent(text) + '&apikey=' + encodeURIComponent(env.WA_KEY)));
-  if (env.TG_TOKEN && env.TG_CHAT) names.push('telegram'), jobs.push(fetch('https://api.telegram.org/bot' + env.TG_TOKEN + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: env.TG_CHAT, text: text + (link ? '\n' + link : ''), disable_web_page_preview: true }) }));
+  if (env.WA_PHONE && env.WA_KEY) names.push('whatsapp'), jobs.push(xf('https://api.callmebot.com/whatsapp.php?phone=' + encodeURIComponent(env.WA_PHONE) + '&text=' + encodeURIComponent(text) + '&apikey=' + encodeURIComponent(env.WA_KEY)));
+  if (env.TG_TOKEN && env.TG_CHAT) names.push('telegram'), jobs.push(xf('https://api.telegram.org/bot' + env.TG_TOKEN + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: env.TG_CHAT, text: text + (link ? '\n' + link : ''), disable_web_page_preview: true }) }));
   if (env.RESEND_KEY && env.ADMIN_EMAIL) names.push('email'), jobs.push(sendMail(env, env.ADMIN_EMAIL, title, mailHTML(title, null, lines.map(esc), link, 'افتح لوحة الإدارة')));
   const res = await Promise.allSettled(jobs), errors = [];
   let sent = 0;
@@ -324,7 +327,7 @@ async function mailCustomer(env, to, subject, name, paras) {
   await sendMail(env, to, subject, mailHTML(subject, name, paras, SITE, 'زور المتجر'));
 }
 function sendMail(env, to, subject, html) {
-  return fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + env.RESEND_KEY, 'content-type': 'application/json' }, body: JSON.stringify({ from: env.MAIL_FROM || STORE + ' <onboarding@resend.dev>', to: [to], subject, html }) });
+  return xf('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + env.RESEND_KEY, 'content-type': 'application/json' }, body: JSON.stringify({ from: env.MAIL_FROM || STORE + ' <onboarding@resend.dev>', to: [to], subject, html }) });
 }
 function mailHTML(title, name, paras, link, linkLabel) {
   return '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;background:#f4f6fb;padding:24px 12px"><div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;padding:22px 20px;border:1px solid #e4e8f2;color:#1b2440;line-height:1.8;font-size:15px">' +
@@ -390,45 +393,49 @@ function cleanId(v) { const id = String(v || ''); if (!/^[A-Za-z0-9_-]{6,40}$/.t
 
 // ---------------------------------------------------------------- chains
 let RPCS = BSC_PUBLIC, rpcI = 0, SPAN = 200;
-const RANGE_ERR = /limit|range|exceed|too (many|large|big)|10000|response size|block/i;
+const RANGE_ERR = /range|too (large|big|wide)|block limit|max(imum)? .{0,20}block|more than \d+ (blocks|results)|10000 results|response size/i;
+const rest = {}; // node → time it may be tried again (it said it is busy or needs a key)
 function useRpcs(env) {
   const own = String((env && env.BSC_RPC) || '').split(',').map(x => x.trim()).filter(x => /^https:\/\//.test(x));
   const list = own.concat(BSC_PUBLIC.filter(u => !own.includes(u)));
   if (list.join() !== RPCS.join()) { RPCS = list; rpcI = 0; }
 }
 async function rpcOne(url, method, params) {
-  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }), signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
+  const r = await xf(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }), signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
   const t = await r.text(); let j;
   try { j = JSON.parse(t); } catch (e) { throw new Error('http ' + r.status + ' ' + t.slice(0, 80)); }
   if (j.error) throw new Error(String(j.error.message || 'rpc error'));
   return j.result;
 }
-// up to 4 nodes per call, starting from the one that answered last
+// up to 3 nodes per call, starting from the one that answered last; busy nodes rest for 5 minutes
 async function rpc(method, params) {
-  let last;
-  for (let k = 0, n = Math.min(4, RPCS.length); k < n; k++) {
-    const i = (rpcI + k) % RPCS.length;
-    try { const res = await rpcOne(RPCS[i], method, params); rpcI = i; return res; } catch (e) { last = e; }
+  let last, tried = 0;
+  for (let k = 0; k < RPCS.length && tried < 3; k++) {
+    const i = (rpcI + k) % RPCS.length, url = RPCS[i];
+    if (rest[url] > Date.now() && k < RPCS.length - 1) continue;
+    tried++;
+    try { const res = await rpcOne(url, method, params); rpcI = i; delete rest[url]; return res; }
+    catch (e) { if (e.budget) throw e; last = e; if (!RANGE_ERR.test(String(e.message))) rest[url] = Date.now() + 5 * 60e3; }
   }
-  if (method === 'eth_getLogs' || !last) rpcI = (rpcI + 1) % RPCS.length;
   throw last || new Error('rpc down');
 }
 async function bscBlock() { return parseInt(await rpc('eth_blockNumber', []), 16); }
+// returns the matches and the last block fully looked at (stops early if few calls are left)
 async function bscFind(addr, amt, from, to) {
   const topic = '0x000000000000000000000000' + addr.toLowerCase().replace(/^0x/, ''), hits = [];
   let a = from;
-  while (a <= to) {
+  while (a <= to && BUDGET > 12) {
     const b = Math.min(to, a + SPAN - 1);
     let logs;
     try { logs = await rpc('eth_getLogs', [{ address: USDT_BSC, fromBlock: '0x' + a.toString(16), toBlock: '0x' + b.toString(16), topics: [TRANSFER, null, topic] }]); }
-    catch (e) { if (SPAN > 25 && RANGE_ERR.test(String(e && e.message))) { SPAN = Math.max(25, Math.floor(SPAN / 2)); continue; } throw e; }
+    catch (e) { if (SPAN > 25 && RANGE_ERR.test(String(e && e.message))) { SPAN = Math.max(25, Math.floor(SPAN / 2)); continue; } if (a > from) break; throw e; }
     for (const l of logs || []) {
       const v = Number(BigInt(l.data) / 10n ** 12n) / 1e6; // 18 decimals → 6, no float drift
       if (Math.abs(v - amt) < 0.0005) hits.push({ tx: l.transactionHash, amt: r3(v) });
     }
     a = b + 1;
   }
-  return hits;
+  return { hits, upto: a - 1 };
 }
 // GET /?rpc=1 : which BNB Smart Chain nodes answer, and for how many blocks
 async function rpcProbe(env) {
@@ -439,18 +446,20 @@ async function rpcProbe(env) {
     const row = { node: url.replace(/^https:\/\//, '').slice(0, 44) };
     try {
       const t0 = Date.now(), b = parseInt(await rpcOne(url, 'eth_blockNumber', []), 16); row.block = b; row.ms = Date.now() - t0;
-      for (const span of [200, 1000, 5000]) {
+      for (const span of [200, 2000]) {
         try { await rpcOne(url, 'eth_getLogs', [{ address: USDT_BSC, fromBlock: '0x' + (b - span).toString(16), toBlock: '0x' + b.toString(16), topics: [TRANSFER, null, topic] }]); row['logs' + span] = 'ok'; }
         catch (e) { row['logs' + span] = String(e.message).slice(0, 60); break; }
       }
     } catch (e) { row.err = String(e.message).slice(0, 70); }
     out.push(row);
   }
-  return { span: SPAN, nodes: out };
+  let tron = '';
+  try { const r = await xf('https://api.trongrid.io/v1/accounts/' + ((m && validAddr('tron', m.tron)) ? m.tron : 'THodKuiPeTJj6qq1QfEeGM8eVfuak1JLti') + '/transactions/trc20?limit=1&contract_address=' + USDT_TRON, { headers: env.TRONGRID_KEY ? { 'TRON-PRO-API-KEY': env.TRONGRID_KEY } : {} }); tron = r.ok ? 'ok' : 'http ' + r.status + ' ' + (await r.text()).slice(0, 60); } catch (e) { tron = String(e.message).slice(0, 60); }
+  return { span: SPAN, own: !!(env.BSC_RPC), nodes: out, tron };
 }
 async function tronFind(env, addr, amt, sinceTs) {
   const u = `https://api.trongrid.io/v1/accounts/${addr}/transactions/trc20?only_to=true&only_confirmed=true&limit=200&contract_address=${USDT_TRON}&min_timestamp=${Math.floor(sinceTs)}`;
-  const r = await fetch(u, { headers: env.TRONGRID_KEY ? { 'TRON-PRO-API-KEY': env.TRONGRID_KEY } : {}, signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined });
+  const r = await xf(u, { headers: env.TRONGRID_KEY ? { 'TRON-PRO-API-KEY': env.TRONGRID_KEY } : {}, signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined });
   if (!r.ok) throw new Error('trongrid ' + r.status);
   const j = await r.json(), hits = [], want = Math.round(amt * 1e6);
   for (const t of j.data || []) {
@@ -475,7 +484,7 @@ async function firestore(env) {
   return {
     project, name,
     async get(p) {
-      const r = await fetch(api + name(p), { headers: H });
+      const r = await xf(api + name(p), { headers: H });
       if (r.status === 404) return null;
       if (!r.ok) throw fail('firestore get ' + r.status + ' ' + (await r.text()).slice(0, 200), 502);
       return parse(await r.json());
@@ -484,7 +493,7 @@ async function firestore(env) {
       const fl = filters.map(([f, op, v]) => op === 'IS_NULL' ? { unaryFilter: { op: 'IS_NULL', field: { fieldPath: f } } } : { fieldFilter: { field: { fieldPath: f }, op, value: toValue(v) } });
       const body = { structuredQuery: { from: [{ collectionId: col }], where: fl.length > 1 ? { compositeFilter: { op: 'AND', filters: fl } } : fl[0], limit } };
       if (orderBy) body.structuredQuery.orderBy = [{ field: { fieldPath: orderBy }, direction: 'ASCENDING' }];
-      const r = await fetch(api + root + ':runQuery', { method: 'POST', headers: H, body: JSON.stringify(body) });
+      const r = await xf(api + root + ':runQuery', { method: 'POST', headers: H, body: JSON.stringify(body) });
       if (!r.ok) throw fail('firestore query ' + r.status + ' ' + (await r.text()).slice(0, 300), 502);
       return (await r.json()).filter(x => x.document).map(x => parse(x.document));
     },
@@ -496,7 +505,7 @@ async function firestore(env) {
       return w;
     },
     async commit(writes) {
-      const r = await fetch(api + root + ':commit', { method: 'POST', headers: H, body: JSON.stringify({ writes }) });
+      const r = await xf(api + root + ':commit', { method: 'POST', headers: H, body: JSON.stringify({ writes }) });
       if (!r.ok) { const t = await r.text(); console.error('commit', r.status, t.slice(0, 300)); throw fail('commit ' + r.status + ' ' + t.slice(0, 300), r.status); }
       return r.json();
     },
@@ -511,7 +520,7 @@ async function accessToken(sa) {
   const der = Uint8Array.from(atob(pem), c => c.charCodeAt(0));
   const key = await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
   const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsigned)));
-  const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=' + unsigned + '.' + b64url(sig) });
+  const r = await xf('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=' + unsigned + '.' + b64url(sig) });
   if (!r.ok) throw fail('google auth ' + r.status, 502);
   const j = await r.json();
   tokenCache = { email: sa.client_email, token: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
