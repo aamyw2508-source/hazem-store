@@ -20,7 +20,8 @@ service cloud.firestore {
     // ===== الطلبات
     match /orders/{oid} {
       allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() || custCancel(oid);
+      allow delete: if isAdmin();
       allow create: if isAdmin()
         || siteOrder(request.resource.data)
         || walletOrder(oid, request.resource.data)
@@ -43,6 +44,22 @@ service cloud.firestore {
         && (!('email' in d) || (d.email is string && d.email.size() <= 100))
         && (!('proofText' in d) || (d.proofText is string && d.proofText.size() <= 120))
         && (!('proofImage' in d) || (d.proofImage is string && d.proofImage.size() <= 900000));
+    }
+
+    // الزبون بيلغي طلب USDT ما اندفع؛ وإذا كان دافع جزء من رصيده بيرجعله بنفس العملية
+    function unpaidUsdt(o) {
+      return o.status == 'pending' && o.payment is string && o.payment.matches('(?i).*usdt.*')
+        && (!('pay' in o) || !('tx' in o.pay));
+    }
+    function custCancel(oid) {
+      let o = resource.data;
+      let d = request.resource.data;
+      return signedIn() && o.uid == request.auth.uid && o.source == 'site' && unpaidUsdt(o)
+        && d.status == 'cancelled' && d.cancelledBy == 'customer'
+        && (('walletPart' in o)
+          ? (d.diff(o).affectedKeys().hasOnly(['status','cancelledBy','walletRefunded']) && d.walletRefunded == true
+             && getAfter(/databases/$(database)/documents/wallets/$(request.auth.uid)).data.lastRefund == oid)
+          : d.diff(o).affectedKeys().hasOnly(['status','cancelledBy']));
     }
 
     // طلب جزء منه من الرصيد والباقي بطريقة ثانية: الخصم من رصيد نفس الزبون بنفس العملية وبقيمة الجزء بالضبط
@@ -101,7 +118,7 @@ service cloud.firestore {
         && request.resource.data.balance == 0
         && request.resource.data.lastOrder == ''
         && profileOk(request.resource.data));
-      allow update: if isAdmin() || (isMe(uid) && (profileUpdate() || walletDebit(uid)));
+      allow update: if isAdmin() || (isMe(uid) && (profileUpdate() || walletDebit(uid) || walletRefund(uid)));
       allow delete: if isAdmin();
     }
     function profileOk(d) {
@@ -126,11 +143,25 @@ service cloud.firestore {
         && d.balance >= 0;
     }
 
+    // رجوع الجزء اللي انخصم من الرصيد لما الزبون يلغي طلبه (مرة وحدة، وبقيمته بالضبط)
+    function walletRefund(uid) {
+      let d = request.resource.data;
+      let o = get(/databases/$(database)/documents/orders/$(d.lastRefund)).data;
+      let oa = getAfter(/databases/$(database)/documents/orders/$(d.lastRefund)).data;
+      return d.diff(resource.data).affectedKeys().hasOnly(['balance','lastRefund'])
+        && d.lastRefund is string && d.lastRefund.size() > 0
+        && o.uid == uid && o.status == 'pending' && ('walletPart' in o) && o.walletPart is number
+        && oa.status == 'cancelled' && oa.walletRefunded == true
+        && d.balance == resource.data.balance + o.walletPart;
+    }
+
     // ===== طلبات شحن الرصيد: الزبون بيطلب، الإدارة بتأكد
     match /topups/{tid} {
       allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create: if isAdmin() || topupOk(request.resource.data);
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid && unpaidUsdt(resource.data)
+        && request.resource.data.status == 'cancelled' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']));
+      allow delete: if isAdmin();
     }
     function topupOk(d) {
       return signedIn()

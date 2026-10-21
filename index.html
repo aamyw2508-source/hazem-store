@@ -1069,6 +1069,17 @@ small.ci-war{display:flex;margin-top:3px}
 .co-need .i{flex:none;margin-top:2px}
 .wlow+.btn+.btn{margin-top:8px}
 body.locked .paybar{display:none}
+/* ===== price from, delivery, cancel ===== */
+.pc-from{font-size:11.5px;font-weight:600;color:var(--muted);letter-spacing:0}
+.dlv .chips{margin-bottom:8px}
+.dlv h3{display:flex;align-items:center;gap:6px}
+.dlvbox{margin-top:8px}
+.dlvbox small{display:flex;align-items:center;gap:5px}
+.dlvbox pre{text-align:start;font-family:inherit;font-weight:600;line-height:1.7}
+.dlv-a{display:block;text-align:start;white-space:normal;font-weight:600;line-height:1.7}
+.mrow .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.mrow .acts .btn{margin-top:0}
+.payv-cancel{justify-self:center;width:auto;color:var(--bad,#c0392b)}
 </style>
 </head>
 <body>
@@ -1288,7 +1299,7 @@ var LocalDB={
   saveCosts:function(m){this.data.costs=clone(m);this.save();return Promise.resolve()},
   addOrder:function(o){o=clone(o);o.id=o.id||uid();this.data.orders.unshift(o);this.emit();return Promise.resolve(o.id)},
   createSiteOrder:function(o){o=clone(o);o.createdAt=Date.now();return this.addOrder(o)},
-  createMixedOrder:function(o){return this.createSiteOrder(o)},refundMixed:function(o){return this.updateOrder(o.id,{status:'cancelled'})},
+  createMixedOrder:function(o){return this.createSiteOrder(o)},cancelMyOrder:function(id){return this.updateOrder(id,{status:'cancelled',cancelledBy:'customer'})},cancelMyTopup:function(){return Promise.resolve()},refundMixed:function(o){return this.updateOrder(o.id,{status:'cancelled'})},
   updateOrder:function(id,patch){var o=this.data.orders.find(function(x){return x.id===id});if(o)Object.assign(o,clone(patch));this.emit();return Promise.resolve()},
   deleteOrder:function(id){this.data.orders=this.data.orders.filter(function(x){return x.id!==id});this.emit();return Promise.resolve()},
   bulk:function(b){if(b.settings)this.data.settings=clone(b.settings);if(b.products)this.data.products=clone(b.products);if(b.costs)this.data.costs=clone(b.costs);this.emit();return Promise.resolve()},
@@ -1336,6 +1347,10 @@ var CloudDB={
   createMixedOrder:function(o){var db=this.db,FV=firebase.firestore.FieldValue,wref=db.doc('wallets/'+o.uid),oref=db.collection('orders').doc();
     return db.runTransaction(function(tx){return tx.get(wref).then(function(ws){if(!ws.exists)throw {code:'wallet/missing'};var w=ws.data(),bal=+w.balance||0;if(bal<o.walletPart)throw {code:'wallet/insufficient'};
       var x=clone(o);x.createdAt=FV.serverTimestamp();tx.set(oref,x);tx.update(wref,{balance:w.balance-o.walletPart,lastOrder:oref.id});return oref})})},
+  cancelMyOrder:function(id,uid,wp){var b=this.db.batch(),FV=firebase.firestore.FieldValue;
+    if(wp>0){b.update(this.db.doc('orders/'+id),{status:'cancelled',cancelledBy:'customer',walletRefunded:true});b.update(this.db.doc('wallets/'+uid),{balance:FV.increment(wp),lastRefund:id})}
+    else b.update(this.db.doc('orders/'+id),{status:'cancelled',cancelledBy:'customer'});return b.commit()},
+  cancelMyTopup:function(id){return this.db.doc('topups/'+id).update({status:'cancelled'})},
   refundMixed:function(o){var b=this.db.batch(),FV=firebase.firestore.FieldValue;b.update(this.db.doc('orders/'+o.id),{status:'cancelled',walletRefunded:true});b.set(this.db.doc('wallets/'+o.uid),{balance:FV.increment(oWalletPart(o))},{merge:true});return b.commit()},
   updateOrder:function(id,patch){return this.db.collection('orders').doc(id).update(this.toFire(patch))},
   deleteOrder:function(id){return this.db.collection('orders').doc(id).delete()},
@@ -1806,11 +1821,11 @@ function filtered(){
 function chipsHTML(){var vis=visibleProducts();var list=[{id:'all',name:'الكل',n:vis.length}].concat(cats().map(function(c){return {id:c.id,name:c.name,n:vis.filter(function(p){return p.cat===c.id}).length}}).filter(function(c){return c.n}));
   return list.map(function(c){return '<button class="fchip" data-act="cat" data-id="'+esc(c.id)+'" aria-pressed="'+(S.cat===c.id)+'">'+esc(c.name)+'<span class="n">'+c.n+'</span></button>'}).join('')}
 function cardHTML(p){
-  var pl=p.plans[0];var disc=pl.compare>pl.price?Math.round((1-pl.price/pl.compare)*100):0;
-  var badge=disc?'<span class="pbadge sale">خصم '+disc+'%</span>':(p.badge?'<span class="pbadge">'+esc(p.badge)+'</span>':'');
+  var pf=priceFrom(p),pl=pf.multi?pf.lo:p.plans[0];var disc=p.plans.reduce(function(a,x){return Math.max(a,x.compare>x.price?Math.round((1-x.price/x.compare)*100):0)},0);
+  var badge=disc?'<span class="pbadge sale">خصم '+(pf.multi?'حتى ':'')+disc+'%</span>':(p.badge?'<span class="pbadge">'+esc(p.badge)+'</span>':'');
   var chips=p.plans.slice(0,2).map(function(x){return '<span>'+esc(x.name)+'</span>'}).join('')+(p.plans.length>2?'<span>+'+(p.plans.length-2)+'</span>':'');
   return '<article class="pcard"><div class="pc-top">'+tile(p,'xl')+badge+'</div><h3 class="pc-name"><button class="pc-link" data-act="openProduct" data-id="'+esc(p.id)+'"><bdi>'+esc(p.name)+'</bdi></button></h3><p class="pc-meta">'+esc(p.note||catName(p.cat))+'</p>'+(walletOn()&&p.plans.some(function(x){return x.instant})?'<span class="pc-inst">'+svg('bolt',13)+'تسليم فوري</span>':'')+(p.plans.some(function(x){return x.war==='yes'})?'<span class="pc-war">'+svg('shield',12)+'مع ضمان</span>':'')+(p.plans.every(function(x){return planAcct(p,x)==='login'})?'<span class="pc-acct">'+svg('user',12)+'على حسابك</span>':'')+'<div class="pc-plans">'+chips+'</div>'+
-   '<div class="pc-foot"><div class="pc-price">'+(disc?strike(pl.compare):'')+'<b>'+money(pl.price)+'</b></div><button class="ibtn" data-act="quickAdd" data-id="'+esc(p.id)+'" aria-label="أضف '+esc(p.name)+' للسلة">'+svg('cart',19)+'</button></div><button class="btn primary block pc-buy" data-act="openProduct" data-id="'+esc(p.id)+'">اطلب الآن</button></article>';
+   '<div class="pc-foot"><div class="pc-price">'+(pf.multi?'<small class="pc-from">يبدأ من</small>':(pl.compare>pl.price?strike(pl.compare):''))+'<b>'+money(pl.price)+'</b></div><button class="ibtn" data-act="quickAdd" data-id="'+esc(p.id)+'" aria-label="أضف '+esc(p.name)+' للسلة">'+svg('cart',19)+'</button></div><button class="btn primary block pc-buy" data-act="openProduct" data-id="'+esc(p.id)+'">اطلب الآن</button></article>';
 }
 function gridHTML(){
   var list=filtered();
@@ -1868,6 +1883,7 @@ function coLines(){return S.co.items.map(function(c){var p=product(c.pid);return
 function coTotal(){return coLines().reduce(function(a,x){return a+x.plan.price*x.qty},0)}
 function startCheckout(items,fromCart){
   if(needLogin()&&!S.user){loginFirst(items,fromCart);return}
+  var up=myUnpaid();if(up){unpaidSheet(up,items,fromCart);return}
   var ms=activeMethods(),me=store('hazem-me')||{};closeAllSheets();
   S.co={items:items,fromCart:!!fromCart,method:ms[0]?ms[0].id:'',proof:'',img:'',name:me.name||'',phone:me.phone||'',email:'',no:newOrderNo()};
   if(walletOn()&&S.wallet){if(!S.co.name)S.co.name=S.wallet.name||'';if(!S.co.phone)S.co.phone=S.wallet.phone||'';if((+S.wallet.balance||0)>=coTotal())S.co.method='wallet'}
@@ -2196,6 +2212,7 @@ function payViewHTML(P){var n=NETS[P.net]||NETS.bsc,m=usdtSrv(),other=m?usdtNets
   h+='<p class="fine">≈ '+fmt(P.ils)+' '+cur()+(P.kind!=='topup'&&P.title?' · <bdi>'+esc(P.title)+'</bdi>':'')+'</p>';
   h+='<button class="btn block" data-act="payNow">'+svg('search',17)+' حوّلت؟ افحص هلأ</button>';
   if(other.length)h+='<button class="btn sm block payv-sw" data-act="paySwitch" data-net="'+other[0]+'">بدك تحوّل على '+NETS[other[0]].short+' بدل '+n.short+'؟</button>';
+  if(S.user)h+='<button class="btn sm block payv-cancel" data-act="payCancel">'+svg('x',15)+' إلغاء الطلب</button>';
   h+='<p class="fine">فيك تسكّر هالصفحة وتحوّل من محفظتك وترجع، بنضل نفحص لحالنا وطلبك محفوظ. <a href="'+esc(waLink(payHelpText(P)))+'" target="_blank" rel="noopener">في مشكلة بالدفع؟ راسلنا</a></p></div>';
   return h}
 function payHelpText(P){return 'مرحباً '+S.settings.storeName+'، عندي سؤال عن دفعة USDT '+(P.kind==='topup'?'لشحن الرصيد':'لطلب رقم '+P.no)+': '+P.amt+' USDT على '+(NETS[P.net]||NETS.bsc).short+'.'}
@@ -2342,6 +2359,42 @@ function saveMyPhone(o){if(S.user&&S.wallet&&!S.wallet.phone&&o&&o.phone)DB.upda
 function oWalletPart(o){return +o.walletPart>0?+o.walletPart:0}
 function priceWarnHTML(o){if(o.source!=='site')return '';var bad=o.items.filter(function(i){var p=product(i.productId),pl=p&&(p.plans||[]).find(function(x){return x.id===i.planId});return pl&&i.price<pl.price-0.001});
   return bad.length?'<p class="alert"><span>'+svg('alert',18)+bad.map(function(i){var pl=(product(i.productId).plans||[]).find(function(x){return x.id===i.planId});return 'سعر '+esc(i.productName)+' بالطلب '+fmt(i.price)+' بس سعره الحالي '+fmt(pl.price)+'.'}).join(' ')+' تأكد من المبلغ قبل ما تأكّد الطلب.</span></p>':''}
+/* ================= prices on cards, delivery through the site, cancelling an unpaid order ================= */
+/* a card shows "from" the cheapest plan when the plans have different prices */
+function priceFrom(p){var lo=p.plans.reduce(function(a,x){return x.price<a.price?x:a},p.plans[0]),multi=p.plans.some(function(x){return x.price!==lo.price});return {lo:lo,multi:multi}}
+/* ----- delivery: what Hazem writes shows in the customer's account ----- */
+var DLV_TPL=[['حساب جاهز','الإيميل: \nكلمة السر: \n\nملاحظة: لا تغيّر كلمة السر ولا تفعّل التحقق بخطوتين.'],['رابط دعوة','رابط الدعوة: \n\nافتح الرابط من نفس الإيميل اللي بعتته واقبل الدعوة.'],['تفعّل على حسابه','تم تفعيل الاشتراك على حسابك ✓\nسجّل خروج ودخول من التطبيق عشان يبيّن عندك، ويفضّل تغيّر كلمة السر.'],['كود','الكود: \nطريقة التفعيل: ']];
+function dlvFieldHTML(o){if(!o||isWa(o))return '';
+  return '<div class="fsec dlv"><h3>'+svg('gift',17)+' التسليم للزبون</h3><p class="hint">اللي بتكتبه هون بيظهر للزبون بحسابه تحت "طلباتي" مع زر نسخ، وبيوصله على الإيميل إذا إيميلات الزبائن مفعّلة. اتركه فاضي إذا سلّمته على واتساب.</p>'+
+   '<div class="chips">'+DLV_TPL.map(function(t,i){return '<button type="button" class="fchip" data-act="dlvTpl" data-i="'+i+'">'+esc(t[0])+'</button>'}).join('')+'</div>'+
+   '<label class="field"><span class="vh">بيانات التسليم</span><textarea class="inp" id="sf-dlv" rows="5" maxlength="2000" dir="auto" placeholder="مثال: الإيميل وكلمة السر، أو رابط الدعوة، أو الكود">'+esc(o.delivery||'')+'</textarea></label></div>'}
+function dlvTpl(el){var t=DLV_TPL[+el.dataset.i],ta=$('#sf-dlv');if(!t||!ta)return;ta.value=ta.value.trim()?ta.value.replace(/\s+$/,'')+'\n\n'+t[1]:t[1];ta.focus()}
+function dlvBoxHTML(o){if(!o.delivery)return '';return '<div class="codebox dlvbox"><small>'+svg('gift',13)+' بيانات اشتراكك</small><pre dir="auto">'+esc(o.delivery)+'</pre><button class="copy" data-act="copy" data-text="'+esc(o.delivery)+'">'+svg('copy',15)+'<span>نسخ</span></button></div>'}
+function dlvWaText(o){return 'مرحباً '+(o.customer||'')+'، تم تسليم طلبك رقم '+(o.orderNo||'')+' من '+S.settings.storeName+' ✓\n\n'+o.delivery+'\n\nبتلاقي التفاصيل كمان بحسابك على الموقع تحت "طلباتي".'}
+function dlvNotify(id){var m=(S.settings.payments||[]).find(isUsdtM),u=payApi(m);if(!u||!CLOUD)return;
+  fetch(u+'/notify/delivered',{method:'POST',headers:{'content-type':'text/plain'},body:JSON.stringify({id:id})}).then(function(r){return r.json()}).then(function(j){if(j&&j.sent)toast('انبعتت بيانات التسليم للزبون على إيميله')},function(){})}
+/* ----- an order or top-up with USDT not paid yet: the customer can cancel it ----- */
+function unpaidO(o){return !!(o&&o.status==='pending'&&o.source==='site'&&/usdt/i.test(o.payment||'')&&!(o.pay&&o.pay.tx))}
+function unpaidT(t){return !!(t&&t.status==='pending'&&/usdt/i.test(t.payment||'')&&!(t.pay&&t.pay.tx))}
+function myUnpaid(){return S.user?(S.myOrders||[]).filter(unpaidO).sort(function(a,b){return b.createdAt-a.createdAt})[0]||null:null}
+function custCancelBtn(k,x){return '<button class="btn sm" data-act="custCancel" data-kind="'+k+'" data-id="'+esc(x.id)+'">'+svg('x',15)+' إلغاء الطلب</button>'}
+function custCancelDo(k,id,wp){var p=k==='topup'?DB.cancelMyTopup(id):DB.cancelMyOrder(id,S.user.uid,wp||0);
+  return p.then(function(){var P=store('hazem-pay');if(P&&P.id===id){if(PAY){payStop();if(PAY.sheet&&!PAY.sheet.closed)PAY.sheet.close(true);PAY=null}payClear()}toast(wp?'انلغى الطلب ورجع '+fmt(wp)+' '+cur()+' لرصيدك':'انلغى الطلب')})}
+function custCancel(el){var k=el.dataset.kind,id=el.dataset.id,x=k==='topup'?(S.myTopups||[]).find(function(t){return t.id===id}):(S.myOrders||[]).find(function(o){return o.id===id});
+  var wp=x&&k!=='topup'?oWalletPart(x):0;
+  ask({title:'إلغاء الطلب',text:'إذا حوّلت المبلغ لا تلغي، استنى دقيقتين بيتأكد لحاله.'+(wp?' الـ '+fmt(wp)+' '+cur()+' اللي دفعتهم من رصيدك بيرجعولك.':''),ok:'إلغاء الطلب',danger:true}).then(function(ok){if(!ok)return;el.disabled=true;
+    custCancelDo(k,id,wp).catch(function(e){el.disabled=false;console.warn(e);toast('ما قدرنا نلغي الطلب، يمكن الدفعة وصلت. حدّث الصفحة.')})})}
+function payCancel(el){var s=PAY;if(!s||!S.user)return;var P=s.P,x=P.kind==='topup'?null:(S.myOrders||[]).find(function(o){return o.id===P.id}),wp=x?oWalletPart(x):(+P.wp||0);
+  ask({title:'إلغاء الطلب',text:'إذا حوّلت المبلغ لا تلغي، استنى دقيقتين بيتأكد لحاله.'+(wp?' الـ '+fmt(wp)+' '+cur()+' اللي دفعتهم من رصيدك بيرجعولك.':''),ok:'إلغاء الطلب',danger:true}).then(function(ok){if(!ok)return;
+    custCancelDo(P.kind,P.id,wp).catch(function(e){console.warn(e);toast('ما قدرنا نلغي الطلب، يمكن الدفعة وصلت.');payKick(200)})})}
+/* before a new order: finish or cancel the one not paid */
+function unpaidSheet(o,items,fromCart){closeAllSheets();var live=o.pay&&Date.now()<(o.pay.lockExp||0)&&usdtSrv(),wp=oWalletPart(o);
+  var h='<p class="ask-t">عندك طلب ما كمّلت دفعه. كمّل دفعه أو الغيه عشان تعمل طلب جديد.</p><div class="mrow"><div class="mrow-h"><b><bdi>'+esc(oTitle(o))+'</bdi></b><span class="pill wait">بانتظار الدفع</span></div><div class="mrow-m"><span dir="ltr">'+esc(o.orderNo||'')+'</span> · '+money(oRev(o))+(o.pay&&o.pay.amt?' · <bdi dir="ltr">'+esc(o.pay.amt)+' USDT</bdi>':'')+(wp?' · '+fmt(wp)+' '+esc(cur())+' من الرصيد':'')+'</div></div>'+
+   '<div class="row2">'+(live?'<button class="btn primary" data-act="payResume" data-kind="order" data-id="'+esc(o.id)+'">'+svg('coin',17)+' كمّل الدفع</button>':'')+'<button class="btn danger" data-act="cancelThenBuy">'+svg('x',17)+' الغيه واطلب جديد</button></div>';
+  S.afterCancel={o:o,items:items,fromCart:!!fromCart};S.upsheet=openSheet({title:'طلب ما اندفع',body:h,onClose:function(){S.afterCancel=null}})}
+function cancelThenBuy(el){var a=S.afterCancel;if(!a)return;el.disabled=true;
+  custCancelDo('order',a.o.id,oWalletPart(a.o)).then(function(){S.afterCancel=null;if(S.upsheet)S.upsheet.close(true);var n=0;(function go(){if(myUnpaid()&&myUnpaid().id===a.o.id&&n++<20){setTimeout(go,150);return}startCheckout(a.items,a.fromCart)})()},
+   function(e){el.disabled=false;console.warn(e);toast('ما قدرنا نلغي الطلب، يمكن الدفعة وصلت. حدّث الصفحة.')})}
 function checkoutHTML(){
   var o=S.co,m=curMethod(),lines=coLines(),total=coTotal(),wal=isWalletPay();
   var h='<div class="co-sum">'+lines.map(function(x){return '<div class="co-item">'+tile(x.p,'sm')+'<span class="ci-info"><b><bdi>'+esc(x.p.name)+'</bdi></b><small>'+esc(x.plan.name)+(x.qty>1?' · ×'+x.qty:'')+warSuffix(x.plan,' · ')+'</small></span>'+money(x.plan.price*x.qty)+'</div>'}).join('')+'<div class="co-total"><span>المجموع</span>'+money(total)+'</div>'+coSumPayHTML()+'</div>'+askHTML()+acctHTML();
@@ -2424,8 +2477,8 @@ function sendOrder(el,ev){
 
 /* ================= ACCOUNT & WALLET ================= */
 var CSTATUS={pending:'بانتظار التأكيد',paid:'مدفوع – قيد التسليم',done:'تم التسليم',cancelled:'ملغي'};
-var TSTATUS={pending:'بانتظار التأكيد',approved:'انضاف للرصيد',rejected:'مرفوض'};
-function tpill(st){return st==='approved'?'done':st==='rejected'?'cancelled':'pending'}
+var TSTATUS={pending:'بانتظار التأكيد',approved:'انضاف للرصيد',rejected:'مرفوض',cancelled:'ملغي'};
+function tpill(st){return st==='approved'?'done':st==='rejected'||st==='cancelled'?'cancelled':'pending'}
 function acctBtnHTML(){if(!walletOn())return '';return '<button class="hbtn" id="acctbtn" data-act="account" aria-label="حسابي">'+svg('user',20)+(S.user?'<span class="udot"></span>':'')+'</button>'}
 function refreshHeader(){var b=$('#acctbtn');if(b)b.outerHTML=acctBtnHTML()}
 function openAccount(tab){if(!walletOn())return;if(tab)S.atab=tab;var ac=S.acsheet;if(ac&&!ac.closed){refreshAccount(true);return}S.acsheet=openSheet({title:S.user?'حسابي':'تسجيل الدخول',body:accountBody()});if(S.user)loadOrderCodes()}
@@ -2453,7 +2506,7 @@ function acctTabHTML(){
   if(S.atab==='topups'){
     var tl=S.myTopups.slice().sort(function(a,b){return b.createdAt-a.createdAt});
     if(!tl.length)return '<div class="empty">'+svg('wallet',26)+'<b>ما في عمليات شحن لسا</b><span>اشحن رصيدك مرة، وبعدها بتشتري بضغطة.</span><button class="btn primary" data-act="topupOpen">'+svg('plus',18)+' شحن الرصيد</button></div>';
-    return '<div class="list-plain">'+tl.map(function(t){var neg=t.amount<0;return '<div class="mrow"><div class="mrow-h"><b class="'+(neg?'bad-t':'good-t')+'"><span dir="ltr">'+(neg?'−':'+')+fmt(Math.abs(t.amount))+esc(cur())+'</span></b><span class="pill '+(waitPay(t)?'wait':tpill(t.status))+'">'+(waitPay(t)?'بانتظار الدفع':(TSTATUS[t.status]||t.status))+'</span></div><div class="mrow-m">'+esc(t.payment||'')+' · '+esc(dayLabel(t.createdAt))+' '+ftime(t.createdAt)+(t.note?' · '+esc(t.note):'')+'</div>'+(waitPay(t)?payResumeBtn('topup',t):'')+'</div>'}).join('')+'</div>';
+    return '<div class="list-plain">'+tl.map(function(t){var neg=t.amount<0;return '<div class="mrow"><div class="mrow-h"><b class="'+(neg?'bad-t':'good-t')+'"><span dir="ltr">'+(neg?'−':'+')+fmt(Math.abs(t.amount))+esc(cur())+'</span></b><span class="pill '+(waitPay(t)?'wait':tpill(t.status))+'">'+(waitPay(t)?'بانتظار الدفع':(TSTATUS[t.status]||t.status))+'</span></div><div class="mrow-m">'+esc(t.payment||'')+' · '+esc(dayLabel(t.createdAt))+' '+ftime(t.createdAt)+(t.note?' · '+esc(t.note):'')+'</div>'+(waitPay(t)||unpaidT(t)?'<div class="acts">'+(waitPay(t)?payResumeBtn('topup',t):'')+(unpaidT(t)?custCancelBtn('topup',t):'')+'</div>':'')+'</div>'}).join('')+'</div>';
   }
   if(S.atab==='profile'){
     var w=S.wallet||{};
@@ -2465,8 +2518,8 @@ function acctTabHTML(){
 }
 function myOrderHTML(o){
   var h='<div class="mrow"><div class="mrow-h"><b><bdi>'+esc(oTitle(o))+'</bdi></b><span class="pill '+stPill(o)+'">'+(waitPay(o)?'بانتظار الدفع':(CSTATUS[o.status]||o.status))+'</span></div><div class="mrow-m"><span dir="ltr">'+esc(o.orderNo||'')+'</span> · '+money(oRev(o))+' · '+esc(o.source==='wallet'?'من الرصيد':(o.payment||'')+(oWalletPart(o)?' + '+fmt(oWalletPart(o))+' '+cur()+' من الرصيد':''))+' · '+esc(dayLabel(o.createdAt))+'</div>';
-  (o.stockIds||[]).forEach(function(sid){h+=codeHTML(sid)});
-  if(waitPay(o))h+=payResumeBtn('order',o);
+  (o.stockIds||[]).forEach(function(sid){h+=codeHTML(sid)});h+=dlvBoxHTML(o);
+  if(waitPay(o)||unpaidO(o))h+='<div class="acts">'+(waitPay(o)?payResumeBtn('order',o):'')+(unpaidO(o)?custCancelBtn('order',o):'')+'</div>';
   if(o.status==='paid')h+='<p class="hint">'+(o.source==='wallet'?'انخصم المبلغ من رصيدك':'وصلت دفعتك وتأكدت')+'، ورح نسلّمك الاشتراك على واتساب بأقرب وقت.</p>';
   if(o.status==='done'&&canReview()){var rv=S.myReviews.find(function(r){return r.id===o.id});h+=rv?'<div class="rv-mine">'+revStars(rv.rating)+'<span>'+(rv.status==='approved'?'تجربتك منشورة بالمتجر':'تجربتك وصلتنا، بتنشر بعد المراجعة')+'</span></div>':'<button class="btn sm rv-btn" data-act="writeReview" data-id="'+esc(o.id)+'">'+svg('star',15)+' قيّم تجربتك</button>'}
   return h+'</div>';
@@ -2761,7 +2814,7 @@ function openOrder(id){
   if(o.customer)rows.push(['الزبون',esc(o.customer)]);if(o.phone)rows.push(['رقم واتساب','<span dir="ltr">'+esc(o.phone)+'</span>']);if(o.email)rows.push([o.items.some(function(i){var p=product(i.productId);return p&&planAcct(p,planOf(p,i.planId))==='login'})?'إيميل حساب الزبون':'إيميل التفعيل','<span dir="ltr">'+esc(o.email)+'</span>']);
   if(o.payment)rows.push(['طريقة الدفع',esc(o.payment)]);rows=rows.concat(payRowsA(o,'order'));if(oWalletPart(o))rows.push(['من رصيد الزبون',money(oWalletPart(o))+(o.walletRefunded?' <span class="muted">(رجع لرصيده)</span>':'')],['الباقي المطلوب',money(r2(rev-oWalletPart(o)))]);if(o.proofText)rows.push([esc((m&&m.proofLabel)||'إثبات الدفع'),'<span dir="auto">'+esc(o.proofText)+'</span>']);
   if(isAutoUsdt(m)&&o.proofText&&!o.pay){rows.push(['فحص الدفعة','<span id="uv-'+esc(o.id)+'">'+usdtVHTML(usdtV[o.id])+'</span>']);usdtRowKick(o.id,o.proofText,o.createdAt)}
-  if(o.note)rows.push(['ملاحظة',esc(o.note)]);rows.push(['المصدر',o.source==='site'?'طلب من الموقع':o.source==='wallet'?'دفع من رصيد الزبون':'بيعة واتساب (تسجيل يدوي)']);
+  if(o.delivery)rows.push(['التسليم للزبون','<span class="dlv-a" dir="auto">'+esc(o.delivery).replace(/\n/g,'<br>')+'</span>']);if(o.cancelledBy==='customer')rows.push(['ألغاه','الزبون نفسه (ما دفع)']);if(o.note)rows.push(['ملاحظة',esc(o.note)]);rows.push(['المصدر',o.source==='site'?'طلب من الموقع':o.source==='wallet'?'دفع من رصيد الزبون':'بيعة واتساب (تسجيل يدوي)']);
   if(o.stockIds&&o.stockIds.length)rows.push(['التسليم','تلقائي بكود <button class="mini-link" style="color:var(--brand)" data-act="showCode" data-id="'+esc(o.stockIds[0])+'">عرض الكود</button>']);
   h+=priceWarnHTML(o)+'<div class="kvlist">'+rows.map(function(r){return '<div><span>'+r[0]+'</span><b>'+r[1]+'</b></div>'}).join('')+'</div>';
   if(o.proofImage)h+='<div class="stack"><b>سكرين الحوالة</b><img class="big-img" src="'+o.proofImage+'" alt="سكرين الحوالة"></div>';
@@ -2769,6 +2822,7 @@ function openOrder(id){
   else if(o.status==='pending')h+=waitPay(o)?'<p class="hint">الزبون لسا ما دفع. أول ما توصل دفعته بيتأكد الطلب لحاله، وإذا ما دفع خلال يوم فيك تلغيه.</p>':'<p class="hint">الزبون ما رفع سكرين؛ تأكد من الحوالة حسب الإثبات المكتوب، أو اطلب السكرين على واتساب.</p>';
   var acts='';
   if(o.phone)acts+='<a class="btn wa" href="'+esc(waLink('مرحباً '+(o.customer||'')+'، بخصوص طلبك رقم '+(o.orderNo||'')+' من '+S.settings.storeName,intlDigits(o.phone)))+'" target="_blank" rel="noopener">'+svg('chat',18)+' راسل الزبون</a>';
+  if(o.delivery&&o.phone)acts+='<a class="btn wa" href="'+esc(waLink(dlvWaText(o),intlDigits(o.phone)))+'" target="_blank" rel="noopener">'+svg('gift',18)+' ابعت التسليم واتساب</a>';
   if(o.email)acts+='<button class="btn" data-act="copy" data-text="'+esc(o.email)+'">'+svg('copy',18)+'<span>نسخ الإيميل</span></button>';
   if(acts)h+='<div class="acts">'+acts+'</div>';
   var wo=o.source==='wallet';
@@ -2817,7 +2871,7 @@ function saleForm(o,mode){
   h+='<div class="stack" id="sf-rows">'+items.map(function(i){return saleRowHTML(i,editable,st0)}).join('')+'</div>'+
    (editable?'<button type="button" class="btn sm s-add" data-act="sfAdd">'+svg('plus',16)+' منتج تاني بنفس البيعة</button>':'')+'<div class="calc" id="sf-calc"></div>'+
    '<div class="row2"><label class="field"><span>التاريخ</span><input class="inp" id="sf-date" type="date" value="'+date+'"></label><label class="field"><span>طريقة الدفع</span><select class="inp" id="sf-pay">'+pays+'</select></label></div>'+
-   (manual?'':custF)+
+   (manual?'':custF)+dlvFieldHTML(o)+
    '<label class="field"><span>ملاحظة <em>(اختياري)</em></span><input class="inp" id="sf-note" value="'+esc(o?o.note||'':'')+'"></label>'+
    '<button class="btn primary block lg" data-act="saveSale" data-mode="'+mode+'" data-id="'+esc(o?o.id:'')+'">'+svg('check',18)+(mode==='confirm'?' تأكيد واستلام الدفع':mode==='edit'?' حفظ التعديل':' تسجيل البيعة')+'</button>';
   S.sfsheet=openSheet({title:mode==='confirm'?'تأكيد الطلب':mode==='edit'?'تعديل البيعة':'بيعة واتساب جديدة',body:h});
@@ -2851,12 +2905,13 @@ function saveSale(el){
   var costsChanged=false;items.forEach(function(i){if(i.costRaw!==''&&i.productId&&costOf(i.productId,i.planId)==null&&product(i.productId)){setCost(i.productId,i.planId,i.cost);costsChanged=true}delete i.costRaw;delete i.other});
   var data={items:items,total:items.reduce(function(a,i){return a+i.price*i.qty},0),payment:$('#sf-pay').value,customer:$('#sf-cust').value.trim().slice(0,60),note:$('#sf-note').value.trim()};
   var pe=$('#sf-phone');if(pe)data.phone=pe.value.trim().slice(0,20);
+  var dv=$('#sf-dlv'),dlvNew=false;if(dv){data.delivery=dv.value.trim().slice(0,2000);dlvNew=!!data.delivery&&(!old||old.delivery!==data.delivery);if(dlvNew)data.deliveredAt=Date.now()}
   var job;
   if(mode==='new'){data.orderNo=newOrderNo();data.status='done';data.source='manual';data.createdAt=t;data.doneAt=t;data.email='';if(!pe)data.phone='';data.proofText='';data.proofImage='';job=DB.addOrder(data)}
   else{data.status='done';data.doneAt=t;job=DB.updateOrder(id,data)}
   if(costsChanged)DB.saveCosts(S.costs).catch(fail);
   el.disabled=true;
-  job.then(function(){toast(mode==='confirm'?'تأكد الطلب وانحسب الربح':'انحفظت البيعة');if(S.sfsheet)S.sfsheet.close(true);if(S.osheet)S.osheet.close(true);if(S.wcsheet)S.wcsheet.close(true);if(S.subsheet)S.subsheet.close(true);if(!CLOUD)renderAdminBody()}).catch(function(e){el.disabled=false;fail(e)});
+  job.then(function(){if(dlvNew&&id)dlvNotify(id);toast(mode==='confirm'?'تأكد الطلب وانحسب الربح':'انحفظت البيعة');if(S.sfsheet)S.sfsheet.close(true);if(S.osheet)S.osheet.close(true);if(S.wcsheet)S.wcsheet.close(true);if(S.subsheet)S.subsheet.close(true);if(!CLOUD)renderAdminBody()}).catch(function(e){el.disabled=false;fail(e)});
 }
 /* ----- products ----- */
 function productsHTML(){
@@ -3112,7 +3167,7 @@ var ACT={
   checkoutCart:function(){startCheckout(cartLines().map(function(x){return {pid:x.pid,plan:x.planId,qty:x.qty}}),true)},
   pickMethod:function(el){S.co.method=el.dataset.id;S.cosheet.set(checkoutHTML(),null,true);updateSendHref()},
   rmProof:function(el){var pre=el.dataset.pre||'co',st=pre==='tp'?S.tp:S.co;if(!st)return;st.img='';$('#'+pre+'-upl').innerHTML=uplHTML(st,pre);if(pre==='tp')updateTopupHref();else updateSendHref()},
-  sendOrder:sendOrder,mixPick:mixPick,
+  sendOrder:sendOrder,mixPick:mixPick,dlvTpl:dlvTpl,custCancel:custCancel,payCancel:payCancel,cancelThenBuy:cancelThenBuy,
   pickNet:function(el){var k=el.dataset.ctx,o=k==='tp'?S.tp:S.co;if(!o)return;o.net=el.dataset.net;if(k==='tp')rerenderTopup();else if(S.cosheet&&!S.cosheet.closed){S.cosheet.set(checkoutHTML(),null,true);updateSendHref()}},
   payGo:payGo,payNow:payNow,paySwitch:paySwitch,payOpen:payOpen,payDrop:payDrop,payResume:payResume,payCheckA:payCheckA,payPing:payPing,notifyTest:notifyTest,
   account:function(el){openAccount(el.dataset.tab)},

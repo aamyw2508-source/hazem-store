@@ -28,7 +28,7 @@ const CHUNKS = 8; // getLogs calls per check (each covers SPAN blocks, SPAN shri
 const SITE = 'https://hazem-store.com';
 let BUDGET = 45; // outside calls left in this run (Cloudflare allows 50 on the free plan)
 function xf(url, init) { if (BUDGET <= 0) { const e = fail('busy, try again', 503); e.budget = true; throw e; } BUDGET--; return fetch(url, init); }
-const VERSION = 7;
+const VERSION = 8;
 const STORE = 'حازم ستور';
 
 export default {
@@ -57,6 +57,7 @@ export default {
       if (url.pathname === '/pay/start') return json(await start(fs, env, body), 200, cors);
       if (url.pathname === '/pay/check') return json(await check(fs, env, body, ctx), 200, cors);
       if (url.pathname === '/notify/test') return json(await notifyTest(fs, env), 200, cors);
+      if (url.pathname === '/notify/delivered') return json(await notifyDelivered(fs, env, body), 200, cors);
       return json({ error: 'not found' }, 404, cors);
     } catch (e) {
       return json({ error: e && e.message ? e.message : String(e) }, e && e.status ? e.status : 500, cors);
@@ -337,6 +338,24 @@ function mailHTML(title, name, paras, link, linkLabel) {
     '</div></div>';
 }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+// Hazem wrote the delivery details on a done order → email them to the customer (once per change)
+async function notifyDelivered(fs, env, b) {
+  const id = cleanId(b.id), doc = await fs.get('orders/' + id);
+  if (!doc) throw fail('not found', 404);
+  const d = doc.data;
+  if (d.status !== 'done' || !d.delivery) return { sent: false, why: 'not delivered' };
+  const sig = String(d.deliveredAt || '') + ':' + String(d.delivery).length;
+  if (d.dlvMail === sig) return { sent: false, why: 'already sent' };
+  let to = d.email || '';
+  if (!to && d.uid) { const w = await fs.get('wallets/' + d.uid); to = (w && w.data.email) || ''; }
+  if (!to) return { sent: false, why: 'no email' };
+  if (!(env.RESEND_KEY && env.MAIL_FROM)) return { sent: false, why: 'customer emails off' };
+  const items = (d.items || []).map(i => esc(i.productName + (i.planName ? ' (' + i.planName + ')' : ''))).join('<br>');
+  const box = '<div style="margin:8px 0;padding:12px;border:1px dashed #16a34a;border-radius:10px;background:#f0fdf4"><pre dir="auto" style="margin:0;font:600 14px/1.7 Tahoma,Arial,sans-serif;white-space:pre-wrap">' + esc(d.delivery) + '</pre></div>';
+  await mailCustomer(env, to, 'تم تسليم طلبك ' + (d.orderNo || '') + ' ✓', d.customer, ['تم تسليم طلبك رقم <b dir="ltr">' + esc(d.orderNo || '') + '</b>:', items, box, 'بتلاقي هاي التفاصيل كمان بحسابك على الموقع تحت "طلباتي".']);
+  await fs.commit([fs.wUpdate('orders/' + id, { dlvMail: sig }, ['dlvMail'], { exists: true })]);
+  return { sent: true };
+}
 // a test message from the admin panel, at most once a minute
 async function notifyTest(fs, env) {
   const ch = channels(env);
