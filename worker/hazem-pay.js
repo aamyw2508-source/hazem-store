@@ -28,7 +28,7 @@ const CHUNKS = 8; // getLogs calls per check (each covers SPAN blocks, SPAN shri
 const SITE = 'https://hazem-store.com';
 let BUDGET = 45; // outside calls left in this run (Cloudflare allows 50 on the free plan)
 function xf(url, init) { if (BUDGET <= 0) { const e = fail('busy, try again', 503); e.budget = true; throw e; } BUDGET--; return fetch(url, init); }
-const VERSION = 6;
+const VERSION = 7;
 const STORE = 'حازم ستور';
 
 export default {
@@ -398,7 +398,7 @@ const rest = {}; // node → time it may be tried again (it said it is busy or n
 function useRpcs(env) {
   const own = String((env && env.BSC_RPC) || '').split(',').map(x => x.trim()).filter(x => /^https:\/\//.test(x));
   const list = own.concat(BSC_PUBLIC.filter(u => !own.includes(u)));
-  if (list.join() !== RPCS.join()) { RPCS = list; rpcI = 0; }
+  if (list.join() !== RPCS.join()) { RPCS = list; rpcI = 0; if (own.length && SPAN === 200) SPAN = 1000; } // a private node answers bigger ranges
 }
 async function rpcOne(url, method, params) {
   const r = await xf(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }), signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
@@ -443,7 +443,7 @@ async function rpcProbe(env) {
   const m = s && (s.data.payments || []).find(isUsdt), addr = (m && validAddr('bsc', m.number)) ? m.number : '0x289B2eae953DBaa04ba59EED4694B6b2919cFEf5';
   const topic = '0x000000000000000000000000' + addr.toLowerCase().replace(/^0x/, ''), out = [];
   for (const url of RPCS) {
-    const row = { node: url.replace(/^https:\/\//, '').slice(0, 44) };
+    const own = !BSC_PUBLIC.includes(url), row = { node: own ? new URL(url).host + ' (مفتاحك)' : url.replace(/^https:\/\//, '').slice(0, 44) }; // never show the key
     try {
       const t0 = Date.now(), b = parseInt(await rpcOne(url, 'eth_blockNumber', []), 16); row.block = b; row.ms = Date.now() - t0;
       for (const span of [200, 2000]) {
