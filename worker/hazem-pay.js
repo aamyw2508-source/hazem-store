@@ -18,18 +18,21 @@ const ORIGINS = ['https://hazem-store.com', 'https://www.hazem-store.com'];
 const USDT_BSC = '0x55d398326f99059ff775485246999027b3197955';
 const USDT_TRON = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 const TRANSFER = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
-const BSC_RPC = ['https://bsc-rpc.publicnode.com', 'https://bsc.drpc.org', 'https://1rpc.io/bnb', 'https://bsc-dataseed.bnbchain.org'];
+// Public BNB Smart Chain nodes. They only answer small block ranges for logs, so we ask in small steps.
+// To put your own node first (e.g. a free NodeReal or BlockPI key), set BSC_RPC in the Worker settings (comma separated).
+const BSC_PUBLIC = ['https://bsc-rpc.publicnode.com', 'https://bsc.blockpi.network/v1/rpc/public', 'https://binance.llamarpc.com', 'https://bsc.drpc.org', 'https://1rpc.io/bnb', 'https://bsc.meowrpc.com', 'https://bsc-mainnet.public.blastapi.io', 'https://bsc-dataseed.bnbchain.org'];
 const PAY_MIN = 60;             // minutes the customer is asked to pay within
 const HOLD_H = 24;              // hours an exact amount belongs to one payment, and we keep accepting it
-const CHUNK = 2000, CHUNKS = 8; // BSC blocks per getLogs call, calls per check
+const CHUNKS = 8; // getLogs calls per check (each covers SPAN blocks, SPAN shrinks by itself if a node refuses)
 
 const SITE = 'https://hazem-store.com';
-const VERSION = 4;
+const VERSION = 5;
 const STORE = 'حازم ستور';
 
 export default {
-  async scheduled(event, env, ctx) { ctx.waitUntil(cron(env).catch(e => cronFailed(env, e))); },
+  async scheduled(event, env, ctx) { useRpcs(env); ctx.waitUntil(cron(env).catch(e => cronFailed(env, e))); },
   async fetch(req, env, ctx) {
+    useRpcs(env);
     const origin = req.headers.get('origin') || '';
     const allowed = ORIGINS.concat(String(env.EXTRA_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean));
     const cors = {
@@ -43,6 +46,7 @@ export default {
     const url = new URL(req.url);
     try {
       if (req.method === 'GET' && url.searchParams.has('cron')) return json(await cronNow(env), 200, cors);
+      if (req.method === 'GET' && url.searchParams.has('rpc')) return json(await rpcProbe(env), 200, cors);
       if (req.method === 'GET') return json(await health(env), 200, cors);
       if (req.method !== 'POST') return json({ error: 'method' }, 405, cors);
       let body = {};
@@ -128,7 +132,7 @@ async function check(fs, env, b, ctx, chunks) {
   let hits = [], scanned = p.scanned || 0;
   if (p.net === 'bsc') {
     const latest = (await bscBlock()) - 2, from = scanned ? scanned + 1 : p.startBlock;
-    const to = Math.min(latest, from + CHUNK * (chunks || CHUNKS) - 1);
+    const to = Math.min(latest, from + SPAN * (chunks || CHUNKS) - 1);
     if (to >= from) { hits = await bscFind(p.addr, p.amt, from, to); scanned = to; }
   } else {
     hits = await tronFind(env, p.addr, p.amt, p.startTs);
@@ -385,37 +389,68 @@ function validAddr(net, a) { return net === 'tron' ? /^T[1-9A-HJ-NP-Za-km-z]{33}
 function cleanId(v) { const id = String(v || ''); if (!/^[A-Za-z0-9_-]{6,40}$/.test(id)) throw fail('bad id'); return id; }
 
 // ---------------------------------------------------------------- chains
-let rpcI = 0;
+let RPCS = BSC_PUBLIC, rpcI = 0, SPAN = 200;
+const RANGE_ERR = /limit|range|exceed|too (many|large|big)|10000|response size|block/i;
+function useRpcs(env) {
+  const own = String((env && env.BSC_RPC) || '').split(',').map(x => x.trim()).filter(x => /^https:\/\//.test(x));
+  const list = own.concat(BSC_PUBLIC.filter(u => !own.includes(u)));
+  if (list.join() !== RPCS.join()) { RPCS = list; rpcI = 0; }
+}
+async function rpcOne(url, method, params) {
+  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }), signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
+  const t = await r.text(); let j;
+  try { j = JSON.parse(t); } catch (e) { throw new Error('http ' + r.status + ' ' + t.slice(0, 80)); }
+  if (j.error) throw new Error(String(j.error.message || 'rpc error'));
+  return j.result;
+}
+// up to 4 nodes per call, starting from the one that answered last
 async function rpc(method, params) {
   let last;
-  for (let k = 0; k < BSC_RPC.length; k++) {
-    const i = (rpcI + k) % BSC_RPC.length;
-    try {
-      const r = await fetch(BSC_RPC[i], { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
-      const j = await r.json();
-      if (j.error) throw new Error(j.error.message || 'rpc error');
-      rpcI = i;
-      return j.result;
-    } catch (e) { last = e; }
+  for (let k = 0, n = Math.min(4, RPCS.length); k < n; k++) {
+    const i = (rpcI + k) % RPCS.length;
+    try { const res = await rpcOne(RPCS[i], method, params); rpcI = i; return res; } catch (e) { last = e; }
   }
+  if (method === 'eth_getLogs' || !last) rpcI = (rpcI + 1) % RPCS.length;
   throw last || new Error('rpc down');
 }
 async function bscBlock() { return parseInt(await rpc('eth_blockNumber', []), 16); }
 async function bscFind(addr, amt, from, to) {
   const topic = '0x000000000000000000000000' + addr.toLowerCase().replace(/^0x/, ''), hits = [];
-  for (let a = from; a <= to; a += CHUNK) {
-    const b = Math.min(to, a + CHUNK - 1);
-    const logs = await rpc('eth_getLogs', [{ address: USDT_BSC, fromBlock: '0x' + a.toString(16), toBlock: '0x' + b.toString(16), topics: [TRANSFER, null, topic] }]);
+  let a = from;
+  while (a <= to) {
+    const b = Math.min(to, a + SPAN - 1);
+    let logs;
+    try { logs = await rpc('eth_getLogs', [{ address: USDT_BSC, fromBlock: '0x' + a.toString(16), toBlock: '0x' + b.toString(16), topics: [TRANSFER, null, topic] }]); }
+    catch (e) { if (SPAN > 25 && RANGE_ERR.test(String(e && e.message))) { SPAN = Math.max(25, Math.floor(SPAN / 2)); continue; } throw e; }
     for (const l of logs || []) {
       const v = Number(BigInt(l.data) / 10n ** 12n) / 1e6; // 18 decimals → 6, no float drift
       if (Math.abs(v - amt) < 0.0005) hits.push({ tx: l.transactionHash, amt: r3(v) });
     }
+    a = b + 1;
   }
   return hits;
 }
+// GET /?rpc=1 : which BNB Smart Chain nodes answer, and for how many blocks
+async function rpcProbe(env) {
+  const fs = await firestore(env), s = await fs.get('settings/main');
+  const m = s && (s.data.payments || []).find(isUsdt), addr = (m && validAddr('bsc', m.number)) ? m.number : '0x289B2eae953DBaa04ba59EED4694B6b2919cFEf5';
+  const topic = '0x000000000000000000000000' + addr.toLowerCase().replace(/^0x/, ''), out = [];
+  for (const url of RPCS) {
+    const row = { node: url.replace(/^https:\/\//, '').slice(0, 44) };
+    try {
+      const t0 = Date.now(), b = parseInt(await rpcOne(url, 'eth_blockNumber', []), 16); row.block = b; row.ms = Date.now() - t0;
+      for (const span of [200, 1000, 5000]) {
+        try { await rpcOne(url, 'eth_getLogs', [{ address: USDT_BSC, fromBlock: '0x' + (b - span).toString(16), toBlock: '0x' + b.toString(16), topics: [TRANSFER, null, topic] }]); row['logs' + span] = 'ok'; }
+        catch (e) { row['logs' + span] = String(e.message).slice(0, 60); break; }
+      }
+    } catch (e) { row.err = String(e.message).slice(0, 70); }
+    out.push(row);
+  }
+  return { span: SPAN, nodes: out };
+}
 async function tronFind(env, addr, amt, sinceTs) {
   const u = `https://api.trongrid.io/v1/accounts/${addr}/transactions/trc20?only_to=true&only_confirmed=true&limit=200&contract_address=${USDT_TRON}&min_timestamp=${Math.floor(sinceTs)}`;
-  const r = await fetch(u, { headers: env.TRONGRID_KEY ? { 'TRON-PRO-API-KEY': env.TRONGRID_KEY } : {} });
+  const r = await fetch(u, { headers: env.TRONGRID_KEY ? { 'TRON-PRO-API-KEY': env.TRONGRID_KEY } : {}, signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined });
   if (!r.ok) throw new Error('trongrid ' + r.status);
   const j = await r.json(), hits = [], want = Math.round(amt * 1e6);
   for (const t of j.data || []) {

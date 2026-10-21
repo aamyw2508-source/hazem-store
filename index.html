@@ -2027,7 +2027,7 @@ function acctText(o){var t=acctNeed(),L=[];if(!t)return L;if(String(o.email||'')
 /* ================= USDT on BEP20 + TRC20: exact amount + QR. With the payment server the order confirms itself ================= */
 var USDT_BSC='0x55d398326f99059ff775485246999027b3197955',TR_TOPIC='0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 var USDT_ADDR='0x289B2eae953DBaa04ba59EED4694B6b2919cFEf5',USDT_TRON='TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',TRON_ADDR='THodKuiPeTJj6qq1QfEeGM8eVfuak1JLti';
-var BSC_RPC=['https://bsc-rpc.publicnode.com','https://bsc.drpc.org','https://1rpc.io/bnb','https://bsc-dataseed.bnbchain.org'],rpcI=0;
+var BSC_RPC=['https://bsc-rpc.publicnode.com','https://bsc.blockpi.network/v1/rpc/public','https://binance.llamarpc.com','https://bsc.drpc.org','https://1rpc.io/bnb','https://bsc.meowrpc.com','https://bsc-dataseed.bnbchain.org'],rpcI=0,CSPAN=500;
 var NETS={bsc:{short:'BEP20',name:'BNB Smart Chain',scan:'https://bscscan.com/tx/'},tron:{short:'TRC20',name:'Tron',scan:'https://tronscan.org/#/transaction/'}};
 function bscOk(a){return /^0x[0-9a-fA-F]{40}$/.test(String(a||'').trim())}
 function tronOk(a){return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(String(a||'').trim())}
@@ -2059,9 +2059,13 @@ function rpc(method,params,k){k=k||0;var url=BSC_RPC[(rpcI+k)%BSC_RPC.length],ct
 function hx(n){return '0x'+n.toString(16)}
 function topicAddr(a){return '0x000000000000000000000000'+String(a).toLowerCase().replace(/^0x/,'')}
 function logVal(l){return parseInt(l.data,16)/1e18}
-function findUsdt(addr,amt,from,to,skip){var cs=[],a=Math.max(0,from);while(a<=to){var b=Math.min(to,a+1999);cs.push([a,b]);a=b+1}var hit=null;
-  return cs.reduce(function(p,c){return p.then(function(){if(hit)return;return rpc('eth_getLogs',[{address:USDT_BSC,fromBlock:hx(c[0]),toBlock:hx(c[1]),topics:[TR_TOPIC,null,topicAddr(addr)]}]).then(function(ls){
-    (ls||[]).some(function(l){if(Math.abs(logVal(l)-amt)<0.0005&&!(skip&&skip(l.transactionHash))){hit={tx:l.transactionHash,block:parseInt(l.blockNumber,16),amt:r3(logVal(l)),net:'bsc'};return true}})})})},Promise.resolve()).then(function(){return hit})}
+// public nodes only answer small block ranges for logs: ask in steps, and shrink the step if a node refuses
+function findUsdt(addr,amt,from,to,skip){var a=Math.max(0,from),hit=null;
+  function step(){if(hit||a>to)return Promise.resolve(hit);var b=Math.min(to,a+CSPAN-1);
+    return rpc('eth_getLogs',[{address:USDT_BSC,fromBlock:hx(a),toBlock:hx(b),topics:[TR_TOPIC,null,topicAddr(addr)]}]).then(function(ls){
+      (ls||[]).some(function(l){if(Math.abs(logVal(l)-amt)<0.0005&&!(skip&&skip(l.transactionHash))){hit={tx:l.transactionHash,block:parseInt(l.blockNumber,16),amt:r3(logVal(l)),net:'bsc'};return true}});a=b+1;return step()},
+     function(e){if(CSPAN>25&&/limit|range|exceed|too (many|large|big)|10000|block/i.test(String(e&&e.message||''))){CSPAN=Math.max(25,Math.floor(CSPAN/2));return step()}throw e})}
+  return step()}
 function tronList(addr,since){return fetch('https://api.trongrid.io/v1/accounts/'+addr+'/transactions/trc20?only_to=true&only_confirmed=true&limit=200&contract_address='+USDT_TRON+'&min_timestamp='+Math.max(0,Math.floor(since)))
   .then(function(r){if(!r.ok)throw new Error('trongrid '+r.status);return r.json()}).then(function(j){return (j.data||[]).filter(function(t){return t.to===addr}).map(function(t){return {tx:String(t.transaction_id),amt:r3(+t.value/1e6),net:'tron'}})})}
 function tronFind(addr,amt,since,skip){return tronList(addr,since).then(function(l){return l.find(function(t){return Math.abs(t.amt-amt)<0.0005&&!(skip&&skip(t.tx))})||null})}
