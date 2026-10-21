@@ -2253,7 +2253,9 @@ function payPing(){var u=String(($('#pm-api')||{}).value||'').trim().replace(/\/
   function(){out.textContent='ما قدرنا نوصل للخادم، تأكد من الرابط.'})}
 function notifyTest(el){var m=(S.settings.payments||[]).find(isUsdtM),u=payApi({api:String(($('#pm-api')||{}).value||'')})||payApi(m);if(!u){toast('حط رابط خادم الدفع أول');return}el.disabled=true;
   fetch(u+'/notify/test',{method:'POST',headers:{'content-type':'text/plain'},body:'{}'}).then(function(r){return r.json()}).then(function(j){el.disabled=false;
-    toast(j.sent?'انبعت إشعار تجربة، شوف إيميلك أو واتساب':j.wait?'استنى دقيقة وجرّب كمان مرة':j.error?'الخادم ما زبط: '+j.error:'ما في إشعارات مفعّلة بالخادم لسا')},function(){el.disabled=false;toast('ما قدرنا نوصل للخادم')})}
+    var out=$('#pm-ping'),er=(j.errors||[]).map(function(x){return ({email:'الإيميل',whatsapp:'واتساب',telegram:'تيليجرام'}[x.ch]||x.ch)+': '+x.msg}).join(' · ');
+    if(out)out.textContent=(j.sent?'انبعت إشعار تجربة ✓ شوف إيميلك (وافحص الـ Spam).':j.wait?'استنى دقيقة وجرّب كمان مرة.':j.error?'الخادم ما زبط: '+j.error:er?'ما انبعت.':'ما في إشعارات مفعّلة بالخادم لسا.')+(er?' المشكلة: '+er:'');
+    toast(j.sent?'انبعت إشعار تجربة':j.wait?'استنى دقيقة وجرّب كمان مرة':'ما انبعت الإشعار، شوف السبب تحت الأزرار')},function(){el.disabled=false;toast('ما قدرنا نوصل للخادم')})}
 
 function checkoutHTML(){
   var o=S.co,m=curMethod(),lines=coLines(),total=coTotal(),wal=isWalletPay();

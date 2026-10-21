@@ -278,12 +278,22 @@ async function notifyPaid(fs, env, kind, id, d, r) {
   }
 }
 async function notifyAdmin(env, title, lines, link) {
-  const text = title + '\n' + lines.join('\n'), jobs = [];
-  if (env.WA_PHONE && env.WA_KEY) jobs.push(fetch('https://api.callmebot.com/whatsapp.php?phone=' + encodeURIComponent(env.WA_PHONE) + '&text=' + encodeURIComponent(text) + '&apikey=' + encodeURIComponent(env.WA_KEY)));
-  if (env.TG_TOKEN && env.TG_CHAT) jobs.push(fetch('https://api.telegram.org/bot' + env.TG_TOKEN + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: env.TG_CHAT, text: text + (link ? '\n' + link : ''), disable_web_page_preview: true }) }));
-  if (env.RESEND_KEY && env.ADMIN_EMAIL) jobs.push(sendMail(env, env.ADMIN_EMAIL, title, mailHTML(title, null, lines.map(esc), link, 'افتح لوحة الإدارة')));
-  const res = await Promise.allSettled(jobs);
-  return res.filter(x => x.status === 'fulfilled' && x.value && x.value.ok).length;
+  const text = title + '\n' + lines.join('\n'), jobs = [], names = [];
+  if (env.WA_PHONE && env.WA_KEY) names.push('whatsapp'), jobs.push(fetch('https://api.callmebot.com/whatsapp.php?phone=' + encodeURIComponent(env.WA_PHONE) + '&text=' + encodeURIComponent(text) + '&apikey=' + encodeURIComponent(env.WA_KEY)));
+  if (env.TG_TOKEN && env.TG_CHAT) names.push('telegram'), jobs.push(fetch('https://api.telegram.org/bot' + env.TG_TOKEN + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: env.TG_CHAT, text: text + (link ? '\n' + link : ''), disable_web_page_preview: true }) }));
+  if (env.RESEND_KEY && env.ADMIN_EMAIL) names.push('email'), jobs.push(sendMail(env, env.ADMIN_EMAIL, title, mailHTML(title, null, lines.map(esc), link, 'افتح لوحة الإدارة')));
+  const res = await Promise.allSettled(jobs), errors = [];
+  let sent = 0;
+  for (let i = 0; i < res.length; i++) {
+    const x = res[i];
+    if (x.status === 'fulfilled' && x.value && x.value.ok) { sent++; continue; }
+    let msg = x.status === 'rejected' ? String(x.reason && x.reason.message || x.reason) : 'http ' + x.value.status;
+    if (x.status === 'fulfilled') { try { const t = await x.value.text(); try { const j = JSON.parse(t); msg = j.message || j.description || t; } catch (e) { msg = t || msg; } } catch (e) {} }
+    errors.push({ ch: names[i], msg: String(msg).slice(0, 300) });
+    console.error('notify', names[i], msg);
+  }
+  notifyAdmin.last = errors;
+  return sent;
 }
 async function mailCustomer(env, to, subject, name, paras) {
   if (!(env.RESEND_KEY && env.MAIL_FROM) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return;
@@ -308,7 +318,7 @@ async function notifyTest(fs, env) {
   if (Date.now() - last < 60e3) return { sent: 0, wait: true, notify: ch };
   await fs.commit([fs.wUpdate('payState/main', { testAt: Date.now() }, ['testAt'])]);
   const sent = await notifyAdmin(env, '🔔 تجربة إشعارات ' + STORE, ['هيك رح توصلك الطلبات الجديدة والدفعات.'], SITE + '/admin.html');
-  return { sent, notify: ch };
+  return { sent, errors: notifyAdmin.last || [], notify: ch };
 }
 
 // instant codes: every unit in the order must be an instant plan with a free code
