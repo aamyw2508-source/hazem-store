@@ -24,10 +24,11 @@ const HOLD_H = 24;              // hours an exact amount belongs to one payment,
 const CHUNK = 2000, CHUNKS = 8; // BSC blocks per getLogs call, calls per check
 
 const SITE = 'https://hazem-store.com';
+const VERSION = 4;
 const STORE = 'حازم ستور';
 
 export default {
-  async scheduled(event, env, ctx) { ctx.waitUntil(cron(env).catch(e => console.error('cron', e && e.message))); },
+  async scheduled(event, env, ctx) { ctx.waitUntil(cron(env).catch(e => cronFailed(env, e))); },
   async fetch(req, env, ctx) {
     const origin = req.headers.get('origin') || '';
     const allowed = ORIGINS.concat(String(env.EXTRA_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean));
@@ -41,6 +42,7 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     const url = new URL(req.url);
     try {
+      if (req.method === 'GET' && url.searchParams.has('cron')) return json(await cronNow(env), 200, cors);
       if (req.method === 'GET') return json(await health(env), 200, cors);
       if (req.method !== 'POST') return json({ error: 'method' }, 405, cors);
       let body = {};
@@ -65,7 +67,8 @@ async function health(env) {
   const s = await fs.get('settings/main');
   const m = s && (s.data.payments || []).find(isUsdt);
   const st = await fs.get('payState/main');
-  return { ok: true, service: 'hazem-pay', project: fs.project, usdt: m ? { auto: !!m.auto, bsc: validAddr('bsc', m.number), tron: validAddr('tron', m.tron) } : null, notify: channels(env), cron: st && st.data.cronAt ? st.data.cronAt : 0 };
+  const sd = (st && st.data) || {};
+  return { ok: true, service: 'hazem-pay', version: VERSION, project: fs.project, usdt: m ? { auto: !!m.auto, bsc: validAddr('bsc', m.number), tron: validAddr('tron', m.tron) } : null, notify: channels(env), cron: sd.cronAt || 0, cronErr: sd.cronErr || '', cronFail: sd.cronFail || 0 };
 }
 
 // ---------------------------------------------------------------- /pay/start : reserve an exact amount
@@ -208,7 +211,7 @@ function fp(seg) { return /^[A-Za-z_][A-Za-z0-9_]*$/.test(seg) ? seg : '`' + seg
 async function cron(env) {
   const fs = await firestore(env), now = Date.now();
   const st = await fs.get('payState/main'), s = (st && st.data) || {};
-  const fields = { cronAt: now }, mask = ['cronAt'];
+  const fields = { cronAt: now }, mask = ['cronAt'], errs = [];
   // 1. payments still waiting: keep checking them even if the customer closed the page
   const w = s.w || {};
   for (const key of shuffle(Object.keys(w)).slice(0, 4)) {
@@ -217,7 +220,7 @@ async function cron(env) {
       try {
         const r = await check(fs, env, { kind: key[0] === 't' ? 'topup' : 'order', id: key.slice(2) }, null, 2);
         done = r.status !== 'pending' || r.nopay || r.expired;
-      } catch (e) { done = e.status === 404 || e.status === 400; }
+      } catch (e) { done = e.status === 404 || e.status === 400; errs.push('check ' + key + ': ' + (e && e.message)); }
     }
     if (done) mask.push('w.' + fp(key));
   }
@@ -225,16 +228,31 @@ async function cron(env) {
   const cur = { ...(s.cur || {}) };
   for (const col of ['orders', 'topups', 'tickets']) {
     if (!cur[col]) { cur[col] = now; continue; } // first run: start from now, no flood of old orders
-    const rows = await fs.query(col, [['createdAt', 'GREATER_THAN', new Date(cur[col])]], 10, 'createdAt');
-    for (const r of rows) {
-      cur[col] = Math.max(cur[col], (r.data.createdAt || 0) + 1); // +1 ms: stored times are finer than ms
-      const msg = newItemMsg(col, r.data);
-      if (msg) await notifyAdmin(env, msg.title, msg.lines, SITE + '/admin.html').catch(e => console.error('notify', e && e.message));
-    }
+    try {
+      const rows = await fs.query(col, [['createdAt', 'GREATER_THAN', new Date(cur[col])]], 10, 'createdAt');
+      for (const r of rows) {
+        cur[col] = Math.max(cur[col], (+r.data.createdAt || 0) + 1); // +1 ms: stored times are finer than ms
+        const msg = newItemMsg(col, r.data);
+        if (msg) await notifyAdmin(env, msg.title, msg.lines, SITE + '/admin.html').catch(e => errs.push('notify: ' + (e && e.message)));
+      }
+    } catch (e) { errs.push(col + ': ' + (e && e.message)); }
   }
   fields.cur = cur; mask.push('cur');
+  fields.cronErr = errs.join(' | ').slice(0, 600); mask.push('cronErr');
   await fs.commit([fs.wUpdate('payState/main', fields, mask)]);
   return { checked: Object.keys(w).length };
+}
+
+async function cronFailed(env, e) {
+  console.error('cron', e && e.message);
+  try { const fs = await firestore(env); await fs.commit([fs.wUpdate('payState/main', { cronFail: Date.now(), cronErr: String(e && e.message || e).slice(0, 600) }, ['cronFail', 'cronErr'])]); } catch (e2) {}
+}
+// GET /?cron=1 : run the 2-minute job now (at most every 20 s) and show the result
+async function cronNow(env) {
+  const fs = await firestore(env), st = await fs.get('payState/main'), last = (st && st.data.cronAt) || 0;
+  if (Date.now() - last < 20e3) return { ran: false, wait: true, cron: last };
+  try { const r = await cron(env); const st2 = await fs.get('payState/main'); return { ran: true, ...r, cronErr: (st2 && st2.data.cronErr) || '' }; }
+  catch (e) { await cronFailed(env, e); return { ran: false, error: String(e && e.message || e) }; }
 }
 
 // ---------------------------------------------------------------- notifications
@@ -424,7 +442,7 @@ async function firestore(env) {
     async get(p) {
       const r = await fetch(api + name(p), { headers: H });
       if (r.status === 404) return null;
-      if (!r.ok) throw fail('firestore get ' + r.status, 502);
+      if (!r.ok) throw fail('firestore get ' + r.status + ' ' + (await r.text()).slice(0, 200), 502);
       return parse(await r.json());
     },
     async query(col, filters, limit, orderBy) {
@@ -432,7 +450,7 @@ async function firestore(env) {
       const body = { structuredQuery: { from: [{ collectionId: col }], where: fl.length > 1 ? { compositeFilter: { op: 'AND', filters: fl } } : fl[0], limit } };
       if (orderBy) body.structuredQuery.orderBy = [{ field: { fieldPath: orderBy }, direction: 'ASCENDING' }];
       const r = await fetch(api + root + ':runQuery', { method: 'POST', headers: H, body: JSON.stringify(body) });
-      if (!r.ok) throw fail('firestore query ' + r.status, 502);
+      if (!r.ok) throw fail('firestore query ' + r.status + ' ' + (await r.text()).slice(0, 300), 502);
       return (await r.json()).filter(x => x.document).map(x => parse(x.document));
     },
     wUpdate(p, fields, mask, pre, transforms) {
@@ -444,7 +462,7 @@ async function firestore(env) {
     },
     async commit(writes) {
       const r = await fetch(api + root + ':commit', { method: 'POST', headers: H, body: JSON.stringify({ writes }) });
-      if (!r.ok) throw fail('commit ' + r.status, r.status);
+      if (!r.ok) { const t = await r.text(); console.error('commit', r.status, t.slice(0, 300)); throw fail('commit ' + r.status + ' ' + t.slice(0, 300), r.status); }
       return r.json();
     },
   };
