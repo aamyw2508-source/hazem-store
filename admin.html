@@ -1065,6 +1065,8 @@ body.locked .paybar{display:none}
 .mrow .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .mrow .acts .btn{margin-top:0}
 .payv-cancel{justify-self:center;width:auto;color:var(--bad,#c0392b)}
+.usebal small{display:block;margin-top:2px;font-size:12px;color:var(--muted);font-weight:500}
+.wcard .w-held{display:block;margin-top:4px;opacity:.85;font-size:12px}
 </style>
 </head>
 <body>
@@ -1283,7 +1285,7 @@ var LocalDB={
   saveCosts:function(m){this.data.costs=clone(m);this.save();return Promise.resolve()},
   addOrder:function(o){o=clone(o);o.id=o.id||uid();this.data.orders.unshift(o);this.emit();return Promise.resolve(o.id)},
   createSiteOrder:function(o){o=clone(o);o.createdAt=Date.now();return this.addOrder(o)},
-  createMixedOrder:function(o){return this.createSiteOrder(o)},cancelMyOrder:function(id){return this.updateOrder(id,{status:'cancelled',cancelledBy:'customer'})},cancelMyTopup:function(){return Promise.resolve()},refundMixed:function(o){return this.updateOrder(o.id,{status:'cancelled'})},
+  createMixedOrder:function(o){return this.createSiteOrder(o)},cancelMyOrder:function(id){return this.updateOrder(id,{status:'cancelled',cancelledBy:'customer'})},cancelMyTopup:function(){return Promise.resolve()},confirmWithWallet:function(id,patch){return this.updateOrder(id,patch)},refundMixed:function(o){return this.updateOrder(o.id,{status:'cancelled'})},
   updateOrder:function(id,patch){var o=this.data.orders.find(function(x){return x.id===id});if(o)Object.assign(o,clone(patch));this.emit();return Promise.resolve()},
   deleteOrder:function(id){this.data.orders=this.data.orders.filter(function(x){return x.id!==id});this.emit();return Promise.resolve()},
   bulk:function(b){if(b.settings)this.data.settings=clone(b.settings);if(b.products)this.data.products=clone(b.products);if(b.costs)this.data.costs=clone(b.costs);this.emit();return Promise.resolve()},
@@ -1328,9 +1330,10 @@ var CloudDB={
   saveCosts:function(m){return this.db.doc('private/costs').set({map:clone(m)})},
   addOrder:function(o){var ref=this.db.collection('orders').doc();return ref.set(this.toFire(o)).then(function(){return ref.id})},
   createSiteOrder:function(o){var x=clone(o);x.createdAt=firebase.firestore.FieldValue.serverTimestamp();return this.db.collection('orders').add(x)},
-  createMixedOrder:function(o){var db=this.db,FV=firebase.firestore.FieldValue,wref=db.doc('wallets/'+o.uid),oref=db.collection('orders').doc();
-    return db.runTransaction(function(tx){return tx.get(wref).then(function(ws){if(!ws.exists)throw {code:'wallet/missing'};var w=ws.data(),bal=+w.balance||0;if(bal<o.walletPart)throw {code:'wallet/insufficient'};
-      var x=clone(o);x.createdAt=FV.serverTimestamp();tx.set(oref,x);tx.update(wref,{balance:w.balance-o.walletPart,lastOrder:oref.id});return oref})})},
+  createMixedOrder:function(o){var x=clone(o);x.walletDue=true;return this.createSiteOrder(x)},
+  confirmWithWallet:function(id,patch,o){var db=this.db,self=this,wref=db.doc('wallets/'+o.uid),oref=db.doc('orders/'+id),wp=oWalletPart(o);
+    return db.runTransaction(function(tx){return tx.get(wref).then(function(ws){var bal=ws.exists?(+ws.data().balance||0):0;if(bal<wp-1e-9)throw {code:'wallet/short'};
+      var x=self.toFire(patch);x.walletDue=false;x.walletShort=false;x.walletPaidAt=firebase.firestore.FieldValue.serverTimestamp();tx.update(oref,x);tx.update(wref,{balance:Math.round((bal-wp)*100)/100})})})},
   cancelMyOrder:function(id,uid,wp){var b=this.db.batch(),FV=firebase.firestore.FieldValue;
     if(wp>0){b.update(this.db.doc('orders/'+id),{status:'cancelled',cancelledBy:'customer',walletRefunded:true});b.update(this.db.doc('wallets/'+uid),{balance:FV.increment(wp),lastRefund:id})}
     else b.update(this.db.doc('orders/'+id),{status:'cancelled',cancelledBy:'customer'});return b.commit()},
@@ -1870,7 +1873,7 @@ function startCheckout(items,fromCart){
   var up=myUnpaid();if(up){unpaidSheet(up,items,fromCart);return}
   var ms=activeMethods(),me=store('hazem-me')||{};closeAllSheets();
   S.co={items:items,fromCart:!!fromCart,method:ms[0]?ms[0].id:'',proof:'',img:'',name:me.name||'',phone:me.phone||'',email:'',no:newOrderNo()};
-  if(walletOn()&&S.wallet){if(!S.co.name)S.co.name=S.wallet.name||'';if(!S.co.phone)S.co.phone=S.wallet.phone||'';if((+S.wallet.balance||0)>=coTotal())S.co.method='wallet'}
+  if(walletOn()&&S.wallet){if(!S.co.name)S.co.name=S.wallet.name||'';if(!S.co.phone)S.co.phone=S.wallet.phone||'';if(myBal()>=coTotal())S.co.method='wallet'}
   if(walletOn()&&!ms.length)S.co.method='wallet';
   S.cosheet=openSheet({title:'إتمام الطلب',body:checkoutHTML(),onClose:function(){S.co=null}});
   updateSendHref();
@@ -1879,7 +1882,7 @@ function isWalletPay(){return walletOn()&&S.co&&S.co.method==='wallet'}
 function walletBoxHTML(total,lines){
   var inst=lines.filter(function(x){return x.plan.instant}),ih=inst.length?'<p class="hint inst-hint">'+svg('bolt',14)+'<span>'+inst.map(function(x){return esc(x.p.name)}).join('، ')+': بتستلمه فوراً بعد الدفع.</span></p>':'';
   if(!S.user)return '<div class="wbox"><p>سجّل دخولك عشان تدفع من رصيدك'+(inst.length?' وتستلم الاشتراك فوراً':'')+'.</p><button class="btn primary" data-act="account">'+svg('user',18)+' تسجيل الدخول</button></div>'+ih;
-  var bal=S.wallet?(+S.wallet.balance||0):0,left=bal-total;
+  var bal=myBal(),left=bal-total;
   var h='<div class="wbox'+(left<0?' low':'')+'"><div class="wrow"><span>رصيدك</span><b>'+money(bal)+'</b></div><div class="wrow"><span>المطلوب</span><b>'+money(total)+'</b></div>';
   if(left>=0)h+='<div class="wrow"><span>بيضل معك</span><b>'+money(left)+'</b></div>';
   else h+='<p class="wlow">رصيدك ما بكفي، ناقصك '+money(-left)+'.</p><button class="btn primary" data-act="topupOpen" data-amount="'+Math.ceil(-left)+'">'+svg('plus',18)+' شحن الرصيد</button>'+(activeMethods().length&&bal>0?'<button class="btn" data-act="mixPick">'+svg('card',18)+' ادفع '+money(Math.floor(bal*100)/100)+' من رصيدك والباقي بطريقة ثانية</button>':'');
@@ -2329,18 +2332,22 @@ function coReady(items){return items.every(function(c){return !!product(c.pid)})
 function coNeedHTML(){return S.pendingCo?'<p class="alert info co-need"><span>'+svg('cart',18)+'سجّل دخولك أو اعمل حساب بثواني عشان تكمّل طلبك، وطلباتك والأكواد بتنحفظ بحسابك.</span></p>':''}
 /* ================= pay part from the balance, the rest by another method ================= */
 function r2(v){return Math.round(v*100)/100}
-function myBal(){return S.wallet?Math.floor((+S.wallet.balance||0)*100)/100:0}
+// balance kept for orders whose payment is not complete yet is not available for another purchase
+function myHeld(){return (S.myOrders||[]).filter(function(o){return o.walletDue&&(o.status==='pending'||o.status==='paid')}).reduce(function(a,o){return a+oWalletPart(o)},0)}
+function myBal(){return S.wallet?Math.max(0,Math.floor(((+S.wallet.balance||0)-myHeld())*100)/100):0}
 function canMix(){var o=S.co;if(!o||!walletOn()||!S.user||!S.wallet||isWalletPay())return false;var b=myBal();return b>0&&b<coTotal()}
 function coWalletPart(){return canMix()&&S.co.useBal!==false?myBal():0}
 function coPayable(){return r2(coTotal()-coWalletPart())}
 function useBalHTML(){if(!canMix())return '';var b=myBal();
-  return '<label class="check usebal"><input type="checkbox" id="co-usebal"'+(S.co.useBal!==false?' checked':'')+'><span>ادفع <b>'+money(b)+'</b> من رصيدك، والباقي <b>'+money(r2(coTotal()-b))+'</b> بطريقة الدفع اللي اخترتها</span></label>'}
+  return '<label class="check usebal"><input type="checkbox" id="co-usebal"'+(S.co.useBal!==false?' checked':'')+'><span>ادفع <b>'+money(b)+'</b> من رصيدك، والباقي <b>'+money(r2(coTotal()-b))+'</b> بطريقة الدفع اللي اخترتها<small>رصيدك ما بينخصم إلا لما يكتمل الدفع كله.</small></span></label>'}
 function coSumPayHTML(){var wp=coWalletPart();if(!wp)return '';return '<div class="co-total co-sub"><span>من رصيدك</span><span dir="ltr">−'+fmt(wp)+' '+esc(cur())+'</span></div><div class="co-total co-due"><span>الباقي عليك</span>'+money(coPayable())+'</div>'}
 function mixPick(){var o=S.co;if(!o)return;var m=activeMethods()[0];if(!m){toast('ما في طريقة دفع ثانية متاحة');return}o.method=m.id;o.useBal=true;S.cosheet.set(checkoutHTML(),null,true);updateSendHref()}
 function createOrderRec(rec){return rec.walletPart>0?DB.createMixedOrder(rec):DB.createSiteOrder(rec)}
 function saveMyPhone(o){if(S.user&&S.wallet&&!S.wallet.phone&&o&&o.phone)DB.updateProfile(S.user.uid,{name:String(S.wallet.name||o.name||'').slice(0,60),phone:String(o.phone).slice(0,20)}).catch(function(){})}
 /* admin */
 function oWalletPart(o){return +o.walletPart>0?+o.walletPart:0}
+function oWalletTaken(o){return oWalletPart(o)>0&&!o.walletDue}
+function walletStateHTML(o){return o.walletShort?' <span class="bad-t">رصيد الزبون ما كفى، اطلب منه الباقي</span>':o.walletDue?' <span class="muted">(محجوز، بينخصم لما يكتمل الدفع)</span>':o.walletRefunded?' <span class="muted">(رجع لرصيده)</span>':' <span class="muted">(انخصم)</span>'}
 function priceWarnHTML(o){if(o.source!=='site')return '';var bad=o.items.filter(function(i){var p=product(i.productId),pl=p&&(p.plans||[]).find(function(x){return x.id===i.planId});return pl&&i.price<pl.price-0.001});
   return bad.length?'<p class="alert"><span>'+svg('alert',18)+bad.map(function(i){var pl=(product(i.productId).plans||[]).find(function(x){return x.id===i.planId});return 'سعر '+esc(i.productName)+' بالطلب '+fmt(i.price)+' بس سعره الحالي '+fmt(pl.price)+'.'}).join(' ')+' تأكد من المبلغ قبل ما تأكّد الطلب.</span></p>':''}
 /* ================= prices on cards, delivery through the site, cancelling an unpaid order ================= */
@@ -2365,10 +2372,10 @@ function custCancelBtn(k,x){return '<button class="btn sm" data-act="custCancel"
 function custCancelDo(k,id,wp){var p=k==='topup'?DB.cancelMyTopup(id):DB.cancelMyOrder(id,S.user.uid,wp||0);
   return p.then(function(){var P=store('hazem-pay');if(P&&P.id===id){if(PAY){payStop();if(PAY.sheet&&!PAY.sheet.closed)PAY.sheet.close(true);PAY=null}payClear()}toast(wp?'انلغى الطلب ورجع '+fmt(wp)+' '+cur()+' لرصيدك':'انلغى الطلب')})}
 function custCancel(el){var k=el.dataset.kind,id=el.dataset.id,x=k==='topup'?(S.myTopups||[]).find(function(t){return t.id===id}):(S.myOrders||[]).find(function(o){return o.id===id});
-  var wp=x&&k!=='topup'?oWalletPart(x):0;
+  var wp=x&&k!=='topup'&&oWalletTaken(x)?oWalletPart(x):0;
   ask({title:'إلغاء الطلب',text:'إذا حوّلت المبلغ لا تلغي، استنى دقيقتين بيتأكد لحاله.'+(wp?' الـ '+fmt(wp)+' '+cur()+' اللي دفعتهم من رصيدك بيرجعولك.':''),ok:'إلغاء الطلب',danger:true}).then(function(ok){if(!ok)return;el.disabled=true;
     custCancelDo(k,id,wp).catch(function(e){el.disabled=false;console.warn(e);toast('ما قدرنا نلغي الطلب، يمكن الدفعة وصلت. حدّث الصفحة.')})})}
-function payCancel(el){var s=PAY;if(!s||!S.user)return;var P=s.P,x=P.kind==='topup'?null:(S.myOrders||[]).find(function(o){return o.id===P.id}),wp=x?oWalletPart(x):(+P.wp||0);
+function payCancel(el){var s=PAY;if(!s||!S.user)return;var P=s.P,x=P.kind==='topup'?null:(S.myOrders||[]).find(function(o){return o.id===P.id}),wp=x&&oWalletTaken(x)?oWalletPart(x):0;
   ask({title:'إلغاء الطلب',text:'إذا حوّلت المبلغ لا تلغي، استنى دقيقتين بيتأكد لحاله.'+(wp?' الـ '+fmt(wp)+' '+cur()+' اللي دفعتهم من رصيدك بيرجعولك.':''),ok:'إلغاء الطلب',danger:true}).then(function(ok){if(!ok)return;
     custCancelDo(P.kind,P.id,wp).catch(function(e){console.warn(e);toast('ما قدرنا نلغي الطلب، يمكن الدفعة وصلت.');payKick(200)})})}
 /* before a new order: finish or cancel the one not paid */
@@ -2377,7 +2384,7 @@ function unpaidSheet(o,items,fromCart){closeAllSheets();var live=o.pay&&Date.now
    '<div class="row2">'+(live?'<button class="btn primary" data-act="payResume" data-kind="order" data-id="'+esc(o.id)+'">'+svg('coin',17)+' كمّل الدفع</button>':'')+'<button class="btn danger" data-act="cancelThenBuy">'+svg('x',17)+' الغيه واطلب جديد</button></div>';
   S.afterCancel={o:o,items:items,fromCart:!!fromCart};S.upsheet=openSheet({title:'طلب ما اندفع',body:h,onClose:function(){S.afterCancel=null}})}
 function cancelThenBuy(el){var a=S.afterCancel;if(!a)return;el.disabled=true;
-  custCancelDo('order',a.o.id,oWalletPart(a.o)).then(function(){S.afterCancel=null;if(S.upsheet)S.upsheet.close(true);var n=0;(function go(){if(myUnpaid()&&myUnpaid().id===a.o.id&&n++<20){setTimeout(go,150);return}startCheckout(a.items,a.fromCart)})()},
+  custCancelDo('order',a.o.id,oWalletTaken(a.o)?oWalletPart(a.o):0).then(function(){S.afterCancel=null;if(S.upsheet)S.upsheet.close(true);var n=0;(function go(){if(myUnpaid()&&myUnpaid().id===a.o.id&&n++<20){setTimeout(go,150);return}startCheckout(a.items,a.fromCart)})()},
    function(e){el.disabled=false;console.warn(e);toast('ما قدرنا نلغي الطلب، يمكن الدفعة وصلت. حدّث الصفحة.')})}
 function checkoutHTML(){
   var o=S.co,m=curMethod(),lines=coLines(),total=coTotal(),wal=isWalletPay();
@@ -2385,7 +2392,7 @@ function checkoutHTML(){
   if(!activeMethods().length&&!walletOn())return h+'<p class="hint">طرق الدفع غير متاحة حالياً، راسلنا على واتساب.</p><a class="btn wa block lg" href="'+esc(waLink('بدي أطلب: '+lines.map(function(x){return x.p.name}).join('، ')))+'" target="_blank" rel="noopener">'+svg('chat')+' اطلب عبر واتساب</a>';
   h+='<div class="ostep"><h3><span class="sn">١</span>اختار طريقة الدفع</h3><div class="methods" id="co-methods">'+methodsHTML()+'</div>'+useBalHTML()+'</div>';
   if(wal){
-    var can=!!(S.user&&S.wallet&&(+S.wallet.balance||0)>=total);
+    var can=!!(S.user&&S.wallet&&myBal()>=total);
     h+='<div class="ostep" id="co-pay">'+walletBoxHTML(total,lines)+'</div>';
     if(S.user)h+='<div class="ostep"><h3><span class="sn">٢</span>بيانات التفعيل</h3>'+(acctNeed()?''+phoneFieldHTML('co-phone',o.phone,'رقم واتساب')+'':'<div class="row2">'+phoneFieldHTML('co-phone',o.phone,'رقم واتساب')+'<label class="field"><span>إيميل التفعيل <em>(إذا بلزم)</em></span><input class="inp ltr" id="co-email" type="email" inputmode="email" value="'+esc(o.email)+'" placeholder="name@gmail.com"></label></div>')+'</div>';
     h+='<p class="err" id="co-err" hidden></p><button class="btn primary block lg" id="co-wpay" data-act="walletPay"'+(can?'':' disabled')+'>'+svg('wallet',18)+' ادفع '+money(total)+' من رصيدك</button><p class="fine">المبلغ بينخصم من رصيدك فوراً، والاشتراكات الفورية بتظهرلك مباشرة.</p>';
@@ -2399,7 +2406,7 @@ function checkoutHTML(){
   return h;
 }
 function methodsHTML(){var wal=isWalletPay(),m=wal?null:curMethod();
-  var w=walletOn()?'<button class="method" data-act="pickMethod" data-id="wallet" aria-pressed="'+wal+'">'+tile({icon:'wallet',tint:'violet'},'sm')+'<span>رصيدي'+(S.user&&S.wallet?' · '+fmt(S.wallet.balance||0)+cur():'')+'</span></button>':'';
+  var w=walletOn()?'<button class="method" data-act="pickMethod" data-id="wallet" aria-pressed="'+wal+'">'+tile({icon:'wallet',tint:'violet'},'sm')+'<span>رصيدي'+(S.user&&S.wallet?' · '+fmt(myBal())+cur():'')+'</span></button>':'';
   return w+activeMethods().map(function(x){return '<button class="method" data-act="pickMethod" data-id="'+esc(x.id)+'" aria-pressed="'+(!!m&&x.id===m.id)+'">'+tile(x,'sm','card')+'<span>'+esc(x.name)+'</span></button>'}).join('')}
 function kv(label,value,ltr){return '<div class="kv"><span class="k">'+esc(label)+'</span><span class="v"'+(ltr?' dir="ltr" style="text-align:right"':'')+'>'+esc(value)+'</span><button class="copy" data-act="copy" data-text="'+esc(value)+'">'+svg('copy',15)+'<span>نسخ</span></button></div>'}
 function payDetailsHTML(m,amount,ctx){
@@ -2480,7 +2487,7 @@ function authHTML(){var m=S.authMode;
 function accountBody(){
   if(!S.user)return authHTML();
   var w=S.wallet,bal=w?(+w.balance||0):0;
-  var h='<div class="wcard"><div><small>رصيدك</small><b>'+(w?money(bal):'…')+'</b><span>'+esc((w&&w.name)||S.user.name||S.user.email||'')+'</span></div><button class="btn light" data-act="topupOpen">'+svg('plus',18)+' شحن الرصيد</button></div>';
+  var h='<div class="wcard"><div><small>رصيدك</small><b>'+(w?money(bal):'…')+'</b>'+(myHeld()?'<small class="w-held">منه '+fmt(myHeld())+' '+esc(cur())+' محجوز لطلب ما اكتمل دفعه</small>':'')+'<span>'+esc((w&&w.name)||S.user.name||S.user.email||'')+'</span></div><button class="btn light" data-act="topupOpen">'+svg('plus',18)+' شحن الرصيد</button></div>';
   var pt=S.myTopups.filter(function(t){return t.status==='pending'&&!waitPay(t)});
   if(pt.length)h+='<p class="alert"><span>'+svg('clock',18)+'عندك '+pt.length+' '+(pt.length===1?'طلب شحن':'طلبات شحن')+' بانتظار التأكيد.</span></p>';
   h+='<div class="chips">'+[['orders','طلباتي',S.myOrders.length],['topups','عمليات الشحن',S.myTopups.length],['profile','بياناتي',null]].map(function(t){return '<button class="fchip" data-act="atab" data-id="'+t[0]+'" aria-pressed="'+(S.atab===t[0])+'">'+t[1]+(t[2]!=null?'<span class="n">'+t[2]+'</span>':'')+'</button>'}).join('')+'</div>';
@@ -2569,7 +2576,7 @@ function sendTopup(el,ev){
 /* ----- pay from balance ----- */
 function walletPay(el){
   if(!S.user){openAccount();return}
-  var o=S.co,lines=coLines(),total=coTotal(),bal=S.wallet?(+S.wallet.balance||0):0,box=$('#co-err');
+  var o=S.co,lines=coLines(),total=coTotal(),bal=myBal(),box=$('#co-err');
   if(bal<total){box.textContent='رصيدك ما بكفي.';box.hidden=false;return}
   var miss=askMissing().concat(acctErrors());if(miss.length){box.innerHTML=miss.map(esc).join('<br>');box.hidden=false;box.scrollIntoView({behavior:smooth(),block:'center'});return}
   if(o.email.trim()&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email.trim())){box.textContent='الإيميل مش مكتوب صح.';box.hidden=false;return}
@@ -2796,7 +2803,7 @@ function openOrder(id){
   var rows=[['الحالة','<span class="pill '+stPill(o)+'">'+stLabel(o)+'</span>'],['الوقت',esc(dayLabel(o.createdAt))+' · '+ftime(o.createdAt)]];
   if(o.status==='done')rows.push(['التكلفة (جملة)',money(cost)],['صافي الربح','<span class="'+(rev-cost>=0?'good-t':'bad-t')+'">'+money(rev-cost)+'</span>']);
   if(o.customer)rows.push(['الزبون',esc(o.customer)]);if(o.phone)rows.push(['رقم واتساب','<span dir="ltr">'+esc(o.phone)+'</span>']);if(o.email)rows.push([o.items.some(function(i){var p=product(i.productId);return p&&planAcct(p,planOf(p,i.planId))==='login'})?'إيميل حساب الزبون':'إيميل التفعيل','<span dir="ltr">'+esc(o.email)+'</span>']);
-  if(o.payment)rows.push(['طريقة الدفع',esc(o.payment)]);rows=rows.concat(payRowsA(o,'order'));if(oWalletPart(o))rows.push(['من رصيد الزبون',money(oWalletPart(o))+(o.walletRefunded?' <span class="muted">(رجع لرصيده)</span>':'')],['الباقي المطلوب',money(r2(rev-oWalletPart(o)))]);if(o.proofText)rows.push([esc((m&&m.proofLabel)||'إثبات الدفع'),'<span dir="auto">'+esc(o.proofText)+'</span>']);
+  if(o.payment)rows.push(['طريقة الدفع',esc(o.payment)]);rows=rows.concat(payRowsA(o,'order'));if(oWalletPart(o))rows.push(['من رصيد الزبون',money(oWalletPart(o))+walletStateHTML(o)],['الباقي المطلوب',money(r2(rev-oWalletPart(o)))]);if(o.proofText)rows.push([esc((m&&m.proofLabel)||'إثبات الدفع'),'<span dir="auto">'+esc(o.proofText)+'</span>']);
   if(isAutoUsdt(m)&&o.proofText&&!o.pay){rows.push(['فحص الدفعة','<span id="uv-'+esc(o.id)+'">'+usdtVHTML(usdtV[o.id])+'</span>']);usdtRowKick(o.id,o.proofText,o.createdAt)}
   if(o.delivery)rows.push(['التسليم للزبون','<span class="dlv-a" dir="auto">'+esc(o.delivery).replace(/\n/g,'<br>')+'</span>']);if(o.cancelledBy==='customer')rows.push(['ألغاه','الزبون نفسه (ما دفع)']);if(o.note)rows.push(['ملاحظة',esc(o.note)]);rows.push(['المصدر',o.source==='site'?'طلب من الموقع':o.source==='wallet'?'دفع من رصيد الزبون':'بيعة واتساب (تسجيل يدوي)']);
   if(o.stockIds&&o.stockIds.length)rows.push(['التسليم','تلقائي بكود <button class="mini-link" style="color:var(--brand)" data-act="showCode" data-id="'+esc(o.stockIds[0])+'">عرض الكود</button>']);
@@ -2892,10 +2899,10 @@ function saveSale(el){
   var dv=$('#sf-dlv'),dlvNew=false;if(dv){data.delivery=dv.value.trim().slice(0,2000);dlvNew=!!data.delivery&&(!old||old.delivery!==data.delivery);if(dlvNew)data.deliveredAt=Date.now()}
   var job;
   if(mode==='new'){data.orderNo=newOrderNo();data.status='done';data.source='manual';data.createdAt=t;data.doneAt=t;data.email='';if(!pe)data.phone='';data.proofText='';data.proofImage='';job=DB.addOrder(data)}
-  else{data.status='done';data.doneAt=t;job=DB.updateOrder(id,data)}
+  else{data.status='done';data.doneAt=t;job=old&&old.walletDue&&oWalletPart(old)&&old.uid?DB.confirmWithWallet(id,data,old):DB.updateOrder(id,data)}
   if(costsChanged)DB.saveCosts(S.costs).catch(fail);
   el.disabled=true;
-  job.then(function(){if(dlvNew&&id)dlvNotify(id);toast(mode==='confirm'?'تأكد الطلب وانحسب الربح':'انحفظت البيعة');if(S.sfsheet)S.sfsheet.close(true);if(S.osheet)S.osheet.close(true);if(S.wcsheet)S.wcsheet.close(true);if(S.subsheet)S.subsheet.close(true);if(!CLOUD)renderAdminBody()}).catch(function(e){el.disabled=false;fail(e)});
+  job.then(function(){if(dlvNew&&id)dlvNotify(id);toast(mode==='confirm'?'تأكد الطلب وانحسب الربح':'انحفظت البيعة');if(S.sfsheet)S.sfsheet.close(true);if(S.osheet)S.osheet.close(true);if(S.wcsheet)S.wcsheet.close(true);if(S.subsheet)S.subsheet.close(true);if(!CLOUD)renderAdminBody()}).catch(function(e){el.disabled=false;if(e&&e.code==='wallet/short'){toast('رصيد الزبون ما بكفي للجزء '+fmt(oWalletPart(old))+' '+cur()+'، اطلب منه يشحن أو يدفع الباقي');return}fail(e)});
 }
 /* ----- products ----- */
 function productsHTML(){
@@ -3187,9 +3194,9 @@ var ACT={
   openOrder:function(el){openOrder(el.dataset.id)},
   confirmOrder:function(el){var o=S.orders.find(function(x){return x.id===el.dataset.id});if(o)saleForm(o,'confirm')},
   editOrder:function(el){var o=S.orders.find(function(x){return x.id===el.dataset.id});if(o){if(S.subsheet)S.subsheet.close(true);saleForm(o,'edit')}},
-  cancelOrder:function(el){var id=el.dataset.id,o=S.orders.find(function(x){return x.id===id});if(!o)return;var wo=o.source==='wallet'&&o.uid,mx=!wo&&oWalletPart(o)&&o.uid&&!o.walletRefunded;ask({title:'إلغاء الطلب',text:wo?'بيرجع '+fmt(oRev(o))+' '+cur()+' لرصيد الزبون، والطلب ما بينحسب بالأرباح.':mx?'بيرجع '+fmt(oWalletPart(o))+' '+cur()+' لرصيد الزبون (الجزء اللي دفعه من رصيده)، والطلب ما بينحسب بالأرباح.':'الطلب بينتقل للملغية وما بينحسب بالأرباح.',ok:wo||mx?'إلغاء وإرجاع المبلغ':'إلغاء الطلب',danger:true}).then(function(ok){if(!ok)return;(wo?DB.refundWalletOrder(o):mx?DB.refundMixed(o):DB.updateOrder(id,{status:'cancelled'})).then(function(){toast('انلغى الطلب');if(S.osheet)S.osheet.close(true);if(!CLOUD)renderAdminBody()}).catch(fail)})},
+  cancelOrder:function(el){var id=el.dataset.id,o=S.orders.find(function(x){return x.id===id});if(!o)return;var wo=o.source==='wallet'&&o.uid,mx=!wo&&oWalletTaken(o)&&o.uid&&!o.walletRefunded;ask({title:'إلغاء الطلب',text:wo?'بيرجع '+fmt(oRev(o))+' '+cur()+' لرصيد الزبون، والطلب ما بينحسب بالأرباح.':mx?'بيرجع '+fmt(oWalletPart(o))+' '+cur()+' لرصيد الزبون (الجزء اللي دفعه من رصيده)، والطلب ما بينحسب بالأرباح.':'الطلب بينتقل للملغية وما بينحسب بالأرباح.',ok:wo||mx?'إلغاء وإرجاع المبلغ':'إلغاء الطلب',danger:true}).then(function(ok){if(!ok)return;(wo?DB.refundWalletOrder(o):mx?DB.refundMixed(o):DB.updateOrder(id,{status:'cancelled'})).then(function(){toast('انلغى الطلب');if(S.osheet)S.osheet.close(true);if(!CLOUD)renderAdminBody()}).catch(fail)})},
   reopenOrder:function(el){DB.updateOrder(el.dataset.id,{status:'pending'}).then(function(){toast('رجع الطلب للانتظار');if(S.osheet)S.osheet.close(true)}).catch(fail)},
-  deleteOrder:function(el){var id=el.dataset.id,dx=S.orders.find(function(x){return x.id===id});ask({title:'حذف الطلب',text:'الحذف نهائي وما بنقدر نرجعه.'+(dx&&oWalletPart(dx)&&dx.status!=='cancelled'?' الزبون دافع '+fmt(oWalletPart(dx))+' '+cur()+' من رصيده، ألغي الطلب أول عشان يرجعله.':''),ok:'حذف',danger:true}).then(function(ok){if(!ok)return;DB.deleteOrder(id).then(function(){toast('انحذف الطلب');if(S.osheet)S.osheet.close(true)}).catch(fail)})},
+  deleteOrder:function(el){var id=el.dataset.id,dx=S.orders.find(function(x){return x.id===id});ask({title:'حذف الطلب',text:'الحذف نهائي وما بنقدر نرجعه.'+(dx&&oWalletTaken(dx)&&!dx.walletRefunded&&dx.status!=='cancelled'?' الزبون دافع '+fmt(oWalletPart(dx))+' '+cur()+' من رصيده، ألغي الطلب أول عشان يرجعله.':''),ok:'حذف',danger:true}).then(function(ok){if(!ok)return;DB.deleteOrder(id).then(function(){toast('انحذف الطلب');if(S.osheet)S.osheet.close(true)}).catch(fail)})},
   newSale:function(){saleForm(null,'new')},
   quickSale:function(el){S.presel={pid:el.dataset.id};saleForm(null,'new')},
   saveSale:saveSale,

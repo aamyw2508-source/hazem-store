@@ -28,7 +28,7 @@ const CHUNKS = 8; // getLogs calls per check (each covers SPAN blocks, SPAN shri
 const SITE = 'https://hazem-store.com';
 let BUDGET = 45; // outside calls left in this run (Cloudflare allows 50 on the free plan)
 function xf(url, init) { if (BUDGET <= 0) { const e = fail('busy, try again', 503); e.budget = true; throw e; } BUDGET--; return fetch(url, init); }
-const VERSION = 8;
+const VERSION = 9;
 const STORE = 'حازم ستور';
 
 export default {
@@ -165,7 +165,7 @@ async function readCodes(fs, d) {
   return out;
 }
 
-async function settle(fs, env, kind, ref, id, hit, ctx) {
+async function settle(fs, env, kind, ref, id, hit, ctx, again) {
   const doc = await fs.get(ref);
   if (!doc) return null;
   const d = doc.data;
@@ -177,34 +177,36 @@ async function settle(fs, env, kind, ref, id, hit, ctx) {
   const used = fs.wUpdate(`usedTx/${txKey}`, { ref, amt: hit.amt, at: Date.now() }, null, { exists: false });
   const unlock = (d.pay.lock ? [{ delete: fs.name(`payLocks/${d.pay.lock}`) }] : []).concat([fs.wUpdate('payState/main', {}, ['w.' + fp(watchKey(kind, id))])]);
   const writes = [used];
-  let status, claims = null;
+  let status, claims = null, short = false;
   if (kind === 'topup') {
     status = 'approved';
     writes.push(fs.wUpdate(ref, { status, proofText: proof, pay }, ['status', 'proofText', 'pay'], { updateTime: doc.updateTime }, [{ fieldPath: 'decidedAt', setToServerValue: 'REQUEST_TIME' }]));
     writes.push(fs.wUpdate(`wallets/${d.uid}`, {}, [], null, [{ fieldPath: 'balance', increment: num(+d.amount) }]));
   } else {
-    claims = await claimStock(fs, d);
+    // the part from the balance is taken now, together with the payment (it was only held until now)
+    const wp = +d.walletPart > 0 && d.walletDue === true ? +d.walletPart : 0;
+    let wal = null;
+    if (wp) { wal = d.uid ? await fs.get('wallets/' + d.uid) : null; short = !wal || (+wal.data.balance || 0) < wp - 1e-9; }
+    claims = short || again ? null : await claimStock(fs, d);
     status = claims ? 'done' : 'paid';
     const fields = { status, proofText: proof, pay }, mask = ['status', 'proofText', 'pay'];
     const tr = [{ fieldPath: 'paidAt', setToServerValue: 'REQUEST_TIME' }];
     if (claims) { fields.stockIds = claims.map(c => c.id); mask.push('stockIds'); tr.push({ fieldPath: 'doneAt', setToServerValue: 'REQUEST_TIME' }); }
+    if (wp && short) { fields.walletShort = true; mask.push('walletShort'); }
+    if (wp && !short) { fields.walletDue = false; mask.push('walletDue'); tr.push({ fieldPath: 'walletPaidAt', setToServerValue: 'REQUEST_TIME' }); }
     writes.push(fs.wUpdate(ref, fields, mask, { updateTime: doc.updateTime }, tr));
+    if (wp && !short) writes.push(fs.wUpdate('wallets/' + d.uid, { balance: Math.round(((+wal.data.balance || 0) - wp) * 100) / 100 }, ['balance'], { updateTime: wal.updateTime }));
     for (const c of claims || []) writes.push(fs.wUpdate(`stock/${c.id}`, { owner: d.uid || 'guest_' + id, order: id }, ['owner', 'order'], { updateTime: c.updateTime }, [{ fieldPath: 'claimedAt', setToServerValue: 'REQUEST_TIME' }]));
   }
   try { await fs.commit(writes.concat(unlock)); } catch (e) {
-    const again = await fs.get(ref);
-    if (again && again.data.status !== 'pending') return finished(fs, again.data);
-    if (claims && again) { // a code was taken at the same moment: confirm the payment, deliver by hand
-      try {
-        await fs.commit([used, fs.wUpdate(ref, { status: 'paid', proofText: proof, pay }, ['status', 'proofText', 'pay'], { updateTime: again.updateTime }, [{ fieldPath: 'paidAt', setToServerValue: 'REQUEST_TIME' }])].concat(unlock));
-        const out2 = { status: 'paid', tx: hit.tx, net: d.pay.net, amt: hit.amt };
-        await later(ctx, notifyPaid(fs, env, kind, id, d, out2));
-        return out2;
-      } catch (e2) {}
-    }
+    const now = await fs.get(ref);
+    if (now && now.data.status !== 'pending') return finished(fs, now.data);
+    // a code or the balance changed at the same moment: try once more, without instant delivery
+    if (!again && now && e.status !== 409) return settle(fs, env, kind, ref, id, hit, ctx, true);
     return null;
   }
   const out = { status, tx: hit.tx, net: d.pay.net, amt: hit.amt };
+  if (short) out.walletShort = true;
   if (claims) out.codes = await readCodes(fs, { ...d, stockIds: claims.map(c => c.id) });
   await later(ctx, notifyPaid(fs, env, kind, id, d, out));
   return out;
@@ -293,7 +295,7 @@ async function notifyPaid(fs, env, kind, id, d, r) {
     return;
   }
   const done = r.status === 'done';
-  await notifyAdmin(env, '✅ وصلت دفعة USDT — طلب ' + (d.orderNo || ''), [...itemLines(d), ...mixLine(d), 'وصل: ' + paid, 'الزبون: ' + who(d) + (d.email ? ' · ' + d.email : ''), done ? 'الحالة: تسلّم تلقائياً بكود ✓' : 'الحالة: قيد التسليم — سلّمه الاشتراك'], SITE + '/admin.html');
+  await notifyAdmin(env, '✅ وصلت دفعة USDT — طلب ' + (d.orderNo || ''), [...itemLines(d), ...mixLine(d), ...(r.walletShort ? ['⚠️ رصيد الزبون ما كفى للجزء ' + money(d.walletPart) + '، اطلب منه الباقي قبل التسليم'] : []), 'وصل: ' + paid, 'الزبون: ' + who(d) + (d.email ? ' · ' + d.email : ''), done ? 'الحالة: تسلّم تلقائياً بكود ✓' : 'الحالة: قيد التسليم — سلّمه الاشتراك'], SITE + '/admin.html');
   let to = d.email || '';
   if (!to && d.uid) { const w = await fs.get('wallets/' + d.uid); to = (w && w.data.email) || ''; }
   if (!to) return;

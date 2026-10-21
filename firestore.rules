@@ -51,26 +51,29 @@ service cloud.firestore {
       return o.status == 'pending' && o.payment is string && o.payment.matches('(?i).*usdt.*')
         && (!('pay' in o) || !('tx' in o.pay));
     }
+    // الجزء من الرصيد انخصم فعلاً (طلبات قديمة قبل نظام الحجز)
+    function walletTaken(o) { return ('walletPart' in o) && o.walletPart is number && (!('walletDue' in o) || o.walletDue == false); }
     function custCancel(oid) {
       let o = resource.data;
       let d = request.resource.data;
       return signedIn() && o.uid == request.auth.uid && o.source == 'site' && unpaidUsdt(o)
         && d.status == 'cancelled' && d.cancelledBy == 'customer'
-        && (('walletPart' in o)
+        && (walletTaken(o)
           ? (d.diff(o).affectedKeys().hasOnly(['status','cancelledBy','walletRefunded']) && d.walletRefunded == true
              && getAfter(/databases/$(database)/documents/wallets/$(request.auth.uid)).data.lastRefund == oid)
           : d.diff(o).affectedKeys().hasOnly(['status','cancelledBy']));
     }
 
-    // طلب جزء منه من الرصيد والباقي بطريقة ثانية: الخصم من رصيد نفس الزبون بنفس العملية وبقيمة الجزء بالضبط
+    // طلب جزء منه من الرصيد والباقي بطريقة ثانية: الرصيد بيضل محجوز وما بينخصم إلا لما يكتمل الدفع
+    // (الخادم أو الإدارة بيخصموه)، فالزبون بيسجّل الطلب بس
     function mixedOrder(oid, d) {
-      let w = /databases/$(database)/documents/wallets/$(request.auth.uid);
       return signedIn()
-        && d.keys().hasOnly(['orderNo','uid','items','total','customer','phone','email','payment','proofText','proofImage','status','source','walletPart','createdAt'])
-        && d.keys().hasAll(['orderNo','uid','items','total','customer','payment','status','source','walletPart','createdAt'])
-        && d.status == 'pending' && d.source == 'site' && d.uid == request.auth.uid
+        && d.keys().hasOnly(['orderNo','uid','items','total','customer','phone','email','payment','proofText','proofImage','status','source','walletPart','walletDue','createdAt'])
+        && d.keys().hasAll(['orderNo','uid','items','total','customer','payment','status','source','walletPart','walletDue','createdAt'])
+        && d.status == 'pending' && d.source == 'site' && d.uid == request.auth.uid && d.walletDue == true
         && d.createdAt == request.time
         && d.walletPart is number && d.walletPart > 0 && d.walletPart < d.total
+        && d.walletPart <= get(/databases/$(database)/documents/wallets/$(request.auth.uid)).data.balance
         && d.orderNo is string && d.orderNo.size() <= 16
         && d.items is list && d.items.size() >= 1 && d.items.size() <= 10
         && d.total is number && d.total < 100000
@@ -79,10 +82,7 @@ service cloud.firestore {
         && (!('phone' in d) || (d.phone is string && d.phone.size() <= 20))
         && (!('email' in d) || (d.email is string && d.email.size() <= 100))
         && (!('proofText' in d) || (d.proofText is string && d.proofText.size() <= 120))
-        && (!('proofImage' in d) || (d.proofImage is string && d.proofImage.size() <= 900000))
-        && get(w).data.lastOrder != oid
-        && getAfter(w).data.lastOrder == oid
-        && getAfter(w).data.balance == get(w).data.balance - d.walletPart;
+        && (!('proofImage' in d) || (d.proofImage is string && d.proofImage.size() <= 900000));
     }
 
     // طلب مدفوع من الرصيد: منتج واحد، بسعره الحقيقي من قاعدة البيانات،
@@ -138,8 +138,7 @@ service cloud.firestore {
         && d.lastOrder is string && d.lastOrder.size() > 0
         && !exists(/databases/$(database)/documents/orders/$(d.lastOrder))
         && o.uid == uid
-        && ((o.source == 'wallet' && d.balance == resource.data.balance - o.total)
-          || (o.source == 'site' && o.walletPart is number && d.balance == resource.data.balance - o.walletPart))
+        && o.source == 'wallet' && d.balance == resource.data.balance - o.total
         && d.balance >= 0;
     }
 
@@ -150,7 +149,7 @@ service cloud.firestore {
       let oa = getAfter(/databases/$(database)/documents/orders/$(d.lastRefund)).data;
       return d.diff(resource.data).affectedKeys().hasOnly(['balance','lastRefund'])
         && d.lastRefund is string && d.lastRefund.size() > 0
-        && o.uid == uid && o.status == 'pending' && ('walletPart' in o) && o.walletPart is number
+        && o.uid == uid && o.status == 'pending' && walletTaken(o)
         && oa.status == 'cancelled' && oa.walletRefunded == true
         && d.balance == resource.data.balance + o.walletPart;
     }
