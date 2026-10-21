@@ -23,7 +23,8 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
       allow create: if isAdmin()
         || siteOrder(request.resource.data)
-        || walletOrder(oid, request.resource.data);
+        || walletOrder(oid, request.resource.data)
+        || mixedOrder(oid, request.resource.data);
     }
 
     // طلب عادي من الموقع (تحويل + إثبات): بيدخل "بانتظار التأكيد"
@@ -42,6 +43,29 @@ service cloud.firestore {
         && (!('email' in d) || (d.email is string && d.email.size() <= 100))
         && (!('proofText' in d) || (d.proofText is string && d.proofText.size() <= 120))
         && (!('proofImage' in d) || (d.proofImage is string && d.proofImage.size() <= 900000));
+    }
+
+    // طلب جزء منه من الرصيد والباقي بطريقة ثانية: الخصم من رصيد نفس الزبون بنفس العملية وبقيمة الجزء بالضبط
+    function mixedOrder(oid, d) {
+      let w = /databases/$(database)/documents/wallets/$(request.auth.uid);
+      return signedIn()
+        && d.keys().hasOnly(['orderNo','uid','items','total','customer','phone','email','payment','proofText','proofImage','status','source','walletPart','createdAt'])
+        && d.keys().hasAll(['orderNo','uid','items','total','customer','payment','status','source','walletPart','createdAt'])
+        && d.status == 'pending' && d.source == 'site' && d.uid == request.auth.uid
+        && d.createdAt == request.time
+        && d.walletPart is number && d.walletPart > 0 && d.walletPart < d.total
+        && d.orderNo is string && d.orderNo.size() <= 16
+        && d.items is list && d.items.size() >= 1 && d.items.size() <= 10
+        && d.total is number && d.total < 100000
+        && d.customer is string && d.customer.size() >= 2 && d.customer.size() <= 60
+        && d.payment is string && d.payment.size() <= 60
+        && (!('phone' in d) || (d.phone is string && d.phone.size() <= 20))
+        && (!('email' in d) || (d.email is string && d.email.size() <= 100))
+        && (!('proofText' in d) || (d.proofText is string && d.proofText.size() <= 120))
+        && (!('proofImage' in d) || (d.proofImage is string && d.proofImage.size() <= 900000))
+        && get(w).data.lastOrder != oid
+        && getAfter(w).data.lastOrder == oid
+        && getAfter(w).data.balance == get(w).data.balance - d.walletPart;
     }
 
     // طلب مدفوع من الرصيد: منتج واحد، بسعره الحقيقي من قاعدة البيانات،
@@ -96,8 +120,9 @@ service cloud.firestore {
       return d.diff(resource.data).affectedKeys().hasOnly(['balance','lastOrder'])
         && d.lastOrder is string && d.lastOrder.size() > 0
         && !exists(/databases/$(database)/documents/orders/$(d.lastOrder))
-        && o.uid == uid && o.source == 'wallet'
-        && d.balance == resource.data.balance - o.total
+        && o.uid == uid
+        && ((o.source == 'wallet' && d.balance == resource.data.balance - o.total)
+          || (o.source == 'site' && o.walletPart is number && d.balance == resource.data.balance - o.walletPart))
         && d.balance >= 0;
     }
 

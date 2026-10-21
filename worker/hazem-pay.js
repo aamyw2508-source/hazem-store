@@ -83,7 +83,8 @@ async function start(fs, env, b) {
     if (!isUsdt({ name: d.payment })) throw fail('not a USDT payment');
     if (d.createdAt && now - d.createdAt > 48 * 3600e3) throw fail('expired');
     if (d.pay && d.pay.net === net && d.pay.amt && d.pay.lockExp > now + 30 * 60e3) return payOut(d.pay, d);
-    const ils = kind === 'topup' ? +d.amount : await orderTotal(fs, d);
+    // part paid from the customer's balance (taken when the order was made) is not asked again
+    const ils = kind === 'topup' ? +d.amount : Math.round((await orderTotal(fs, d) - (+d.walletPart > 0 ? +d.walletPart : 0)) * 100) / 100;
     if (!(ils > 0)) throw fail('bad amount');
     const rate = +m.rate > 0 ? +m.rate : 3.1;
     const base = Math.ceil((ils / rate) * 100 - 1e-9) / 100;
@@ -242,13 +243,14 @@ function channels(env) {
 }
 const money = n => (Math.round((+n || 0) * 100) / 100) + ' ₪';
 function itemLines(d) { return (d.items || []).map(i => '• ' + (i.productName || '') + (i.planName ? ' (' + i.planName + ')' : '') + ((+i.qty || 1) > 1 ? ' ×' + i.qty : '') + ' — ' + money((+i.price || 0) * (+i.qty || 1))); }
+function mixLine(d) { return +d.walletPart > 0 ? ['من رصيده: ' + money(d.walletPart) + ' · الباقي: ' + money((+d.total || 0) - d.walletPart)] : []; }
 function who(d) { return [d.customer || d.name || '', d.phone || ''].filter(Boolean).join(' · '); }
 function newItemMsg(col, d) {
   if (col === 'orders') {
     if (d.source !== 'site' && d.source !== 'wallet') return null;      // your own WhatsApp sales
     if (/usdt/i.test(d.payment || '') && d.pay) return null;            // told when the payment arrives
     const st = d.source === 'wallet' ? (d.status === 'done' ? 'دفع من رصيده وتسلّم تلقائياً بكود' : 'دفع من رصيده – سلّمه الاشتراك') : 'بانتظار تأكيدك للحوالة';
-    return { title: '🛒 طلب جديد ' + (d.orderNo || ''), lines: [...itemLines(d), 'المجموع: ' + money(d.total), 'الدفع: ' + (d.payment || ''), 'الزبون: ' + who(d), 'الحالة: ' + st] };
+    return { title: '🛒 طلب جديد ' + (d.orderNo || ''), lines: [...itemLines(d), 'المجموع: ' + money(d.total), ...mixLine(d), 'الدفع: ' + (d.payment || ''), 'الزبون: ' + who(d), 'الحالة: ' + st] };
   }
   if (col === 'topups') {
     if (d.source === 'admin' || (/usdt/i.test(d.payment || '') && d.pay)) return null;
@@ -265,7 +267,7 @@ async function notifyPaid(fs, env, kind, id, d, r) {
     return;
   }
   const done = r.status === 'done';
-  await notifyAdmin(env, '✅ وصلت دفعة USDT — طلب ' + (d.orderNo || ''), [...itemLines(d), 'وصل: ' + paid, 'الزبون: ' + who(d) + (d.email ? ' · ' + d.email : ''), done ? 'الحالة: تسلّم تلقائياً بكود ✓' : 'الحالة: قيد التسليم — سلّمه الاشتراك'], SITE + '/admin.html');
+  await notifyAdmin(env, '✅ وصلت دفعة USDT — طلب ' + (d.orderNo || ''), [...itemLines(d), ...mixLine(d), 'وصل: ' + paid, 'الزبون: ' + who(d) + (d.email ? ' · ' + d.email : ''), done ? 'الحالة: تسلّم تلقائياً بكود ✓' : 'الحالة: قيد التسليم — سلّمه الاشتراك'], SITE + '/admin.html');
   let to = d.email || '';
   if (!to && d.uid) { const w = await fs.get('wallets/' + d.uid); to = (w && w.data.email) || ''; }
   if (!to) return;
