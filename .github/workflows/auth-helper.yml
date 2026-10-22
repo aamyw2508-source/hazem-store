@@ -28,7 +28,9 @@ jobs:
           get /__/auth/experiments.js __/auth/experiments.js
           get /__/auth/iframe         __/auth/iframe.html
           get /__/auth/iframe.js      __/auth/iframe.js
-          get /__/firebase/init.json  __/firebase/init.json
+          # init.json: keep our own copy unless Firebase serves one
+          code=$(curl -sSL -w "%{http_code}" -o /tmp/init.json "$P/__/firebase/init.json" || echo ERR); echo "/__/firebase/init.json -> $code" >> __/auth/fetch-log.txt
+          [ "$code" = "200" ] && cp /tmp/init.json __/firebase/init.json || true
           cat __/auth/fetch-log.txt
       - name: Commit to main and gh-pages
         run: |
