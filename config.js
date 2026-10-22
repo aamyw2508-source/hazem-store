@@ -5,7 +5,7 @@
 window.HAZEM_CONFIG = {
   firebase: {
     apiKey: "AIzaSyCJ5xs23CeYlxQWuvFxVW_mtuIrvuN5VYY",
-    authDomain: "hazem-store-7a272.firebaseapp.com",
+    authDomain: "hazem-store.com", // sign-in pages are served from the store itself (__/auth), so iPhone Safari works
     projectId: "hazem-store-7a272",
     storageBucket: "hazem-store-7a272.firebasestorage.app",
     messagingSenderId: "251515448236",
