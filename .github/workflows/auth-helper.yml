@@ -1,0 +1,41 @@
+# Copies Firebase's sign-in helper pages onto hazem-store.com, so "Sign in with Google" stays on the
+# store's own domain. Safari on iPhone (and in-app browsers) block the old firebaseapp.com flow.
+name: Firebase sign-in helper
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/auth-helper.yml']
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'   # refresh weekly
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download the helper files
+        run: |
+          set -e
+          P=https://hazem-store-7a272.firebaseapp.com
+          mkdir -p __/auth __/firebase
+          curl -fsSL "$P/__/auth/handler"        -o __/auth/handler.html
+          curl -fsSL "$P/__/auth/handler.js"     -o __/auth/handler.js
+          curl -fsSL "$P/__/auth/experiments.js" -o __/auth/experiments.js
+          curl -fsSL "$P/__/auth/iframe"         -o __/auth/iframe.html
+          curl -fsSL "$P/__/auth/iframe.js"      -o __/auth/iframe.js
+          curl -fsSL "$P/__/firebase/init.json"  -o __/firebase/init.json
+          ls -la __/auth __/firebase
+          head -c 600 __/auth/handler.html; echo
+      - name: Commit to main and gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add __
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git commit -m "Firebase sign-in helper files (self-hosted on hazem-store.com)"
+          git push origin HEAD:main
+          git push origin HEAD:gh-pages || echo "gh-pages push skipped"
