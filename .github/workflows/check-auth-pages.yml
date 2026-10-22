@@ -1,0 +1,27 @@
+# Checks that the sign-in helper pages answer on the store's domain (result saved to __/auth/check-log.txt).
+name: Check sign-in pages
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/check-auth-pages.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check
+        run: |
+          : > __/auth/check-log.txt
+          for p in /__/auth/handler /__/auth/handler.js /__/auth/iframe /__/auth/iframe.js /__/auth/experiments.js /__/firebase/init.json; do
+            r=$(curl -sS -o /tmp/b -w "%{http_code} %{content_type} %{url_effective}" -L "https://hazem-store.com$p")
+            echo "$p -> $r $(wc -c < /tmp/b) bytes | $(head -c 80 /tmp/b | tr '\n' ' ')" >> __/auth/check-log.txt
+          done
+          cat __/auth/check-log.txt
+      - name: Save
+        run: |
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add __/auth/check-log.txt; git commit -m "check sign-in pages" || exit 0
+          git push origin HEAD:main; git push origin HEAD:gh-pages || true
