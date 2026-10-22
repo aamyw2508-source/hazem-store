@@ -3,4 +3,4 @@
 /__/auth/experiments.js -> 200 831 bytes
 /__/auth/iframe -> 200 439 bytes
 /__/auth/iframe.js -> 200 289777 bytes
-/__/firebase/init.json -> 404 21265 bytes
+/__/firebase/init.json -> 404
