@@ -19,17 +19,17 @@ jobs:
           fetch-depth: 0
       - name: Download the helper files
         run: |
-          set -e
           P=https://hazem-store-7a272.firebaseapp.com
           mkdir -p __/auth __/firebase
-          curl -fsSL "$P/__/auth/handler"        -o __/auth/handler.html
-          curl -fsSL "$P/__/auth/handler.js"     -o __/auth/handler.js
-          curl -fsSL "$P/__/auth/experiments.js" -o __/auth/experiments.js
-          curl -fsSL "$P/__/auth/iframe"         -o __/auth/iframe.html
-          curl -fsSL "$P/__/auth/iframe.js"      -o __/auth/iframe.js
-          curl -fsSL "$P/__/firebase/init.json"  -o __/firebase/init.json
-          ls -la __/auth __/firebase
-          head -c 600 __/auth/handler.html; echo
+          : > __/auth/fetch-log.txt
+          get() { code=$(curl -sSL -A "Mozilla/5.0" -w "%{http_code}" -o "$2" "$P$1" || echo ERR); echo "$1 -> $code $(wc -c < "$2" 2>/dev/null) bytes" >> __/auth/fetch-log.txt; [ "$code" = "200" ] || rm -f "$2"; }
+          get /__/auth/handler        __/auth/handler.html
+          get /__/auth/handler.js     __/auth/handler.js
+          get /__/auth/experiments.js __/auth/experiments.js
+          get /__/auth/iframe         __/auth/iframe.html
+          get /__/auth/iframe.js      __/auth/iframe.js
+          get /__/firebase/init.json  __/firebase/init.json
+          cat __/auth/fetch-log.txt
       - name: Commit to main and gh-pages
         run: |
           git config user.name "github-actions[bot]"
