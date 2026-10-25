@@ -1239,8 +1239,10 @@ function DEFAULT_SETTINGS(){return {
   categories:[{id:'ai',name:'الذكاء الاصطناعي',icon:'sparkle'},{id:'design',name:'التصميم والمونتاج',icon:'palette'},{id:'study',name:'التعليم والإنتاجية',icon:'book'}],
   payments:[
    {id:'jawwal',name:'جوال باي',domain:'jawwalpay.ps',icon:'phone',tint:'green',logo:'',numberLabel:'رقم المحفظة',number:NUM,holder:HOLDER,note:'',proofLabel:'رقم الجوال اللي حوّلت منه',proofType:'tel',active:true},
+   {id:'jawwal-biz',name:'جوال باي تاجر',domain:'jawwalpay.ps',icon:'phone',tint:'green',logo:'',numberLabel:'رقم محفظة التاجر',number:NUM,holder:HOLDER,note:'',proofLabel:'رقم الجوال اللي حوّلت منه',proofType:'tel',active:true},
    {id:'palpay',name:'بال باي',domain:'palpay.ps',icon:'wallet',tint:'blue',logo:'',numberLabel:'رقم الدفع',number:NUM,holder:HOLDER,note:'',proofLabel:'الاسم اللي حوّلت منه',proofType:'name',active:true},
-   {id:'bop',name:'بنك فلسطين',domain:'bankofpalestine.com',icon:'bank',tint:'cyan',logo:'',numberLabel:'رقم الدفع',number:NUM,holder:HOLDER,note:'',proofLabel:'الاسم اللي حوّلت منه',proofType:'name',active:true},
+   {id:'bop',name:'بنك فلسطين',domain:'bankofpalestine.com',icon:'bank',tint:'cyan',logo:'',numberLabel:'رقم الدفع',number:NUM,iban:'PS06PALS045441188940993000000',holder:HOLDER,note:'',proofLabel:'الاسم اللي حوّلت منه',proofType:'name',active:true},
+   {id:'maalchat',name:'مال شات',domain:'maalchat.ps',icon:'wallet',tint:'violet',logo:'',numberLabel:'رقم المحفظة',number:NUM,holder:HOLDER,note:'',proofLabel:'رقم الجوال اللي حوّلت منه',proofType:'tel',active:true},
    {id:'usdt',name:'USDT',domain:'tether.to',icon:'coin',tint:'green',logo:'',numberLabel:'عنوان المحفظة (BEP20)',number:'0x289B2eae953DBaa04ba59EED4694B6b2919cFEf5',tron:'THodKuiPeTJj6qq1QfEeGM8eVfuak1JLti',holder:'',note:'الشبكات: BNB Smart Chain (BEP20) أو Tron (TRC20)',proofLabel:'رقم المعاملة TXID',proofType:'text',auto:true,rate:3.1,active:true}
   ],
   faq:[
@@ -2135,6 +2137,13 @@ function usdtVHTML(r){if(!r)return '<span class="muted">جاري الفحص عل
   if(r.st==='err')return '<span class="warn-t">ما قدرنا نفحص هلأ، جرّب بعد شوي</span>';
   return '<span class="bad-t">'+svg('alert',14)+' '+esc(r.why||'ما لقينا الدفعة')+'</span>'+(r.tx?' <a href="'+sc+esc(r.tx)+'" target="_blank" rel="noopener">المعاملة</a>':'')}
 function usdtRowKick(id,proofText,createdAt){setTimeout(function(){usdtVerify(id,proofText,createdAt).then(function(r){var el=$('#uv-'+id);if(el)el.innerHTML=usdtVHTML(r)})},30)}
+/* one-time setup: Bank of Palestine IBAN, MaalChat, Jawwal Pay merchant (details Hazem sent) */
+function payMigrate(){var v=+S.settings.payV||0;if(!S.isAdmin||!CLOUD||v>=1||!S.loaded)return;var a=S.settings.payments=S.settings.payments||[],HN='حازم محسن العشي',NO='0594826482';
+  var bop=a.find(function(m){return m.id==='bop'||/بنك فلسطين/.test(m.name||'')});if(bop&&!bop.iban)bop.iban='PS06PALS045441188940993000000';
+  var jw=a.find(function(m){return m.id==='jawwal'});
+  if(!a.some(function(m){return m.id==='jawwal-biz'})){var ji=jw?a.indexOf(jw)+1:a.length;a.splice(ji,0,{id:'jawwal-biz',name:'جوال باي تاجر',domain:'jawwalpay.ps',icon:'phone',tint:'green',logo:(jw&&jw.logo)||'',numberLabel:'رقم محفظة التاجر',number:NO,holder:HN,note:'',proofLabel:'رقم الجوال اللي حوّلت منه',proofType:'tel',active:true})}
+  if(!a.some(function(m){return m.id==='maalchat'||/مال ?شات/.test(m.name||'')})){var ui=a.findIndex(isUsdtM);a.splice(ui>-1?ui:a.length,0,{id:'maalchat',name:'مال شات',domain:'maalchat.ps',icon:'wallet',tint:'violet',logo:'',numberLabel:'رقم المحفظة',number:NO,holder:HN,note:'',proofLabel:'رقم الجوال اللي حوّلت منه',proofType:'tel',active:true})}
+  S.settings.payV=1;DB.saveSettings(S.settings).then(function(){cachePublic();toast('انضاف آيبان بنك فلسطين، ومال شات، وجوال باي تاجر');adminRefresh()},function(e){S.settings.payV=v;console.warn('pay setup',e)})}
 /* one-time setup: the wallet addresses Hazem sent (v1 BEP20, v2 TRC20) */
 function usdtMigrate(){var v=+S.settings.usdtV||0;if(!S.isAdmin||!CLOUD||v>=2||!S.loaded)return;var a=S.settings.payments=S.settings.payments||[],m=a.find(isUsdtM);
   if(!m){m={id:'usdt',name:'USDT',domain:'tether.to',icon:'coin',tint:'green',logo:'',holder:'',active:true};a.push(m)}
@@ -2429,6 +2438,7 @@ function payDetailsHTML(m,amount,ctx){
   if(!m)return '';if(isServerPay(m))return srvPayStepHTML(m,ctx||'co');if(isAutoUsdt(m))return usdtBoxHTML(m,amount,ctx||'co');
   var h='<h3><span class="sn">٢</span>حوّل '+money(amount)+' على '+esc(m.name)+'</h3><div class="paybox">';
   if(m.number)h+=kv(m.numberLabel||'رقم الدفع',m.number,true);else h+='<p class="paynote">اطلب '+esc(m.numberLabel||'تفاصيل الدفع')+' منّا على واتساب قبل التحويل.</p>';
+  if(m.iban)h+=kv('رقم الآيبان (IBAN)',m.iban,true);
   if(m.holder)h+=kv('اسم صاحب الحساب',m.holder,false);
   if(m.note)h+='<p class="paynote">'+esc(m.note)+'</p>';
   return h+'</div>';
@@ -3001,6 +3011,7 @@ function payForm(m){
    '<div class="fsec"><h3>الشعار</h3><label class="field"><span>موقعها الرسمي</span><input class="inp ltr" id="pm-domain" value="'+esc(m.domain||'')+'" placeholder="jawwalpay.ps" autocapitalize="off"></label><p class="hint">بيظهر شعارها الرسمي تلقائياً من موقعها، أو ارفع الشعار بنفسك.</p><div class="upl"><label class="btn sm">'+svg('upload',16)+' رفع الشعار<input class="vh" id="pm-logo" type="file" accept="image/*"></label><button type="button" class="btn sm" data-act="pmLogoRm" id="pm-logo-rm"'+(m.logo?'':' hidden')+'>حذف الشعار</button></div>'+
    '<details><summary class="hint" style="cursor:pointer">أيقونة بديلة</summary><div class="stack" style="margin-top:10px"><div class="picker">'+PAY_ICONS.map(function(k){return '<button type="button" data-act="pmIcon" data-id="'+k+'" aria-pressed="'+(m.icon===k)+'">'+svg(k,20)+'</button>'}).join('')+'</div><div class="swatches">'+TINTS.map(function(t){return '<button type="button" data-act="pmTint" data-id="'+t+'" style="--c:var(--t-'+t+')" aria-pressed="'+(m.tint===t)+'" aria-label="'+t+'"></button>'}).join('')+'</div></div></details></div>'+
    '<div class="fsec"><h3>بيانات التحويل</h3><div class="row2"><label class="field"><span>عنوان الرقم</span><input class="inp" id="pm-nl" value="'+esc(m.numberLabel)+'" placeholder="رقم المحفظة"></label><label class="field"><span>الرقم / العنوان</span><input class="inp ltr" id="pm-num" value="'+esc(m.number)+'"></label></div>'+
+   '<label class="field"><span>رقم الآيبان IBAN <em>(اختياري، للتحويل البنكي)</em></span><input class="inp ltr" id="pm-iban" value="'+esc(m.iban||'')+'" placeholder="PS00XXXX0000000000000000000" autocomplete="off" spellcheck="false"></label>'+
    '<label class="field"><span>اسم صاحب الحساب</span><input class="inp" id="pm-holder" value="'+esc(m.holder)+'"></label><label class="field"><span>ملاحظة للزبون <em>(اختياري)</em></span><input class="inp" id="pm-note" value="'+esc(m.note)+'" placeholder="مثال: الشبكة TRC20"></label></div>'+
    '<div class="fsec"><h3>إثبات الدفع</h3><div class="row2"><label class="field"><span>شو لازم يكتب الزبون</span><input class="inp" id="pm-pl" value="'+esc(m.proofLabel)+'"></label><label class="field"><span>نوعه</span><select class="inp" id="pm-pt"><option value="tel"'+(m.proofType==='tel'?' selected':'')+'>رقم جوال</option><option value="name"'+(m.proofType==='name'?' selected':'')+'>اسم</option><option value="text"'+(m.proofType==='text'?' selected':'')+'>نص (مثل TXID)</option></select></label></div></div>'+
    (isUsdtM(m)?'<div class="fsec"><h3>الدفع التلقائي بـ USDT</h3><label class="check"><input type="checkbox" id="pm-auto"'+(m.auto?' checked':'')+'> اكتشف الدفعات لحالها (QR ومبلغ مميّز لكل طلب)</label><p class="hint">"رقم الدفع" فوق هو عنوان BEP20 (بيبدأ بـ 0x). حط كمان عنوان TRC20 والزبون بيختار الشبكة.</p><label class="field"><span>عنوان TRC20 (Tron) <em>(بيبدأ بـ T)</em></span><input class="inp ltr" id="pm-tron" value="'+esc(m.tron||'')+'" placeholder="T…" autocomplete="off" spellcheck="false"></label><label class="field"><span>سعر USDT بالشيكل</span><input class="inp ltr" id="pm-rate" inputmode="decimal" value="'+esc(m.rate||3.1)+'"></label><label class="field"><span>رابط خادم الدفع <em>(Cloudflare Worker)</em></span><input class="inp ltr" id="pm-api" type="url" value="'+esc(m.api||'')+'" placeholder="https://hazem-pay.xxxx.workers.dev" autocomplete="off" spellcheck="false"></label><p class="hint">مع الخادم: الزبون بيعبّي بياناته، بيدفع، والطلب بيتأكد لحاله، والكود الفوري بيوصله مباشرة. بدون الخادم: الموقع بيكتشف الدفعة والتأكيد النهائي عليك.</p><div class="acts"><button type="button" class="btn sm" data-act="payPing">'+svg('bolt',15)+' اختبر الخادم</button><button type="button" class="btn sm" data-act="notifyTest">'+svg('chat',15)+' ابعتلي إشعار تجربة</button></div><p class="hint" id="pm-ping" role="status"></p></div>':'')+
@@ -3292,7 +3303,7 @@ var ACT={
   pmTint:function(el){S.pm.tint=el.dataset.id;$$('[data-act=pmTint]').forEach(function(b){b.setAttribute('aria-pressed',b===el)});pmPreview()},
   pmLogoRm:function(){S.pm.logo='';pmPreview()},
   savePay:function(el){var m=S.pm,isNew=el.dataset.new==='1';m.name=$('#pm-name').value.trim();if(!m.name){toast('اكتب اسم طريقة الدفع');return}
-    m.domain=cleanDomain($('#pm-domain').value);m.numberLabel=$('#pm-nl').value.trim()||'رقم الدفع';m.number=$('#pm-num').value.trim();m.holder=$('#pm-holder').value.trim();m.note=$('#pm-note').value.trim();m.proofLabel=$('#pm-pl').value.trim()||'تفاصيل الحوالة';m.proofType=$('#pm-pt').value;m.active=$('#pm-active').checked;if($('#pm-auto')){m.auto=$('#pm-auto').checked;m.rate=num($('#pm-rate').value)||3.1;m.tron=$('#pm-tron').value.trim();var api=$('#pm-api').value.trim().replace(/\/+$/,'');
+    m.domain=cleanDomain($('#pm-domain').value);m.numberLabel=$('#pm-nl').value.trim()||'رقم الدفع';m.number=$('#pm-num').value.trim();var ib=$('#pm-iban')?latin($('#pm-iban').value).replace(/\s+/g,'').toUpperCase():null;if(ib!=null){if(ib&&!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(ib)){toast('رقم الآيبان مش مكتوب صح، لازم يبدأ بحرفين ورقمين مثل PS06');return}m.iban=ib}m.holder=$('#pm-holder').value.trim();m.note=$('#pm-note').value.trim();m.proofLabel=$('#pm-pl').value.trim()||'تفاصيل الحوالة';m.proofType=$('#pm-pt').value;m.active=$('#pm-active').checked;if($('#pm-auto')){m.auto=$('#pm-auto').checked;m.rate=num($('#pm-rate').value)||3.1;m.tron=$('#pm-tron').value.trim();var api=$('#pm-api').value.trim().replace(/\/+$/,'');
       if(m.tron&&!tronOk(m.tron)){toast('عنوان TRC20 لازم يبدأ بـ T ويكون 34 حرف');return}
       if(m.auto&&m.number&&!bscOk(m.number)){toast('عنوان BEP20 لازم يبدأ بـ 0x ويكون 42 حرف');return}
       if(m.auto&&!usdtNets(m).length){toast('حط عنوان BEP20 أو TRC20 عشان يشتغل الفحص التلقائي');return}
@@ -3384,7 +3395,7 @@ var rzT;window.addEventListener('resize',function(){clearTimeout(rzT);rzT=setTim
 function stopWatch(arr){(arr||[]).forEach(function(f){try{if(typeof f==='function')f()}catch(e){}});return []}
 function adminRefresh(){if(S.view==='admin'&&$('#abody'))renderAdminBody()}
 function startAdminData(){
-  if(S.adminOn||!S.user||!S.isAdmin)return;S.adminOn=true;setTimeout(usdtMigrate,1500);
+  if(S.adminOn||!S.user||!S.isAdmin)return;S.adminOn=true;setTimeout(usdtMigrate,1500);setTimeout(payMigrate,3200);
   DB.seedIfEmpty().then(function(seeded){if(seeded){toast('تجهّز المتجر بالبيانات الأساسية');return DB.loadPublic().then(function(pub){applyPublic(pub);cachePublic()})}}).catch(function(e){console.warn(e)}).then(function(){
     return DB.loadPrivate().then(function(p){S.costs=p.costs||{};adminRefresh()})}).catch(fail);
   DB.loadPeople().then(function(m){S.people=m||{};adminRefresh()},function(e){console.warn('people',e)});
