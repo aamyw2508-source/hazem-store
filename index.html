@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin><link rel="preconnect" href="https://www.gstatic.com" crossorigin><link rel="dns-prefetch" href="https://www.google.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=Noto+Sans+Arabic:wght@400..800&display=swap">
 <style>html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}</style>
 <script>try{var t=localStorage.getItem('hazem-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
 <style>
@@ -52,8 +52,8 @@
   --shadow:0 1px 2px rgba(16,40,120,.06),0 18px 36px -22px rgba(16,40,120,.38);
   --shadow-lift:0 2px 4px rgba(16,40,120,.06),0 24px 44px -24px rgba(22,62,200,.45);
   --t-blue:#1f5fe6; --t-cyan:#0890d0; --t-violet:#7a47d6; --t-green:#0f8456; --t-amber:#ad6c00; --t-rose:#cf355c; --t-orange:#d45a16; --t-slate:#56648a;
-  --f-display:"Readex Pro","IBM Plex Sans Arabic","Segoe UI",Tahoma,system-ui,sans-serif;
-  --f-body:"IBM Plex Sans Arabic","Segoe UI",Tahoma,system-ui,sans-serif;
+  --f-display:-apple-system,BlinkMacSystemFont,"Inter","Noto Sans Arabic","Segoe UI",Tahoma,sans-serif;
+  --f-body:-apple-system,BlinkMacSystemFont,"Inter","Noto Sans Arabic","Segoe UI",Tahoma,sans-serif;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -696,6 +696,17 @@ select.inp{appearance:none;-webkit-appearance:none;background-image:linear-gradi
 .wa-ic{display:grid;place-items:center;width:54px;border:0;border-inline-start:1px solid var(--line);background:rgba(37,211,102,.1);color:#1a8f4c;text-decoration:none;cursor:pointer}
 .wa-ic:hover{background:rgba(37,211,102,.18)}
 .wa-ic.off{background:var(--surface-2);color:var(--line-2)}
+.subrow .wa-ic{width:54px;height:auto;position:static}
+.subrow.need{grid-template-rows:auto auto}.subrow.need .sub-main{grid-row:1/3}
+.rem-ic{display:grid;place-items:center;width:54px;min-height:42px;border:0;border-inline-start:1px solid var(--line);border-top:1px solid var(--line);background:var(--brand-soft);color:var(--brand);cursor:pointer;padding:0}
+.rem-ic:hover{background:color-mix(in srgb,var(--brand) 18%,var(--surface))}
+.subrow.need .wa-ic{min-height:42px}
+.pill.done svg{vertical-align:-2px}
+.rem-done{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border-radius:14px;background:var(--good-bg);color:var(--good);font-weight:600}
+.rem-done>span{display:flex;align-items:center;gap:8px;min-width:0}.rem-done small{display:block;font-weight:500;opacity:.85}
+.rem-done .btn{margin:0;flex:none}
+.rem-btn{border-color:color-mix(in srgb,var(--brand) 35%,var(--line-2));color:var(--brand)}
+.rem-hint{margin:6px 0 0;text-align:center}
 .pill.info{background:var(--brand-soft);color:var(--brand)}
 .remind-pre{margin:0;white-space:pre-line;background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:12px;font-size:14px;color:var(--fg-2)}
 .sub-chips{margin-top:-4px}
@@ -1513,7 +1524,7 @@ function custKeyer(){var np={};S.orders.forEach(function(o){var d=intlDigits(o.p
 function subsAll(){var key=custKeyer(),m={},info={};
   S.orders.forEach(function(o){if(o.status!=='done')return;var ck=key(o.customer,o.phone)||('o'+o.id),ci=info[ck]||(info[ck]={name:'',phone:'',t:-1});if(oDate(o)>ci.t){ci.t=oDate(o);if(o.customer)ci.name=o.customer;if(o.phone)ci.phone=o.phone}if(!ci.name&&o.customer)ci.name=o.customer;if(!ci.phone&&o.phone)ci.phone=o.phone;
     o.items.forEach(function(i){var e=itemEnd(o,i);if(!e)return;var k=ck+'|'+(i.productId||'~'+normName(i.productName));var x=m[k];if(!x||e>x.end)m[k]={key:k,ck:ck,o:o,i:i,start:itemStart(o,i),end:e}})});
-  return Object.keys(m).map(function(k){var x=m[k],ci=info[x.ck]||{};x.name=ci.name||x.o.customer||'';x.phone=ci.phone||x.o.phone||'';x.d=daysLeft(x.end);return x}).sort(function(a,b){return a.end-b.end})}
+  return Object.keys(m).map(function(k){var x=m[k],ci=info[x.ck]||{};x.name=ci.name||x.o.customer||'';x.phone=ci.phone||x.o.phone||'';x.d=daysLeft(x.end);var ix=x.o.items.indexOf(x.i),r=x.o.remind&&x.o.remind[ix];x.ix=ix;x.rem=r&&+r.end===+x.end?r:null;return x}).sort(function(a,b){return a.end-b.end})}
 /* ----- addressing customers: أستاذ / أستاذة from the first name (admin can override per customer) ----- */
 function arNorm(t){return String(t||'').replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').trim()}
 var F_NAMES=arNorm('مريم زينب ريم رهف رغد نور سعاد هيام ايمان امل وعد غدير شهد روان بيان حنين جيهان سوزان نسرين ياسمين نيفين عبير سحر اريج ابتسام اخلاص انتصار تغريد تهاني اماني اغاني هنادي هديل بتول سجود ملاك مرام غزل لمار ميار جود سيدرا ميس ميسون رزان ايات ايناس وئام رنيم ريهام ريماس ريتاج شيرين سوسن تسنيم اسيل نوال منال احلام وجدان جنان حنان افنان بيسان ليان لين سلاف نغم رحاب الاء اسماء دعاء شيماء اسراء هناء وفاء صفاء سناء نجلاء لمياء هيفاء حسناء ولاء رجاء ثناء عفاف كوثر زهور عهد سهام ختام وصال وداد رؤى ديانا كارمن جوليا ماريا مارينا نيرمين ناريمان شروق غروب سلام بشرى يسرى هيلين ميرفت عايده نجاح ريتال لجين تولين ميرال ايلين لارين سيلين روز نرمين رنين سديل دلال جمان هاجر ايلاف منار عروب سوار').split(' ');
@@ -1535,22 +1546,38 @@ function remindText(x){var svc=(product(x.i.productId)||{}).cat==='social',nm=St
 function remindBoxHTML(x){var g=custGender(x),own=(S.people||{})[x.ck];
   return '<div class="stack" id="sub-remind"><div class="card-h"><b>رسالة التذكير</b><span class="seg" role="group" aria-label="المخاطبة">'+[['m','أستاذ'],['f','أستاذة']].map(function(o){return '<button type="button" data-act="subTitle" data-k="'+esc(x.key)+'" data-g="'+o[0]+'" aria-pressed="'+(g===o[0])+'">'+o[1]+'</button>'}).join('')+'</span></div>'+
    (own?'':'<p class="hint">اخترنا المخاطبة تلقائياً من الاسم، وإذا غلط غيّرها وبنتذكرها لهالزبون.</p>')+'<p class="remind-pre">'+esc(remindText(x))+'</p>'+waRemind(x,'btn wa block lg',' ابعت التذكير على واتساب')+'</div>'}
-function waRemind(x,cls,label){return x.phone?'<a class="'+(cls||'btn wa')+'" href="'+esc(waLink(remindText(x),intlDigits(x.phone)))+'" target="_blank" rel="noopener" aria-label="ذكّر '+esc(x.name||'الزبون')+' على واتساب">'+svg('chat',18)+(label||'')+'</a>':''}
-function dueSubs(){return subsAll().filter(function(x){return x.d===0||x.d===1})}
-function subRowHTML(x){var p=subPill(x.d);
-  return '<div class="subrow'+(x.d>=0&&x.d<=1?' due':'')+(x.d<0?' gone':'')+'"><button class="sub-main" data-act="subOpen" data-k="'+esc(x.key)+'">'+avHTML(x.name||x.phone)+'<span class="sub-t"><b><bdi>'+esc(x.name||x.phone||'زبون')+'</bdi></b><span><bdi>'+esc(x.i.productName)+'</bdi>'+(x.i.planName?' · '+esc(x.i.planName):'')+'</span><small>من '+esc(fdShort(x.start))+' لـ '+esc(fdShort(x.end))+'</small></span><span class="pill '+p[0]+'">'+p[1]+'</span></button>'+
-    (x.phone?waRemind(x,'wa-ic'):'<button class="wa-ic off" data-act="subOpen" data-k="'+esc(x.key)+'" aria-label="ما في رقم واتساب">'+svg('chat',18)+'</button>')+'</div>'}
+function waRemind(x,cls,label){return x.phone?'<a class="'+(cls||'btn wa')+'" data-remk="'+esc(x.key)+'" href="'+esc(waLink(remindText(x),intlDigits(x.phone)))+'" target="_blank" rel="noopener" aria-label="ذكّر '+esc(x.name||'الزبون')+' على واتساب">'+svg('chat',18)+(label||'')+'</a>':''}
+function dueSubs(){return subsAll().filter(function(x){return (x.d===0||x.d===1)&&!x.rem})}
+function needRem(x){return !x.rem&&x.d<=3&&x.d>=-30}
+function remWhen(t){return fdate(t,{weekday:'long',day:'numeric',month:'long'})+'، الساعة '+fdate(t,{hour:'numeric',minute:'2-digit'})}
+function remMarkHTML(x){if(x.rem)return '<div class="rem-done"><span>'+svg('check',17)+'<span>بلّغت الزبون <small>'+esc(remWhen(x.rem.at))+'</small></span></span><button class="btn sm" data-act="subUnrem" data-k="'+esc(x.key)+'">تراجع</button></div>';
+  return '<button class="btn block rem-btn" data-act="subRem" data-k="'+esc(x.key)+'">'+svg('check',18)+' تم إبلاغ الزبون</button><p class="hint rem-hint">بعد ما تبعتله التذكير اضغطها، وبينشال التنبيه من الرئيسية.</p>'}
+function remSet(k,on){var x=findSub(k);if(!x||x.ix<0)return;var o=x.o,old=o.remind,m=Object.assign({},old||{});
+  if(on)m[x.ix]={end:x.end,at:Date.now()};else delete m[x.ix];o.remind=m;remRedraw(k);
+  DB.updateOrder(o.id,{remind:m}).then(function(){toast(on?'تمام، انسجّل إنك بلّغت '+(x.name||'الزبون'):'رجع الاشتراك لقائمة التذكير')},function(e){o.remind=old;remRedraw(k);fail(e)})}
+function remRedraw(k){adminRefresh();var b=$('#sub-rem'),y=findSub(k);if(b&&y)b.innerHTML=remMarkHTML(y)}
+/* back from WhatsApp after sending a reminder: ask once if the customer was told */
+D.addEventListener('click',function(e){var a=e.target&&e.target.closest&&e.target.closest('a[data-remk]');if(a)S.remAsk={k:a.dataset.remk,t:Date.now()}},true);
+D.addEventListener('visibilitychange',function(){if(D.hidden){if(S.remAsk)S.remAsk.away=1}else setTimeout(remAskCheck,350)});
+window.addEventListener('blur',function(){if(S.remAsk)S.remAsk.away=1});window.addEventListener('focus',function(){setTimeout(remAskCheck,350)});
+function remAskCheck(){var r=S.remAsk;if(!r||!r.away||D.hidden)return;S.remAsk=null;if(Date.now()-r.t>3*3600e3)return;var x=findSub(r.k);if(!x||x.rem)return;
+  ask({title:'بلّغت '+(x.name||'الزبون')+'؟',text:'إذا بعتتله التذكير على واتساب، اضغط "تم الإبلاغ" عشان ينشال التنبيه.',ok:'تم الإبلاغ',no:'لسا'}).then(function(ok){if(ok)remSet(x.key,true)})}
+function subRowHTML(x){var p=x.rem?['done',svg('check',12)+' تم الإبلاغ']:subPill(x.d),need=needRem(x);
+  return '<div class="subrow'+(!x.rem&&x.d>=0&&x.d<=1?' due':'')+(x.d<0?' gone':'')+(need?' need':'')+'"><button class="sub-main" data-act="subOpen" data-k="'+esc(x.key)+'">'+avHTML(x.name||x.phone)+'<span class="sub-t"><b><bdi>'+esc(x.name||x.phone||'زبون')+'</bdi></b><span><bdi>'+esc(x.i.productName)+'</bdi>'+(x.i.planName?' · '+esc(x.i.planName):'')+'</span><small>من '+esc(fdShort(x.start))+' لـ '+esc(fdShort(x.end))+(x.rem?' · '+esc(subPill(x.d)[1]):'')+'</small></span><span class="pill '+p[0]+'">'+p[1]+'</span></button>'+
+    (x.phone?waRemind(x,'wa-ic'):'<button class="wa-ic off" data-act="subOpen" data-k="'+esc(x.key)+'" aria-label="ما في رقم واتساب">'+svg('chat',18)+'</button>')+
+    (need?'<button class="rem-ic" data-act="subRem" data-k="'+esc(x.key)+'" aria-label="تم إبلاغ '+esc(x.name||'الزبون')+'" title="تم الإبلاغ">'+svg('check',19)+'</button>':'')+'</div>'}
 function subsHTML(){
   var l=subsAll(),soon=l.filter(function(x){return x.d>=0&&x.d<=3}),act=l.filter(function(x){return x.d>=0}),exp=l.filter(function(x){return x.d<0&&x.d>=-30});
   if(!S.sfil)S.sfil=soon.length?'soon':'active';
-  var h='<div class="a-h"><div><h1>الاشتراكات</h1><p>كل زبون مع اشتراكه وتاريخ بدايته ونهايته. قبل ما يخلص الاشتراك بيوم بيطلعلك تنبيه، وبكبسة بتبعتله تذكير على واتساب.</p></div><button class="btn primary" data-act="newSale">'+svg('plus',18)+' بيعة واتساب</button></div>';
-  h+='<section class="kpis k3"><article class="kpi"><span class="lbl">اشتراكات فعّالة</span><div class="val num">'+act.length+'</div></article><article class="kpi"><span class="lbl">بتخلص خلال 3 أيام</span><div class="val num'+(soon.length?' warn-t':'')+'">'+soon.length+'</div></article><article class="kpi"><span class="lbl">خلصت آخر 30 يوم</span><div class="val num">'+exp.length+'</div><span class="cap">فرصة للتجديد</span></article></section>'+ctabsHTML();
+  var h='<div class="a-h"><div><h1>الاشتراكات</h1><p>كل زبون مع اشتراكه وتاريخ بدايته ونهايته. قبل ما يخلص الاشتراك بيوم بيطلعلك تنبيه، وبكبسة بتبعتله تذكير على واتساب. بعد ما تبلّغه اضغط ✓ وبينشال التنبيه.</p></div><button class="btn primary" data-act="newSale">'+svg('plus',18)+' بيعة واتساب</button></div>';
+  h+='<section class="kpis k3"><article class="kpi"><span class="lbl">اشتراكات فعّالة</span><div class="val num">'+act.length+'</div></article><article class="kpi"><span class="lbl">بتخلص خلال 3 أيام</span><div class="val num'+(soon.some(function(x){return !x.rem})?' warn-t':'')+'">'+soon.length+'</div>'+(function(){var n=soon.filter(function(x){return x.rem}).length;return n?'<span class="cap">'+(n===soon.length?'كلهم انبلغوا ✓':'منهم '+n+' انبلغوا')+'</span>':''})()+'</article><article class="kpi"><span class="lbl">خلصت آخر 30 يوم</span><div class="val num">'+exp.length+'</div><span class="cap">فرصة للتجديد</span></article></section>'+ctabsHTML();
   var F=[['soon','بتخلص قريب',soon.length],['active','فعّالة',act.length],['expired','خلصت',exp.length],['all','الكل',l.length]];
   h+='<div class="chips sub-chips">'+F.map(function(f){return '<button class="fchip" data-act="sfil" data-id="'+f[0]+'" aria-pressed="'+(S.sfil===f[0])+'">'+f[1]+'<span class="n">'+f[2]+'</span></button>'}).join('')+'</div>';
   h+='<label class="search">'+svg('search',18)+'<span class="vh">بحث في الاشتراكات</span><input id="subq" type="search" placeholder="اسم، رقم، أو اشتراك" value="'+esc(S.subq||'')+'" autocomplete="off"></label><div id="sublist">'+subListHTML()+'</div>';
   return h}
 function subListHTML(){var q=(S.subq||'').trim().toLowerCase(),f=S.sfil,l=subsAll().filter(function(x){return (f==='all'||(f==='soon'&&x.d>=0&&x.d<=3)||(f==='active'&&x.d>=0)||(f==='expired'&&x.d<0))&&(!q||[x.name,x.phone,intlDigits(x.phone),x.i.productName,x.i.planName].join(' ').toLowerCase().indexOf(q)>-1)});
   if(f==='expired'||f==='all')l=l.slice().sort(function(a,b){return f==='expired'?b.end-a.end:a.end-b.end});
+  if(f==='soon')l=l.slice().sort(function(a,b){return (a.rem?1:0)-(b.rem?1:0)||a.end-b.end});
   if(!l.length)return '<div class="empty">'+svg('clock',26)+'<b>'+(q?'ما في نتائج':f==='soon'?'ما في اشتراكات بتخلص بالأيام الجاية':f==='expired'?'ما في اشتراكات خالصة':'ما في اشتراكات لسا')+'</b><span>كل بيعة بتسجّلها (أو طلب بتأكده) بيظهر اشتراكها هون مع تاريخ الانتهاء، حسب مدة الاشتراك.</span></div>';
   return '<div class="sublist">'+l.slice(0,300).map(subRowHTML).join('')+'</div>'}
 function findSub(k){return subsAll().find(function(x){return x.key===k})}
@@ -1559,6 +1586,7 @@ function openSub(k){var x=findSub(k);if(!x)return;var p=subPill(x.d),o=x.o,i=x.i
   var h='<div class="kvlist">'+rows.map(function(r){return '<div><span>'+r[0]+'</span><b>'+r[1]+'</b></div>'}).join('')+'</div>';
   if(x.phone)h+=remindBoxHTML(x);
   else h+='<p class="alert info"><span>'+svg('alert',18)+'ما في رقم واتساب لهالزبون. عدّل البيعة وضيف رقمه عشان تقدر تذكّره.</span></p>';
+  h+='<div id="sub-rem" class="stack">'+remMarkHTML(x)+'</div>';
   var ivb=inviteBtnHTML(x.name,x.phone,i.productName,o.orderNo,'btn block');if(ivb)h+=ivb;
   h+='<div class="row2"><button class="btn primary" data-act="subRenew" data-k="'+esc(k)+'">'+svg('plus',18)+' تجديد الاشتراك</button><button class="btn" data-act="editOrder" data-id="'+esc(o.id)+'">'+svg('edit',18)+' تعديل التواريخ</button></div>';
   var wc=waCustomers().find(function(c){return c.key===x.ck});if(wc)h+='<button class="btn block" data-act="waCust" data-id="'+esc(wc.key)+'">'+svg('user',18)+' كل مشتريات '+esc(x.name||'الزبون')+'</button>';
@@ -1591,7 +1619,7 @@ function openSheet(o){
   return api;
 }
 function closeAllSheets(){$$('.ov').forEach(function(o){if(o.__close)o.__close(true)})}
-function ask(o){return new Promise(function(res){var sh=openSheet({title:o.title,body:'<p class="ask-t">'+esc(o.text)+'</p><div class="row2"><button class="btn '+(o.danger?'danger-solid':'primary')+'" data-ask="1">'+esc(o.ok||'تأكيد')+'</button><button class="btn" data-ask="0">رجوع</button></div>',onClose:function(){res(false)}});
+function ask(o){return new Promise(function(res){var sh=openSheet({title:o.title,body:'<p class="ask-t">'+esc(o.text)+'</p><div class="row2"><button class="btn '+(o.danger?'danger-solid':'primary')+'" data-ask="1">'+esc(o.ok||'تأكيد')+'</button><button class="btn" data-ask="0">'+esc(o.no||'رجوع')+'</button></div>',onClose:function(){res(false)}});
   sh.el.addEventListener('click',function(e){var b=e.target.closest('[data-ask]');if(!b)return;sh.close(true);res(b.dataset.ask==='1')})})}
 function copyText(text,btn){
   function ok(){if(btn){btn.classList.add('ok');var l=btn.querySelector('span');if(l){var o=l.textContent;l.textContent='تم النسخ';setTimeout(function(){l.textContent=o;btn.classList.remove('ok')},1500)}}toast('تم النسخ')}
@@ -3236,6 +3264,7 @@ var ACT={
   subTitle:function(el){var x=findSub(el.dataset.k);if(!x)return;S.people=S.people||{};S.people[x.ck]=el.dataset.g;var b=$('#sub-remind');if(b)b.outerHTML=remindBoxHTML(x);
     DB.savePeople(S.people).catch(fail);var sl=$('#sublist');if(sl)sl.innerHTML=subListHTML()},
   subRenew:function(el){renewSub(el.dataset.k)},
+  subRem:function(el){remSet(el.dataset.k,true)},subUnrem:function(el){remSet(el.dataset.k,false)},
   subsTab:function(){S.tab='customers';S.ctab='subs';S.sfil='soon';closeAllSheets();renderAdminBody();window.scrollTo(0,0)},
   writeReview:function(el){openWriteReview(el.dataset.id)},
   ivStar:function(el){S.iv.rating=+el.dataset.n;rvPaint(el.parentNode,S.iv.rating)},
