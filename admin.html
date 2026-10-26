@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin><link rel="preconnect" href="https://www.gstatic.com" crossorigin><link rel="dns-prefetch" href="https://www.google.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=Noto+Sans+Arabic:wght@400..800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400..800&display=swap">
 <style>html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}</style>
 <script>try{var t=localStorage.getItem('hazem-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
 <style>
@@ -37,8 +37,8 @@
   --shadow:0 1px 2px rgba(16,40,120,.06),0 18px 36px -22px rgba(16,40,120,.38);
   --shadow-lift:0 2px 4px rgba(16,40,120,.06),0 24px 44px -24px rgba(22,62,200,.45);
   --t-blue:#1f5fe6; --t-cyan:#0890d0; --t-violet:#7a47d6; --t-green:#0f8456; --t-amber:#ad6c00; --t-rose:#cf355c; --t-orange:#d45a16; --t-slate:#56648a;
-  --f-display:-apple-system,BlinkMacSystemFont,"Inter","Noto Sans Arabic","Segoe UI",Tahoma,sans-serif;
-  --f-body:-apple-system,BlinkMacSystemFont,"Inter","Noto Sans Arabic","Segoe UI",Tahoma,sans-serif;
+  --f-display:-apple-system,BlinkMacSystemFont,"Alexandria","Segoe UI",Tahoma,sans-serif;
+  --f-body:-apple-system,BlinkMacSystemFont,"Alexandria","Segoe UI",Tahoma,sans-serif;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -1099,6 +1099,7 @@ var FRAMED=(function(){try{return window.self!==window.top}catch(e){return true}
 /* ================= helpers ================= */
 function $(s,r){return (r||D).querySelector(s)}
 function $$(s,r){return Array.prototype.slice.call((r||D).querySelectorAll(s))}
+function escT(v){return esc(v).replace(/(^|[^\u0600-\u06FF])(و)(?=[A-Za-z])/g,'$1$2\u202F')}
 function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function uid(){return Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-4)}
 function latin(s){return String(s==null?'':s).replace(/[٠-٩]/g,function(d){return d.charCodeAt(0)-1632}).replace(/[۰-۹]/g,function(d){return d.charCodeAt(0)-1776})}
@@ -1726,10 +1727,10 @@ function renderStore(){
     '<nav class="mainnav" aria-label="القائمة الرئيسية">'+navList().map(function(x){return '<a href="#'+x[0]+'" data-act="nav" data-to="'+x[0]+'">'+x[1]+'</a>'}).join('')+'</nav>'+
     '<div class="hdr-act">'+themeBtnHTML('only-d')+'<button class="hbtn" data-act="focusSearch" aria-label="بحث">'+svg('search',20)+'</button>'+acctBtnHTML()+'<button class="hbtn" data-act="openCart" aria-label="سلة المشتريات">'+svg('bag',20)+'<span class="cbadge" id="cbadge"'+(n?'':' hidden')+'>'+n+'</span></button><button class="hbtn only-m" data-act="menu" aria-label="القائمة">'+svg('menu',20)+'</button></div></div></header>';
   h+='<main id="main">';
-  h+='<section class="hero"><div class="awning" aria-hidden="true"></div><div class="hero-mark" aria-hidden="true"><svg viewBox="0 0 120 120"><defs><linearGradient id="hmh" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#7ae6ff"/><stop offset="1" stop-color="#1f8fff"/></linearGradient><linearGradient id="hmb" x1="1" y1="0" x2=".25" y2="1"><stop offset="0" stop-color="#4b90ff"/><stop offset=".55" stop-color="#2a60f0"/><stop offset="1" stop-color="#2238c8"/></linearGradient></defs><g transform="translate(0 -7)"><path d="M98 33C64 35 34 51 23 77C13 101 33 113 57 110C75 108 89 98 98 85C86 93 72 98 60 97C43 96 35 85 41 72C49 55 74 45 100 44Z" fill="url(#hmb)"/><path d="M17 58C36 39 66 28 102 27L100.4 37.6C72 38 43 46 17 58Z" fill="url(#hmh)"/></g></svg></div><div class="wrap hero-in"><div class="hero-txt"><span class="hero-pill">'+svg('shield',15)+esc(st.tagline)+'</span><h1>'+heroTitle(st.headline)+'</h1><p>'+esc(st.sub)+'</p><div class="hero-cta"><a class="btn lg light" href="#products" data-act="nav" data-to="products">'+svg('bag',18)+' تسوّق الاشتراكات</a><a class="btn lg ghost-l" href="'+esc(waLink('مرحباً '+st.storeName))+'" target="_blank" rel="noopener">'+svg('chat',18)+' تواصل على واتساب</a></div></div>'+
+  h+='<section class="hero"><div class="awning" aria-hidden="true"></div><div class="hero-mark" aria-hidden="true"><svg viewBox="0 0 120 120"><defs><linearGradient id="hmh" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#7ae6ff"/><stop offset="1" stop-color="#1f8fff"/></linearGradient><linearGradient id="hmb" x1="1" y1="0" x2=".25" y2="1"><stop offset="0" stop-color="#4b90ff"/><stop offset=".55" stop-color="#2a60f0"/><stop offset="1" stop-color="#2238c8"/></linearGradient></defs><g transform="translate(0 -7)"><path d="M98 33C64 35 34 51 23 77C13 101 33 113 57 110C75 108 89 98 98 85C86 93 72 98 60 97C43 96 35 85 41 72C49 55 74 45 100 44Z" fill="url(#hmb)"/><path d="M17 58C36 39 66 28 102 27L100.4 37.6C72 38 43 46 17 58Z" fill="url(#hmh)"/></g></svg></div><div class="wrap hero-in"><div class="hero-txt"><span class="hero-pill">'+svg('shield',15)+esc(st.tagline)+'</span><h1>'+heroTitle(st.headline)+'</h1><p>'+escT(st.sub)+'</p><div class="hero-cta"><a class="btn lg light" href="#products" data-act="nav" data-to="products">'+svg('bag',18)+' تسوّق الاشتراكات</a><a class="btn lg ghost-l" href="'+esc(waLink('مرحباً '+st.storeName))+'" target="_blank" rel="noopener">'+svg('chat',18)+' تواصل على واتساب</a></div></div>'+
     (vis.length?'<div class="appcloud" aria-hidden="true">'+vis.slice(0,9).map(function(p){return '<span class="ac">'+tile(p,'xl')+'</span>'}).join('')+'</div>':'')+'</div></section>';
   var feats=(st.features||[]).filter(function(f){return f&&f.t});
-  if(feats.length)h+='<div class="wrap trust-wrap"><ul class="trust">'+feats.slice(0,4).map(function(f){return '<li><span class="trust-ic">'+svg(f.icon||'check',20)+'</span><span><b>'+esc(f.t)+'</b>'+(f.d?'<small>'+esc(f.d)+'</small>':'')+'</span></li>'}).join('')+'</ul></div>';
+  if(feats.length)h+='<div class="wrap trust-wrap"><ul class="trust">'+feats.slice(0,4).map(function(f){return '<li><span class="trust-ic">'+svg(f.icon||'check',20)+'</span><span><b>'+escT(f.t)+'</b>'+(f.d?'<small>'+escT(f.d)+'</small>':'')+'</span></li>'}).join('')+'</ul></div>';
   var cl=cats().map(function(c){return {c:c,n:vis.filter(function(p){return p.cat===c.id}).length}}).filter(function(x){return x.n});
   if(cl.length>1)h+='<section class="sec" id="cats"><div class="wrap"><div class="sec-h"><div><h2>تسوّق حسب القسم</h2></div></div><div class="catgrid">'+cl.map(function(x){return '<button class="catcard" data-act="pickCat" data-id="'+esc(x.c.id)+'"><span class="cat-ic">'+svg(x.c.icon||'star',22)+'</span><span><b>'+esc(x.c.name)+'</b><small>'+x.n+' اشتراك</small></span></button>'}).join('')+'</div></div></section>';
   h+='<section class="sec" id="products"><div class="wrap"><div class="sec-h"><div><h2>الاشتراكات</h2><p>'+vis.length+' اشتراك متوفر الآن</p></div></div>'+
@@ -1742,11 +1743,11 @@ function renderStore(){
   if(ms.length)h+='<section class="sec" id="pay"><div class="wrap"><div class="sec-h"><div><h2>طرق الدفع</h2><p>رقم الدفع واسم صاحب الحساب بيظهرولك وقت الطلب.</p></div></div><div class="paygrid">'+ms.map(function(m){return '<div class="paycard">'+tile(m,'lg','card')+'<span><b>'+esc(m.name)+'</b><small>'+(m.number?'<span dir="ltr">'+esc(m.number)+'</span>'+(m.holder?' · '+esc(m.holder):''):'التفاصيل عند الطلب')+'</small></span></div>'}).join('')+'</div></div></section>';
   h+=reviewsSecHTML();
   var faq=(st.faq||[]).filter(function(f){return f&&f.q});
-  if(faq.length)h+='<section class="sec" id="faq"><div class="wrap"><div class="sec-h"><div><h2>الأسئلة الشائعة</h2></div></div><div class="faq">'+faq.map(function(f){return '<details><summary>'+esc(f.q)+svg('down',18)+'</summary><p>'+esc(f.a)+'</p></details>'}).join('')+'</div></div></section>';
+  if(faq.length)h+='<section class="sec" id="faq"><div class="wrap"><div class="sec-h"><div><h2>الأسئلة الشائعة</h2></div></div><div class="faq">'+faq.map(function(f){return '<details><summary>'+esc(f.q)+svg('down',18)+'</summary><p>'+escT(f.a)+'</p></details>'}).join('')+'</div></div></section>';
   if(st.seoAbout)h+='<section class="sec" id="about"><div class="wrap"><div class="seo"><h2>'+esc(st.storeName)+(st.storeNameEn?' <span dir="ltr">'+esc(st.storeNameEn)+'</span>':'')+'</h2><p>'+esc(st.seoAbout)+'</p>'+(vis.length?'<ul class="seo-list">'+vis.map(function(p){return '<li><b><bdi>'+(PAGE_SLUG[p.id]&&B.page==='store'?'<a href="'+PAGE_SLUG[p.id]+'/">'+esc(p.name)+'</a>':esc(p.name))+'</bdi></b>'+(p.keywords?'<span>'+esc(p.keywords)+'</span>':'')+'</li>'}).join('')+'</ul>':'')+'</div></div></section>';
   h+='<div class="wrap"><section class="cta"><div><h2>ما لقيت الاشتراك اللي بدك ياه؟</h2><p>راسلنا على واتساب ومنحاول نوفّرلك ياه بأفضل سعر.</p></div><div class="cta-act"><a class="btn lg wa" href="'+esc(waLink('مرحباً '+st.storeName+'، بدي أسأل عن اشتراك'))+'" target="_blank" rel="noopener">'+svg('chat',18)+' راسلنا على واتساب</a></div></section></div>';
   h+='</main>';
-  h+='<footer class="foot"><div class="wrap"><div class="foot-grid"><div><a class="brand" href="#top" data-act="nav" data-to="top"><span class="logo"><img src="'+LOGO+'" alt=""></span><span class="bname"><b>'+esc(st.storeName)+'</b><small>'+esc(st.tagline)+'</small></span></a><p>'+esc(st.about)+'</p></div>'+
+  h+='<footer class="foot"><div class="wrap"><div class="foot-grid"><div><a class="brand" href="#top" data-act="nav" data-to="top"><span class="logo"><img src="'+LOGO+'" alt=""></span><span class="bname"><b>'+esc(st.storeName)+'</b><small>'+esc(st.tagline)+'</small></span></a><p>'+escT(st.about)+'</p></div>'+
     '<div><h3>روابط</h3><ul class="flinks">'+navList().slice(1).map(function(x){return '<li><a href="#'+x[0]+'" data-act="nav" data-to="'+x[0]+'">'+x[1]+'</a></li>'}).join('')+'</ul></div>'+
     '<div><h3>تواصل معنا</h3><button class="btn sm foot-sup" data-act="support">'+svg('headphones',16)+' الدعم الفني</button><div class="contact"><span class="muted">واتساب:</span><span class="sel" dir="ltr">'+esc(waPretty())+'</span><button class="copy" data-act="copy" data-text="'+esc(waPretty())+'">'+svg('copy',15)+'<span>نسخ</span></button></div>'+
     (ms.length?'<div class="foot-pay">'+ms.map(function(m){return '<span title="'+esc(m.name)+'">'+tile(m,'sm','card')+'</span>'}).join('')+'</div>':'')+'</div></div>'+
@@ -1874,13 +1875,13 @@ function openProduct(id,planId){
 function productSheetHTML(){
   var p=product(S.sel.pid),pl=planOf(p,S.sel.plan);
   var h='<div class="pd-head">'+tile(p,'xxl')+'<span><h3><bdi>'+esc(p.name)+'</bdi></h3><span class="muted">'+esc(catName(p.cat))+(p.note?' · '+esc(p.note):'')+'</span></span></div>';
-  if(p.desc)h+='<p class="pd-desc">'+esc(p.desc)+'</p>';
+  if(p.desc)h+='<p class="pd-desc">'+escT(p.desc)+'</p>';
   if(pl.war==='yes')h+='<p class="war-note yes">'+svg('shield',16)+'<span>هالمدة عليها <b>ضمان طول مدة الاشتراك</b>: إذا صار فيها أي مشكلة بنصلّحها أو بنبدّلها مجاناً. <a href="guarantee.html">شروط الضمان</a></span></p>';
   else if(pl.war==='no'){var alt=p.plans.find(function(x){return x.war==='yes'});h+='<p class="war-note">'+svg('alert',16)+'<span>هالمدة <b>بدون ضمان</b>، عشان هيك سعرها أقل. بنتأكد إنها شغالة وقت التسليم، بس ما بتنبدل إذا وقفت بعدين.'+(alt?' بدك ضمان؟ اختار «'+esc(alt.name)+'».':'')+'</span></p>'}
   var pa=planAcct(p,pl);if(pa)h+='<p class="acct-note">'+svg(pa==='login'?'lock':'user',16)+'<span>'+(pa==='login'?'هالمدة بتتفعّل على حسابك الشخصي، فوقت الطلب بنطلب منك إيميل الحساب وكلمة السر.':'هالمدة بتوصلك كدعوة على إيميلك، فوقت الطلب بنطلب منك الإيميل.')+'</span></p>';
   h+='<div class="ostep"><h4>'+(p.plans.length>1?'اختار المدة':'المدة')+'</h4><div class="plans" role="radiogroup" aria-label="المدة">'+p.plans.map(function(x){return '<button class="plan" role="radio" aria-checked="'+(x.id===pl.id)+'" data-act="pickPlan" data-id="'+esc(x.id)+'"><span class="radio"></span><span class="pl-n">'+esc(x.name||p.name)+(x.instant&&walletOn()?' <span class="pl-inst">'+svg('bolt',12)+'فوري</span>':'')+warTag(x)+acctTag(p,x)+'</span><span class="pl-p">'+(x.compare>x.price?strike(x.compare):'')+money(x.price)+'</span></button>'}).join('')+'</div></div>';
   if(walletOn()&&p.plans.some(function(x){return x.instant}))h+='<p class="hint inst-hint">'+svg('bolt',14)+'<span>المدد المكتوب جنبها "فوري" بتستلمها مباشرة لما تدفع من رصيدك.</span></p>';
-  if(p.features.length)h+='<ul class="feat">'+p.features.map(function(f){return '<li>'+svg('check',16)+'<span>'+esc(f)+'</span></li>'}).join('')+'</ul>';
+  if(p.features.length)h+='<ul class="feat">'+p.features.map(function(f){return '<li>'+svg('check',16)+'<span>'+escT(f)+'</span></li>'}).join('')+'</ul>';
   h+='<div class="pd-foot"><button class="btn lg" data-act="addSel" aria-label="أضف للسلة">'+svg('cart',20)+'</button><button class="btn lg primary" data-act="buySel">اطلب الآن · '+money(pl.price)+'</button></div>';
   return h;
 }
