@@ -36,7 +36,7 @@ jobs:
           s=get('settings/main');sf={a:val(b) for a,b in s.get('fields',{}).items()}
           import gzip, base64
           blob=base64.b64encode(gzip.compress(json.dumps({'cats':sf.get('categories',[]),'products':out},ensure_ascii=False).encode())).decode()
-          parts=[blob[i:i+6000] for i in range(0,len(blob),6000)]
+          parts=[blob[i:i+3900] for i in range(0,len(blob),3900)]
           print('NPRODUCTS=%d parts=%d'%(len(out),len(parts)))
           for i,c in enumerate(parts): print('::notice title=part %d of %d::%s'%(i+1,len(parts),c))
           PY
