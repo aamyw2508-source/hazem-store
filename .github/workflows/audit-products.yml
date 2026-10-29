@@ -1,0 +1,40 @@
+name: audit products (read-only)
+# Reads the public product list and store settings (the same data the store page shows) and prints a summary.
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: read public products
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request
+          B='https://firestore.googleapis.com/v1/projects/hazem-store-7a272/databases/(default)/documents/'
+          def val(v):
+              k=next(iter(v));x=v[k]
+              if k=='mapValue': return {a:val(b) for a,b in x.get('fields',{}).items()}
+              if k=='arrayValue': return [val(i) for i in x.get('values',[])]
+              if k in('integerValue',): return int(x)
+              return x
+          def get(path):
+              return json.load(urllib.request.urlopen(B+path))
+          docs=[];tok=''
+          while True:
+              r=get('products?pageSize=300'+('&pageToken='+tok if tok else ''))
+              docs+=r.get('documents',[]);tok=r.get('nextPageToken')
+              if not tok: break
+          out=[]
+          for d in docs:
+              f={a:val(b) for a,b in d.get('fields',{}).items()}
+              img=f.pop('img','')
+              f['img']='yes' if img else ''
+              f['desc_len']=len(f.pop('desc','') or '')
+              f['id']=d['name'].rsplit('/',1)[1]
+              out.append(f)
+          s=get('settings/main');sf={a:val(b) for a,b in s.get('fields',{}).items()}
+          print('CATS='+json.dumps(sf.get('categories',[]),ensure_ascii=False))
+          print('NPRODUCTS=%d'%len(out))
+          for p in out: print('P='+json.dumps(p,ensure_ascii=False))
+          PY
