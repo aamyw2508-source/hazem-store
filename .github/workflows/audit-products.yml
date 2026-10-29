@@ -34,7 +34,9 @@ jobs:
               f['id']=d['name'].rsplit('/',1)[1]
               out.append(f)
           s=get('settings/main');sf={a:val(b) for a,b in s.get('fields',{}).items()}
-          print('CATS='+json.dumps(sf.get('categories',[]),ensure_ascii=False))
-          print('NPRODUCTS=%d'%len(out))
-          for p in out: print('P='+json.dumps(p,ensure_ascii=False))
+          import gzip, base64
+          blob=base64.b64encode(gzip.compress(json.dumps({'cats':sf.get('categories',[]),'products':out},ensure_ascii=False).encode())).decode()
+          parts=[blob[i:i+6000] for i in range(0,len(blob),6000)]
+          print('NPRODUCTS=%d parts=%d'%(len(out),len(parts)))
+          for i,c in enumerate(parts): print('::notice title=part %d of %d::%s'%(i+1,len(parts),c))
           PY
