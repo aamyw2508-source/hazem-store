@@ -1109,6 +1109,16 @@ body.locked .paybar{display:none}
 .out-check{align-items:flex-start}.out-check span{display:grid;gap:2px}.out-check small{font-weight:500;color:var(--muted);line-height:1.6}
 .pl-outf{margin-top:10px}
 .icon-btn.out-on{background:var(--warn-bg);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
+
+/* ===== admin products: search and what to fix ===== */
+.psearch{margin:4px 0 0;min-height:50px}.psearch input{flex:1;min-width:0;border:0;background:none;font:inherit;color:var(--fg);padding:13px 0;outline:none}
+.chips.pfil{margin:2px 0 4px}
+.pcount{margin:0 2px}
+.pfix{display:grid}
+.pfix .arow{border-end-start-radius:0;border-end-end-radius:0}
+.pissues{list-style:none;margin:0;padding:10px 14px 12px;display:grid;gap:6px;border:1px solid color-mix(in srgb,var(--warn) 30%,var(--line));border-top:0;border-radius:0 0 18px 18px;background:color-mix(in srgb,var(--warn-bg) 70%,var(--surface));color:var(--warn);font-size:13px;font-weight:600;line-height:1.65}
+.pissues li{display:flex;gap:7px;align-items:flex-start}.pissues svg{flex:none;margin-top:4px}
+@media (max-width:520px){.arow{grid-template-columns:auto minmax(0,1fr)}.arow>.acts{grid-column:1/-1;grid-row:2;display:flex;gap:8px;justify-content:flex-end;margin-top:-4px}.arow>.ptable{grid-row:3}}
 </style>
 </head>
 <body>
@@ -1518,7 +1528,7 @@ var DURS=[['w1','أسبوع'],['w2','أسبوعين'],['m1','شهر'],['m2','ش�
 function durLabel(c){var d=DURS.find(function(x){return x[0]===c});if(d)return d[1];var m=/^([dwmy])(\d+)$/.exec(c||'');if(!m)return '';var n=+m[2],u=m[1];
   if(u==='d')return n===1?'يوم':n===2?'يومين':n<=10?n+' أيام':n+' يوم';if(u==='w')return n===1?'أسبوع':n===2?'أسبوعين':n<=10?n+' أسابيع':n+' أسبوع';
   if(u==='y')return n===1?'سنة':n===2?'سنتين':n<=10?n+' سنوات':n+' سنة';return n===1?'شهر':n===2?'شهرين':n<=10?n+' أشهر':n+' شهر'}
-function guessDur(n){n=latin(n||'').toLowerCase().replace(/[٫,]/g,'.');var m;
+function guessDur(n){n=latin(n||'').toLowerCase().replace(/[٫,]/g,'.').replace(/[()\[\]]/g,' ');var m;
   if((m=/(\d+)\s*(سنة|سنه|سنوات|سنين|years?)/.exec(n)))return 'y'+(+m[1]||1);
   if((m=/(\d+)\s*(شهر|شهور|أشهر|اشهر|months?)/.exec(n))){var k=+m[1]||1;return k%12===0?'y'+k/12:'m'+k}
   if((m=/(\d+)\s*(أسبوع|اسبوع|أسابيع|اسابيع|weeks?)/.exec(n)))return 'w'+(+m[1]||1);
@@ -2990,10 +3000,35 @@ function productsHTML(){
   var uneven=unevenImgs().length;if(uneven)h+='<div class="alert info"><span>'+svg('image',18)+'في '+uneven+' صورة منتج مرفوعة قبل التنسيق التلقائي. بنرتبهم كلهم بنفس الحجم والشكل.</span><button class="btn sm primary" data-act="fixImgs">نسّق الصور</button></div>';
   if(miss.length)h+='<div class="alert info"><span>'+svg('alert',18)+'أضف سعر الجملة لكل مدة عشان ينحسب صافي ربحك. سعر الجملة بيظهر إلك بس.</span></div>';
   if(!list.length)return h+'<div class="empty">'+svg('box',26)+'<b>ما في منتجات</b><span>ضيف أول اشتراك بالأسعار تبعته.</span><button class="btn primary" data-act="newProduct">'+svg('plus',18)+' منتج جديد</button></div>';
-  var groups=cats().map(function(c){return {name:c.name,items:list.filter(function(p){return p.cat===c.id})}});var known=cats().map(function(c){return c.id});var other=list.filter(function(p){return known.indexOf(p.cat)<0});if(other.length)groups.push({name:'بدون قسم',items:other});
-  groups.forEach(function(g){if(!g.items.length)return;h+='<section class="psec"><div class="psec-h"><h2>'+esc(g.name)+'</h2><span>'+g.items.length+'</span></div><div class="list-plain">'+g.items.map(arowHTML).join('')+'</div></section>'});
-  return h;
+  var F=[['all','الكل',list.length],['fix','بدها تعديل',list.filter(function(p){return prodIssues(p).length}).length],['nocost','ناقصها سعر جملة',list.filter(function(p){return costIssue(p)}).length],['out','نفدت الكمية',list.filter(prodOut).length],['hidden','مخفية',list.filter(function(p){return p.active===false}).length]];
+  if(!S.pfil)S.pfil='all';
+  h+='<label class="search psearch">'+svg('search',18)+'<span class="vh">بحث في المنتجات</span><input id="pq" type="search" placeholder="ابحث باسم المنتج أو المدة" value="'+esc(S.pq||'')+'" autocomplete="off"></label>';
+  h+='<div class="chips pfil">'+F.filter(function(f){return f[0]==='all'||f[2]||S.pfil===f[0]}).map(function(f){return '<button class="fchip" data-act="pfil" data-id="'+f[0]+'" aria-pressed="'+(S.pfil===f[0])+'">'+f[1]+'<span class="n'+(f[0]==='fix'&&f[2]?' hot':'')+'">'+f[2]+'</span></button>'}).join('')+'</div>';
+  return h+'<div id="plist">'+prodListHTML()+'</div>';
 }
+function prodMatch(p,q){if(!q)return true;var t=arNorm([p.name,p.keywords,p.note,p.badge,catName(p.cat),p.id].concat(p.plans.map(function(x){return x.name})).join(' ')).toLowerCase();
+  return arNorm(q).toLowerCase().split(/\s+/).filter(Boolean).every(function(w){return t.indexOf(w)>-1})}
+function prodListHTML(){var f=S.pfil||'all',q=(S.pq||'').trim(),fix=f==='fix',nocost=f==='nocost';
+  var list=S.products.filter(function(p){return (f==='all'||(fix&&prodIssues(p).length)||(f==='nocost'&&costIssue(p))||(f==='out'&&prodOut(p))||(f==='hidden'&&p.active===false))&&prodMatch(p,q)});
+  if(!list.length)return '<div class="empty">'+svg(q?'search':'check',26)+'<b>'+(q?'ما لقينا منتج اسمه "'+esc(q)+'"':fix?'كل المنتجات تمام، ما في إشي بده تعديل':nocost?'كل المدد إلها سعر جملة':'ما في منتجات هون')+'</b>'+(q?'<span>جرّب كلمة ثانية، أو اسم المدة.</span>':'')+'</div>';
+  var row=function(p){if(!fix&&!nocost)return arowHTML(p);return '<div class="pfix">'+arowHTML(p)+'<ul class="pissues">'+(nocost?[costIssue(p)]:prodIssues(p)).map(function(t){return '<li>'+svg('alert',14)+'<span>'+t+'</span></li>'}).join('')+'</ul></div>'};
+  var groups=cats().map(function(c){return {name:c.name,items:list.filter(function(p){return p.cat===c.id})}});var known=cats().map(function(c){return c.id});var other=list.filter(function(p){return known.indexOf(p.cat)<0});if(other.length)groups.push({name:'بدون قسم',items:other});
+  var h='';if(q||f!=='all')h+='<p class="hint pcount">'+list.length+' '+(list.length===1?'منتج':'منتجات')+'</p>';
+  groups.forEach(function(g){if(!g.items.length)return;h+='<section class="psec"><div class="psec-h"><h2>'+esc(g.name)+'</h2><span>'+g.items.length+'</span></div><div class="list-plain">'+g.items.map(row).join('')+'</div></section>'});
+  return h}
+/* what to fix in a product, most important first (text is already escaped) */
+function prodIssues(p){var is=[],q=function(pl){return '«'+esc(pl.name||'بدون اسم')+'»'},ls=function(a){return a.map(q).join('، ')};
+  if(/^[\u064B-\u0652\u0640\s]/.test(p.name||'')||/\s$/.test(p.name||''))is.push('في حركة أو مسافة زايدة بأول أو آخر الاسم «'+esc(p.name)+'»');
+  if(cats().map(function(c){return c.id}).indexOf(p.cat)<0)is.push('ما إله قسم، فبيظهر للزبون تحت «اشتراكات ثانية»');
+  var loss=p.plans.filter(function(pl){var c=costOf(p.id,pl.id);return c!=null&&pl.price<c});if(loss.length)is.push('بتخسر فيها، سعر البيع أقل من الجملة: '+ls(loss));
+  var seen={},dup=[];p.plans.forEach(function(pl){var k=arNorm(pl.name).replace(/\s+/g,' ').toLowerCase();if(seen[k])dup.push(pl);seen[k]=1});if(dup.length)is.push('في أكثر من مدة بنفس الاسم '+ls(dup)+'، ميّزهم بالاسم عشان الزبون يعرف الفرق');
+  var bad=p.plans.filter(function(pl){var g=guessDur(pl.name);return pl.dur&&pl.dur!=='none'&&g&&g!==pl.dur});if(bad.length)is.push('مدة الاشتراك مش زي الاسم: '+bad.map(function(pl){return q(pl)+' مسجّلة '+esc(durLabel(pl.dur))+' بس اسمها '+esc(durLabel(guessDur(pl.name)))}).join('، ')+'. اختار «تلقائي من اسم المدة» عشان تاريخ الانتهاء والتذكير يطلعوا صح');
+  var nd=p.plans.filter(function(pl){return !pl.dur&&!guessDur(pl.name)});if(nd.length)is.push('مدة مش معروفة لـ '+ls(nd)+'. اختار «مدة الاشتراك»، أو «بدون انتهاء» إذا ما بيخلص، عشان ينحسب تاريخ الانتهاء والتذكير');
+  if(CLOUD){var ni=p.plans.filter(function(pl){return pl.instant&&!planOut(p,pl)&&!stockFree(p.id,pl.id)});if(ni.length)is.push('تسليم فوري بس ما ضل أكواد: '+ls(ni)+'. ضيف أكواد أو علّم «نفدت هالمدة»')}
+  if(!String(p.desc||'').trim())is.push('ما إله وصف، والزبون ما بيعرف شو بياخد');
+  if(!p.img&&!p.domain)is.push('ما إله أيقونة، اكتب موقع التطبيق أو ارفع صورة');
+  return is}
+function costIssue(p){var nc=p.plans.filter(function(pl){return costOf(p.id,pl.id)==null});return nc.length?'ما في سعر جملة لـ '+nc.map(function(pl){return '«'+esc(pl.name||'بدون اسم')+'»'}).join('، ')+'، فربحها ما بينحسب':''}
 function arowHTML(p){
   var rows=p.plans.map(function(pl){var c=costOf(p.id,pl.id),has=c!=null,pf=has?pl.price-c:0,mg=has&&pl.price?pf/pl.price*100:0;
     return '<div class="pt-r"><span>'+esc(pl.name||'—')+(pl.instant?' <span class="pl-inst" title="تسليم فوري">'+svg('bolt',11)+(CLOUD?stockFree(p.id,pl.id):'')+'</span>':'')+(pl.out&&!p.soldOut?' <span class="pl-outt">نفدت</span>':'')+'</span><b>'+money(pl.price)+'</b><b>'+(has?money(c):'<button class="mini-link" data-act="editProduct" data-id="'+esc(p.id)+'">أضف</button>')+'</b><b class="'+(has?(pf>=0?'good-t':'bad-t'):'muted')+'">'+(has?money(pf):'—')+'</b><b>'+(has?pct(mg):'—')+'</b></div>'}).join('');
@@ -3312,6 +3347,7 @@ var ACT={
   waSale:function(el){var c=waCustomers().find(function(x){return x.key===el.dataset.id});S.presel={cust:{name:c?c.name:'',phone:c?c.phone:''}};if(S.wcsheet)S.wcsheet.close(true);saleForm(null,'new')},
   waOrders:function(){S.tab='orders';S.ofilter='wa';closeAllSheets();renderAdminBody();window.scrollTo(0,0)},
   newProduct:function(){productForm(null)},
+  pfil:function(el){S.pfil=el.dataset.id;renderAdminBody()},
   editProduct:function(el){var p=product(el.dataset.id);if(p)productForm(p)},
   toggleOut:function(el){var p=product(el.dataset.id);if(!p)return;p.soldOut=!p.soldOut;DB.saveProduct(p).then(function(){cachePublic();toast(p.soldOut?p.name+': نفدت الكمية، والزبون ما بيقدر يطلبه':p.name+' رجع متوفر للطلب')}).catch(fail);renderAdminBody()},
   toggleProduct:function(el){var p=product(el.dataset.id);if(!p)return;p.active=p.active===false;DB.saveProduct(p).then(function(){cachePublic();toast(p.active?'المنتج ظاهر بالمتجر':'المنتج مخفي عن الزبائن')}).catch(fail);renderAdminBody()},
@@ -3394,6 +3430,7 @@ D.addEventListener('input',function(e){var t=e.target,id=t.id||'';
   if(S.co&&id==='co-proof-t'){S.co.proof=t.value;updateSendHref();return}
   if(S.tp&&id==='tp-proof-t'){S.tp.proof=t.value;updateTopupHref();return}
   if(S.tp&&id==='tp-amount'){S.tp.amount=t.value;var tp=$('#tp-pay');if(tp)tp.innerHTML=payDetailsHTML(tpMethod(),num(t.value)||0,'tp');$$('[data-act=tpAmt]').forEach(function(b){b.setAttribute('aria-pressed',num(b.dataset.v)===num(t.value))});updateTopupHref();return}
+  if(id==='pq'){S.pq=t.value;var pl=$('#plist');if(pl)pl.innerHTML=prodListHTML();return}
   if(id==='subq'){S.subq=t.value;var sl=$('#sublist');if(sl)sl.innerHTML=subListHTML();return}
   if(id==='cq'){S.cq=t.value;var cl=$('#clist');if(cl)cl.innerHTML=S.ctab==='wa'?waListHTML():custListHTML();return}
   if(id==='sf-cust'&&S.sf&&S.sf.manual){var pe=$('#sf-phone'),mc=waCustomers().find(function(c){return c.name&&normName(c.name)===normName(t.value)});if(pe&&(!pe.value.trim()||pe.dataset.auto)){pe.value=mc&&mc.phone?mc.phone:'';if(mc&&mc.phone)pe.dataset.auto='1';else delete pe.dataset.auto}sfHints(true);return}

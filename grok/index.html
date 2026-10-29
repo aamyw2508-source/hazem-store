@@ -47,7 +47,7 @@ h2{margin:34px 0 12px;font:800 clamp(19px,4vw,24px)/1.35 var(--f-d)}
 .plan{display:flex;align-items:center;gap:12px;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px}
 .plan .n{flex:1;min-width:0;font-weight:700}.plan small{display:block;font-weight:600;font-size:12.5px;color:var(--muted)}.plan small.y{color:var(--good)}.plan small.w{color:var(--warn)}
 .plan .p{font:800 20px var(--f-d);color:var(--price);white-space:nowrap}
-.plan .btn{padding:9px 14px}
+.plan .btn{padding:9px 14px}.plan.out .p{color:var(--muted);text-decoration:line-through}
 .muted{color:var(--muted)}
 .feat{list-style:none;margin:0;padding:0;display:grid;gap:10px}
 .feat li{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
@@ -92,8 +92,8 @@ function fmt(n){n=+n||0;return (Math.round(n*100)/100).toLocaleString('en-US')}
 function none(){box.innerHTML='<div class="card"><p style="margin:0">الأسعار والمدد المتوفرة هلأ بتلاقيها بالمتجر، أو اسألنا على واتساب وبنرد عليك فوراً.</p><p style="margin:12px 0 0;display:flex;gap:10px;flex-wrap:wrap"><a class="btn pri" href="/#p-'+pid+'">شوف الأسعار بالمتجر</a><a class="btn wa" href="'+box.dataset.wa+'" target="_blank" rel="noopener">اسأل على واتساب</a></p></div>'}
 fetch('https://firestore.googleapis.com/v1/projects/hazem-store-7a272/databases/(default)/documents/products/'+encodeURIComponent(pid)+'?key=AIzaSyCJ5xs23CeYlxQWuvFxVW_mtuIrvuN5VYY').then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){var p=fv({mapValue:d});
   if(!p||p.active===false||!p.plans||!p.plans.length)return none();
-  box.innerHTML='<div class="plans">'+p.plans.map(function(pl){var acct=pl.acct||p.acct||'';var tags=[];if(pl.war==='yes')tags.push('<small class="y">مع ضمان طول المدة</small>');else if(pl.war==='no')tags.push('<small>بدون ضمان</small>');if(acct==='login')tags.push('<small class="w">على إيميلك الشخصي</small>');else if(acct==='email')tags.push('<small class="w">دعوة على إيميلك</small>');
-    return '<div class="plan"><span class="n">'+esc(pl.name||p.name)+tags.join('')+'</span><span class="p">'+fmt(pl.price)+' ₪</span><a class="btn pri" href="/#p-'+pid+'">اطلب</a></div>'}).join('')+'</div>'}).catch(none)})();
+  box.innerHTML='<div class="plans">'+p.plans.map(function(pl){var acct=pl.acct||p.acct||'';var tags=[],out=!!(p.soldOut||pl.out);if(out)tags.push('<small class="w">نفدت الكمية حالياً</small>');if(pl.war==='yes')tags.push('<small class="y">مع ضمان طول المدة</small>');else if(pl.war==='no')tags.push('<small>بدون ضمان</small>');if(acct==='login')tags.push('<small class="w">على إيميلك الشخصي</small>');else if(acct==='email')tags.push('<small class="w">دعوة على إيميلك</small>');
+    return '<div class="plan'+(out?' out':'')+'"><span class="n">'+esc(pl.name||p.name)+tags.join('')+'</span><span class="p">'+fmt(pl.price)+' ₪</span>'+(out?'<a class="btn" href="'+box.dataset.wa+'" target="_blank" rel="noopener">اسأل</a>':'<a class="btn pri" href="/#p-'+pid+'">اطلب</a>')+'</div>'}).join('')+'</div>'}).catch(none)})();
 </script>
 </main>
 <footer class="foot"><div class="wrap"><nav aria-label="روابط"><a href="/">المتجر</a><a href="/guarantee.html">الضمان والاسترجاع</a><a href="/terms.html">شروط الاستخدام</a><a href="/privacy.html">سياسة الخصوصية</a><a href="https://wa.me/970594826482?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7%D9%8B%20%D8%AD%D8%A7%D8%B2%D9%85%20%D8%B3%D8%AA%D9%88%D8%B1" target="_blank" rel="noopener">واتساب +970 59 482 6482</a></nav><span>© 2026 حازم ستور Hazem Store. أسماء التطبيقات وشعاراتها ملك لأصحابها، وحازم ستور مش تابع إلهم.</span></div></footer>
