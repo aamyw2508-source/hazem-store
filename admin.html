@@ -1660,6 +1660,19 @@ button.mxrow[data-act="logout"] svg{color:var(--bad)}
 .hx-top .hdr.on-dark{background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none}
 .lite .hdr.on-dark{background:rgba(6,12,34,.86)}
 .mxrow .pill{flex:none;width:auto}
+
+/* perf: looping animations sleep while their section is off screen; loops animate only transform/opacity */
+.fx-off,.fx-off *,.fx-off *::before,.fx-off *::after{animation-play-state:paused!important}
+.hx-pill i{position:relative;animation:none}
+.hx-pill i::after{content:"";position:absolute;inset:0;border-radius:50%;background:rgba(61,220,151,.55);animation:hxPing2 2s ease-out infinite}
+@keyframes hxPing2{0%{transform:scale(1);opacity:.75}100%{transform:scale(2.3);opacity:0}}
+.v-pay span{position:relative;animation:none}
+.v-pay span::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1px #4cc9ff,inset 0 0 0 4px rgba(76,201,255,.18);opacity:0;pointer-events:none;animation:vGlow2 calc(var(--n) * 1.4s) infinite;animation-delay:calc(var(--i) * 1.4s)}
+@keyframes vGlow2{0%,12%{opacity:1}24%,100%{opacity:0}}
+.v-sh i{overflow:hidden;background:none;animation:none}
+.v-sh i::before{content:"";position:absolute;top:0;bottom:0;left:-180%;width:250%;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.5) 50%,transparent 65%);animation:vShine2 3s ease-in-out infinite}
+@keyframes vShine2{0%,30%{transform:translateX(0)}70%,100%{transform:translateX(84%)}}
+@media (prefers-reduced-motion:reduce){.hx-pill i::after,.v-pay span::after,.v-sh i::before{animation:none}}
 </style>
 </head>
 <body>
@@ -2415,11 +2428,11 @@ function renderStore(){
     (ms.length?'<div class="foot-pay">'+ms.map(function(m){return '<span title="'+esc(m.name)+'">'+tile(m,'sm','card')+'</span>'}).join('')+'</div>':'')+'</div></div>'+
     '<div class="foot-bottom"><span>© '+new Date().getFullYear()+' '+esc(st.storeName)+'. جميع الحقوق محفوظة.</span><nav class="foot-pol" aria-label="السياسات"><a href="guarantee.html">الضمان والاسترجاع</a><a href="terms.html">شروط الاستخدام</a><a href="privacy.html">سياسة الخصوصية</a></nav></div></div></footer>';
   h+=fabsHTML();
-  root.innerHTML=h;loadShots();setTimeout(hrAll,30);refreshSupBadge();fxInit();helloRefresh();
+  root.innerHTML=h;loadShots();setTimeout(hrAll,30);refreshSupBadge();fxInit();fxVis();helloRefresh();
 }
 /* ================= v4 storefront: cinematic hero, best sellers, story, motion ================= */
 var FX={ready:false,lite:false,rm:false,scenes:[],zones:[],mq:[],bandOn:false,vel:0,lastY:0,run:false,idle:0,lastT:0,rt:0,M:{}};
-(function(){var r=D.documentElement;try{var n=navigator,c=n.connection||{};FX.lite=!!(c.saveData||(n.deviceMemory&&n.deviceMemory<=2)||(n.hardwareConcurrency&&n.hardwareConcurrency<=2)||/(^|-)2g$/.test(c.effectiveType||''))}catch(e){}
+(function(){var r=D.documentElement;try{var n=navigator,c=n.connection||{};FX.lite=!!(c.saveData||(n.deviceMemory&&n.deviceMemory<=2)||(n.hardwareConcurrency&&n.hardwareConcurrency<=2)||/(^|-)2g$/.test(c.effectiveType||''));if(!FX.lite&&sessionStorage.getItem('hz-lite')==='1')FX.lite=true}catch(e){}
   try{FX.rm=matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){}
   if(FX.lite)r.classList.add('lite');if(FX.rm)r.classList.add('rm')})();
 function fxPick(vis,n){var a=vis.filter(function(p){return !prodOut(p)});if(a.length<n)a=a.concat(vis.filter(function(p){return prodOut(p)}));return a.slice(0,n)}
@@ -2536,7 +2549,7 @@ function fxFin(p){var M=FX.F;if(!M)return;if(M.awn)M.awn.style.transform='scaleY
   var n=M.w.length;M.w.forEach(function(w,i){w.style.opacity=fxR(.14+.86*fxSeg(p,.25+i*(.5/n),.25+(i+1)*(.5/n)))});
   var c=fxSeg(p,.66,.82);fxFx(M.cta,c,(1-c)*16,0);if(M.cta)M.cta.style.visibility=c<.02?'hidden':''}
 function fxRail(){FX.rr=0;var rs=FX.rs;if(!rs||!rs.isConnected)return;var r=rs.getBoundingClientRect(),cx=r.left+r.width/2,max=rs.scrollWidth-rs.clientWidth;
-  if(!FX.lite&&!FX.rm)$$('.bc',rs).forEach(function(c){var b=c.getBoundingClientRect(),d=(b.left+b.width/2-cx)/r.width,ad=Math.min(1,Math.abs(d));c.style.transform='rotateY('+fxR(d*-12)+'deg) scale('+fxR(1-ad*.06)+')'});
+  if(!FX.lite&&!FX.rm){var cs=$$('.bc',rs),ds=cs.map(function(c){var b=c.getBoundingClientRect();return (b.left+b.width/2-cx)/r.width});cs.forEach(function(c,i){var d=ds[i],ad=Math.min(1,Math.abs(d));c.style.transform='rotateY('+fxR(d*-12)+'deg) scale('+fxR(1-ad*.06)+')'})}
   var bar=$('#railBar');if(bar)bar.style.transform='scaleX('+fxR(max>0?.15+.85*Math.min(1,Math.abs(rs.scrollLeft)/max):1)+')'}
 function fxStars(){var c=FX.stars;if(!c||!c.isConnected)return;if(FX.lite){c.width=c.height=0;return}
   var st=c.parentNode,w=st.clientWidth,h=st.clientHeight*1.3,dpr=Math.min(2,window.devicePixelRatio||1);if(!w||!h)return;
@@ -2548,14 +2561,20 @@ function fxMeasure(){var y=window.scrollY;
   FX.scenes.forEach(function(s){if(!s.el.isConnected)return;var r=s.el.getBoundingClientRect();s.top=r.top+y;s.h=Math.max(1,s.el.offsetHeight);var st=s.el.querySelector('.stage');s.len=Math.max(1,s.h-(st?st.offsetHeight:0));s.p=-1});
   FX.zones=$$('.dz-sec').map(function(z){var r=z.getBoundingClientRect();return [r.top+y,r.bottom+y]});
   FX.mq.forEach(function(m){m.w=m.el.scrollWidth/2});FX.doc=Math.max(1,D.documentElement.scrollHeight-innerHeight)}
-function fxUpdate(force){if(S.view!=='store'||!FX.hdr)return;var y=window.scrollY,vh=innerHeight;
+function fxUpdate(force){if(S.view!=='store'||!FX.hdr)return;var y=window.scrollY,vh=innerHeight,hb=FX.hdr.getBoundingClientRect();
   FX.scenes.forEach(function(s){var p=s.mode==='pin'?(y-s.top)/s.len:s.mode==='leave'?(y-s.top)/s.h:(y+vh-s.top)/(vh*.85);p=p<0?0:p>1?1:p;if(force||Math.abs(p-s.p)>.0003){s.p=p;s.fn(p)}});
-  var hb=FX.hdr.getBoundingClientRect(),yh=y+hb.top+hb.height*.5,dark=FX.zones.some(function(z){return yh>=z[0]&&yh<z[1]});FX.hdr.classList.toggle('on-dark',dark);D.documentElement.classList.toggle('hx-top',dark&&y<40);if(FX.prog)FX.prog.style.transform='scaleX('+fxR(Math.min(1,y/(FX.doc||1)))+')'}
+  var yh=y+hb.top+hb.height*.5,dark=FX.zones.some(function(z){return yh>=z[0]&&yh<z[1]});FX.hdr.classList.toggle('on-dark',dark);D.documentElement.classList.toggle('hx-top',dark&&y<40);if(FX.prog)FX.prog.style.transform='scaleX('+fxR(Math.min(1,y/(FX.doc||1)))+')'}
 function fxMarquee(dt){if(!FX.bandOn||FX.rm)return;var boost=FX.lite?0:Math.min(Math.abs(FX.vel)*.9,40),sg=(!FX.lite&&FX.vel<-.4)?-1:1;
   FX.mq.forEach(function(m){if(!m.w||!m.el.isConnected)return;m.x+=(.04*dt+boost*dt/16)*m.dir*sg;if(m.x>0)m.x-=m.w;if(m.x<-m.w)m.x+=m.w;m.el.style.transform='translate3d('+fxR(m.x)+'px,0,0)'})}
-function fxLoop(now){var dt=Math.min(64,now-(FX.lastT||now));FX.lastT=now;var y=window.scrollY,dy=y-FX.lastY;FX.lastY=y;FX.vel+=(dy-FX.vel)*.12;
-  if(dy!==0){fxUpdate();FX.idle=0}else FX.idle++;fxMarquee(dt);
+function fxLoop(now){var raw=FX.lastT?now-FX.lastT:0,dt=Math.min(64,now-(FX.lastT||now));FX.lastT=now;var y=window.scrollY,dy=y-FX.lastY;FX.lastY=y;FX.vel+=(dy-FX.vel)*.12;
+  if(dy!==0){fxUpdate();FX.idle=0}else FX.idle++;if(FX.idle<8)fxWatch(now,raw);fxMarquee(dt);
   if((FX.bandOn&&S.view==='store')||FX.idle<20)requestAnimationFrame(fxLoop);else{FX.run=false;FX.lastT=0}}
+function fxVis(){if(FX.vo){FX.vo.disconnect();FX.vo=null}if(!('IntersectionObserver' in window))return;
+  FX.vo=new IntersectionObserver(function(es){es.forEach(function(e){e.target.classList.toggle('fx-off',!e.isIntersecting)})},{rootMargin:'80px 0px'});
+  $$('#main>section,.announce,.foot').forEach(function(el){FX.vo.observe(el)})}
+function fxWatch(now,raw){if(FX.lite||FX.rm||FX.wdDone||!raw||raw>250)return;if(!FX.t0)FX.t0=now;if(now-FX.t0<2500)return;var w=FX.wd||(FX.wd=[]);w.push(raw);if(w.length<90)return;FX.wdDone=true;
+  var a=w.slice().sort(function(x,y){return x-y});if(a[a.length>>1]>27)fxGoLite()}
+function fxGoLite(){FX.lite=true;D.documentElement.classList.add('lite');try{sessionStorage.setItem('hz-lite','1')}catch(e){}try{fxStars()}catch(e){}fxUpdate(true)}
 function fxKick(){if(!FX.run){FX.run=true;requestAnimationFrame(fxLoop)}}
 function fxInit(){
   FX.hdr=$('.hdr');FX.prog=$('#hprog');FX.scenes=[];var hx=$('.hx');
@@ -3053,14 +3072,14 @@ function srvPayStepHTML(m,ctx){var o=ctx==='tp'?S.tp:S.co;if(!o)return '';
   return '<h3><span class="sn">٢</span>شبكة التحويل</h3>'+netPickHTML(m,o,ctx)+'<p class="hint srv-hint">'+svg('bolt',14)+'<span>بعد ما تكمّل بيطلعلك المبلغ بالظبط بـ USDT مع العنوان وQR، وأول ما توصل دفعتك '+(ctx==='tp'?'بينضاف المبلغ لرصيدك':'بيتأكد طلبك')+' لحاله بدون ما تستنى.</span></p>'}
 function coAllInstant(){var l=coLines();return l.length>0&&l.every(function(x){return x.plan.instant})}
 function srvDataHTML(o){var inst=coAllInstant(),need=acctNeed();
-  var ph=''+phoneFieldHTML('co-phone',o.phone,'رقم واتساب '+(inst?'<em>(اختياري)</em>':'<em>(للتسليم)</em>')+'')+'';
+  var ph=''+phoneFieldHTML('co-phone',o.phone,'رقم واتساب <em>(ضروري)</em>')+'';
   var h='<div class="ostep"><h3><span class="sn">٣</span>بياناتك</h3><label class="field"><span>الاسم</span><input class="inp" id="co-name" autocomplete="name" value="'+esc(o.name)+'" placeholder="الاسم الكامل"></label>'+
     (need?ph:'<div class="row2">'+ph+'<label class="field"><span>إيميلك <em>(اختياري، بيوصلك عليه تأكيد الطلب)</em></span><input class="inp ltr" id="co-email" type="email" inputmode="email" autocomplete="email" value="'+esc(o.email)+'" placeholder="name@gmail.com"></label></div>')+'</div>';
   return h+'<p class="err" id="co-err" hidden></p><button class="btn primary block lg" id="co-go" data-act="payGo" data-ctx="co">'+svg('lock',18)+' متابعة للدفع</button>'+
    '<p class="fine">رقم الطلب <span dir="ltr">'+esc(o.no)+'</span> · بالمتابعة بتوافق على <a href="terms.html">شروط الاستخدام</a> و<a href="guarantee.html">سياسة الضمان</a>.</p>'}
 function validateSrv(){var o=S.co,e=askMissing().concat(acctErrors()),d=latin(o.phone||'').replace(/\D/g,'');
   if(o.name.trim().length<2)e.push('اكتب اسمك.');
-  var pe=phoneErr(o.phone,false);if(pe)e.push(pe);else if(!coAllInstant()&&!o.phone)e.push('اكتب رقم واتساب عشان نبعتلك الاشتراك.');
+  var pe=phoneErr(o.phone,true);if(pe)e.push(pe);
   if(!acctNeed()&&o.email.trim()&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email.trim()))e.push('الإيميل مش مكتوب صح.');
   return e}
 function orderRec(o,m,lines){var rec={orderNo:o.no,items:lines.map(function(x){var it={productId:x.p.id,productName:String(x.p.name).slice(0,100),planId:x.plan.id,planName:String(x.plan.name).slice(0,60),price:+x.plan.price||0,qty:x.qty},inf=askText(x.p.id,o.ans).join(' | ').slice(0,600);if(inf)it.info=inf;return it}),
@@ -3225,13 +3244,13 @@ function phoneSplit(v){var s=latin(String(v||'')).trim(),d=s.replace(/\D/g,''),L
 function phoneJoin(cc,n){var s=latin(String(n||'')).trim(),d=s.replace(/\D/g,'');if(!d)return '';
   if(s.charAt(0)==='+')return '+'+d;if(d.indexOf('00')===0)return '+'+d.slice(2);
   return '+'+cc+d.replace(/^0+/,'')}
-function phoneErr(full,required){var p=String(full||'');if(!p)return required?'اكتب رقم واتساب.':'';
+function phoneErr(full,required){var p=String(full||'');if(!p)return required?'اكتب رقم الواتساب تبعك، ضروري عشان نبعتلك الاشتراك ونتواصل معك.':'';
   var x=phoneSplit(p),d=p.replace(/\D/g,'');
   if((x.cc==='970'||x.cc==='972')&&x.n.length!==9)return 'رقم واتساب مش مكتوب صح، لازم يكون زي 599123456 بعد المقدمة.';
   if(d.length<8||d.length>15||x.n.length<6)return 'رقم واتساب مش مكتوب صح.';
   return ''}
 function phoneFieldHTML(id,value,label){var p=phoneSplit(value);
-  return '<label class="field"><span>'+label+'</span><span class="phone-w" dir="ltr"><select class="inp cc" id="'+id+'-cc" aria-label="مقدمة الدولة">'+ccOptions(p.key)+'</select><input class="inp ltr" id="'+id+'" type="tel" inputmode="tel" autocomplete="tel-national" value="'+esc(p.n)+'" placeholder="599 123 456"></span>'+(id==='co-phone'||id==='pr-phone'?'<small class="ph-hint">اختار نفس المقدمة اللي فاتح فيها واتساب (+970 أو +972).</small>':'')+'</label>'}
+  return '<label class="field"><span>'+label+'</span><span class="phone-w" dir="ltr"><select class="inp cc" id="'+id+'-cc" aria-label="مقدمة الدولة">'+ccOptions(p.key)+'</select><input class="inp ltr" id="'+id+'" type="tel" inputmode="tel" autocomplete="tel-national"'+(id==='co-phone'?' aria-required="true"':'')+' value="'+esc(p.n)+'" placeholder="599 123 456"></span>'+(id==='co-phone'||id==='pr-phone'?'<small class="ph-hint">اختار نفس المقدمة اللي فاتح فيها واتساب (+970 أو +972).</small>':'')+'</label>'}
 function phoneRead(id){var sel=$('#'+id+'-cc'),inp=$('#'+id);if(!inp)return '';if(!sel)return latin(inp.value).trim();var op=sel.options[sel.selectedIndex];return phoneJoin(op?op.dataset.cc:'970',inp.value)}
 function phoneCCPicked(id){var sel=$('#'+id+'-cc');if(sel&&sel.value)store('hazem-cc',sel.value)}
 function phoneShow(p){var x=phoneSplit(p);return p?'+'+x.cc+' '+x.n:''}
@@ -3307,14 +3326,14 @@ function checkoutHTML(){
   if(wal){
     var can=!!(S.user&&S.wallet&&myBal()>=total);
     h+='<div class="ostep" id="co-pay">'+walletBoxHTML(total,lines)+'</div>';
-    if(S.user)h+='<div class="ostep"><h3><span class="sn">٢</span>بيانات التفعيل</h3>'+(acctNeed()?''+phoneFieldHTML('co-phone',o.phone,'رقم واتساب')+'':'<div class="row2">'+phoneFieldHTML('co-phone',o.phone,'رقم واتساب')+'<label class="field"><span>إيميل التفعيل <em>(إذا بلزم)</em></span><input class="inp ltr" id="co-email" type="email" inputmode="email" value="'+esc(o.email)+'" placeholder="name@gmail.com"></label></div>')+'</div>';
+    if(S.user)h+='<div class="ostep"><h3><span class="sn">٢</span>بيانات التفعيل</h3>'+(acctNeed()?''+phoneFieldHTML('co-phone',o.phone,'رقم واتساب <em>(ضروري)</em>')+'':'<div class="row2">'+phoneFieldHTML('co-phone',o.phone,'رقم واتساب <em>(ضروري)</em>')+'<label class="field"><span>إيميل التفعيل <em>(إذا بلزم)</em></span><input class="inp ltr" id="co-email" type="email" inputmode="email" value="'+esc(o.email)+'" placeholder="name@gmail.com"></label></div>')+'</div>';
     h+='<p class="err" id="co-err" hidden></p><button class="btn primary block lg" id="co-wpay" data-act="walletPay"'+(can?'':' disabled')+'>'+svg('wallet',18)+' ادفع '+money(total)+' من رصيدك</button><p class="fine">المبلغ بينخصم من رصيدك فوراً، والاشتراكات الفورية بتظهرلك مباشرة.</p>';
     return h;
   }
   if(isServerPay(m))return h+'<div class="ostep" id="co-pay">'+payDetailsHTML(m,total,'co')+'</div>'+srvDataHTML(o);
   h+='<div class="ostep" id="co-pay">'+payDetailsHTML(m,coPayable(),'co')+'</div>';
   h+='<div class="ostep" id="co-proof">'+proofHTML(m,S.co,'co')+'</div>';
-  h+='<div class="ostep"><h3><span class="sn">٤</span>بياناتك</h3><label class="field"><span>الاسم</span><input class="inp" id="co-name" autocomplete="name" value="'+esc(o.name)+'" placeholder="الاسم الكامل"></label>'+(acctNeed()?''+phoneFieldHTML('co-phone',o.phone,'رقم واتساب <em>(اختياري)</em>')+'':'<div class="row2">'+phoneFieldHTML('co-phone',o.phone,'رقم واتساب <em>(اختياري)</em>')+'<label class="field"><span>إيميل التفعيل <em>(إذا بلزم)</em></span><input class="inp ltr" id="co-email" type="email" inputmode="email" autocomplete="email" value="'+esc(o.email)+'" placeholder="name@gmail.com"></label></div>')+'</div>';
+  h+='<div class="ostep"><h3><span class="sn">٤</span>بياناتك</h3><label class="field"><span>الاسم</span><input class="inp" id="co-name" autocomplete="name" value="'+esc(o.name)+'" placeholder="الاسم الكامل"></label>'+(acctNeed()?''+phoneFieldHTML('co-phone',o.phone,'رقم واتساب <em>(ضروري)</em>')+'':'<div class="row2">'+phoneFieldHTML('co-phone',o.phone,'رقم واتساب <em>(ضروري)</em>')+'<label class="field"><span>إيميل التفعيل <em>(إذا بلزم)</em></span><input class="inp ltr" id="co-email" type="email" inputmode="email" autocomplete="email" value="'+esc(o.email)+'" placeholder="name@gmail.com"></label></div>')+'</div>';
   h+='<p class="err" id="co-err" hidden></p><a class="btn wa block lg" id="co-send" href="#" target="_blank" rel="noopener" data-act="sendOrder">'+svg('chat')+' أرسل الطلب عبر واتساب</a><p class="fine">رقم الطلب <span dir="ltr">'+esc(o.no)+'</span> · بعد ما نتأكد من الحوالة بنفعّلك الاشتراك ونبعتلك التفاصيل.</p><p class="fine">بإرسال الطلب بتوافق على <a href="terms.html">شروط الاستخدام</a> و<a href="guarantee.html">سياسة الضمان</a>.</p>';
   return h;
 }
@@ -3361,7 +3380,7 @@ function validateOrder(){var o=S.co,m=curMethod(),e=askMissing().concat(acctErro
   if(!pr&&!o.img)e.push('اكتب '+((m&&m.proofLabel)||'تفاصيل الحوالة')+' أو ارفع سكرين الحوالة.');
   else if(pr&&m&&m.proofType==='tel'&&!o.img&&latin(pr).replace(/\D/g,'').length<9)e.push('رقم الجوال لازم يكون 10 أرقام، مثل 0599123456.');
   if(o.name.trim().length<2)e.push('اكتب اسمك.');
-  var pe=phoneErr(o.phone,false);if(pe)e.push(pe);
+  var pe=phoneErr(o.phone,true);if(pe)e.push(pe);
   if(!acctNeed()&&o.email.trim()&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email.trim()))e.push('الإيميل مش مكتوب صح.');
   return e}
 function sendOrder(el,ev){
@@ -3492,7 +3511,7 @@ function walletPay(el){
   if(!S.user){openAccount();return}
   var o=S.co,lines=coLines(),total=coTotal(),bal=myBal(),box=$('#co-err');
   if(bal<total){box.textContent='رصيدك ما بكفي.';box.hidden=false;return}
-  var miss=askMissing().concat(acctErrors());if(miss.length){box.innerHTML=miss.map(esc).join('<br>');box.hidden=false;box.scrollIntoView({behavior:smooth(),block:'center'});return}
+  var miss=askMissing().concat(acctErrors()),wpe=phoneErr(o.phone,true);if(wpe)miss.push(wpe);if(miss.length){box.innerHTML=miss.map(esc).join('<br>');box.hidden=false;box.scrollIntoView({behavior:smooth(),block:'center'});return}
   if(o.email.trim()&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email.trim())){box.textContent='الإيميل مش مكتوب صح.';box.hidden=false;return}
   box.hidden=true;o.paying=true;el.disabled=true;el.innerHTML='جاري الدفع…';
   var units=[];lines.forEach(function(x){for(var i=0;i<x.qty;i++)units.push(x)});
