@@ -1,0 +1,950 @@
+{
+ "fetchedAt": "2026-10-29T00:00:00Z",
+ "storeName": "حازم ستور",
+ "cats": [
+  {
+   "id": "ai",
+   "name": "الذكاء الاصطناعي"
+  },
+  {
+   "id": "design",
+   "name": "التصميم والمونتاج"
+  },
+  {
+   "id": "study",
+   "name": "التعليم والإنتاجية"
+  },
+  {
+   "id": "c-wgr8s3",
+   "name": "انترنت لأهل غزة"
+  },
+  {
+   "id": "social",
+   "name": "خدمات السوشال ميديا"
+  },
+  {
+   "id": "dev",
+   "name": "البرمجة"
+  },
+  {
+   "id": "c-38pgkf",
+   "name": "افلام ومسلسلات"
+  }
+ ],
+ "payments": [
+  {
+   "name": "جوال باي",
+   "auto": false
+  },
+  {
+   "name": "جوال باي تاجر",
+   "auto": false
+  },
+  {
+   "name": "بال باي",
+   "auto": false
+  },
+  {
+   "name": "بنك فلسطين",
+   "auto": false
+  },
+  {
+   "name": "مال شات",
+   "auto": false
+  },
+  {
+   "name": "USDT",
+   "auto": true
+  }
+ ],
+ "products": [
+  {
+   "id": "chatgpt",
+   "name": "ChatGPT",
+   "cat": "ai",
+   "features": [
+    "وصول لأقوى نماذج ChatGPT مع وضع التفكير للمهام الصعبة",
+    "رسائل واستخدام أكثر بكتير من النسخة المجانية",
+    "البحث المعمّق Deep Research ووضع الوكيل Agent",
+    "إنشاء صور أسرع وبعدد أكبر",
+    "محادثة صوتية متقدمة وذاكرة ومشاريع لتنظيم شغلك"
+   ],
+   "keywords": "شات جي بي تي بلس، شات بلس، تشات جي بي تي، ChatGPT Go",
+   "note": "",
+   "domain": "chatgpt.com",
+   "active": true,
+   "sort": 1,
+   "badge": "الأكثر طلباً",
+   "plans": [
+    {
+     "id": "plus-1m",
+     "name": "Plus · شهر",
+     "price": 80,
+     "compare": 0,
+     "war": "yes",
+     "instant": false,
+     "acct": "login"
+    },
+    {
+     "id": "go-1m",
+     "name": "ChatGPT Go · شهر",
+     "price": 40,
+     "compare": 0,
+     "war": "yes",
+     "instant": false,
+     "acct": "login"
+    },
+    {
+     "id": "or17qv",
+     "name": "Plus · شهر (مشترك مع شخص)",
+     "price": 40,
+     "compare": 0,
+     "war": "yes",
+     "instant": false,
+     "acct": "none"
+    },
+    {
+     "id": "wxtpe0",
+     "name": "Plus · شهر (مشترك مع شخصين )",
+     "price": 30,
+     "compare": 0,
+     "war": "yes",
+     "instant": false,
+     "acct": "none"
+    },
+    {
+     "id": "gairvz",
+     "name": "Plus · شهر (ايميل من طرفي )",
+     "price": 60,
+     "compare": 0,
+     "war": "yes",
+     "instant": false,
+     "acct": "none"
+    }
+   ]
+  },
+  {
+   "id": "claude",
+   "name": "Claude Pro",
+   "cat": "ai",
+   "features": [
+    "استخدام أكثر بكتير من النسخة المجانية",
+    "Claude Code للبرمجة مشمول بالاشتراك",
+    "مهام أطول وأصعب بخطوات متعددة",
+    "أولوية بالاستخدام وقت الضغط",
+    "وصول مبكر للميزات الجديدة"
+   ],
+   "keywords": "كلود برو، Claude AI",
+   "note": "",
+   "domain": "claude.ai",
+   "active": true,
+   "sort": 2,
+   "badge": "",
+   "plans": [
+    {
+     "id": "1m",
+     "name": "شهر",
+     "price": 75,
+     "compare": 0,
+     "instant": false
+    },
+    {
+     "id": "ogmroj",
+     "name": "Claude Pro (مشترك مع شخص)",
+     "price": 40,
+     "compare": 0,
+     "instant": false
+    }
+   ]
+  },
+  {
+   "id": "grok",
+   "name": "Grok",
+   "cat": "ai",
+   "features": [
+    "Grok بأقوى نماذجه وحدود استخدام أعلى",
+    "علامة التوثيق الزرقاء على حسابك بمنصة X",
+    "تصفح X بدون إعلانات",
+    "ردودك بتظهر أعلى ومنشورات أطول مع إمكانية التعديل",
+    "إنشاء صور بالذكاء الاصطناعي عن طريق Grok"
+   ],
+   "keywords": "جروك، إكس بريميوم بلس",
+   "note": "مع X Premium+",
+   "domain": "grok.com",
+   "active": true,
+   "sort": 4,
+   "badge": "",
+   "plans": [
+    {
+     "id": "1m",
+     "name": "شهر",
+     "price": 70,
+     "compare": 0,
+     "instant": false
+    }
+   ]
+  },
+  {
+   "id": "canva",
+   "name": "Canva Pro",
+   "cat": "design",
+   "features": [
+    "كل القوالب والصور والعناصر المدفوعة مفتوحة",
+    "إزالة خلفية الصور بضغطة وحدة",
+    "أدوات الذكاء الاصطناعي Magic Studio للكتابة والتصميم",
+    "تغيير مقاس التصميم لأي منصة بضغطة",
+    "هوية لعلامتك Brand Kit ومساحة تخزين أكبر"
+   ],
+   "keywords": "كانفا برو",
+   "note": "EDU",
+   "domain": "canva.com",
+   "active": true,
+   "sort": 5,
+   "badge": "",
+   "plans": [
+    {
+     "id": "1y",
+     "name": "سنة كاملة",
+     "price": 15,
+     "compare": 0,
+     "instant": false
+    }
+   ]
+  },
+  {
+   "id": "gemini",
+   "name": "Gemini Pro",
+   "cat": "ai",
+   "features": [
+    "Gemini بأقوى نماذجه وحدود استخدام أعلى",
+    "البحث المعمّق Deep Research",
+    "Gemini داخل Gmail وDocs وDrive",
+    "NotebookLM بحدود أعلى للدراسة والملخصات",
+    "مساحة تخزين ضخمة على Google One للصور والملفات"
+   ],
+   "keywords": "جيميني برو، جوجل جيميني",
+   "note": "",
+   "domain": "gemini.google.com",
+   "active": true,
+   "soldOut": true,
+   "sort": 5,
+   "badge": "",
+   "plans": [
+    {
+     "id": "18m",
+     "name": "18 شهر",
+     "price": 18,
+     "compare": 0,
+     "war": "no",
+     "out": false,
+     "instant": true,
+     "acct": "none"
+    },
+    {
+     "id": "qicrnf",
+     "name": "18 شهر",
+     "price": 30,
+     "compare": 0,
+     "war": "yes",
+     "out": false,
+     "instant": true,
+     "acct": "none"
+    }
+   ]
+  },
+  {
+   "id": "capcut",
+   "name": "CapCut Pro",
+   "cat": "design",
+   "features": [
+    "تصدير الفيديو بدون علامة مائية",
+    "كل الفلاتر والمؤثرات والانتقالات المدفوعة",
+    "ترجمة وكتابة نصوص الفيديو تلقائياً",
+    "إزالة الخلفية وأدوات الذكاء الاصطناعي",
+    "تصدير بجودة عالية لحد 4K"
+   ],
+   "keywords": "كاب كات برو",
+   "note": "",
+   "domain": "capcut.com",
+   "active": true,
+   "sort": 6,
+   "badge": "",
+   "plans": [
+    {
+     "id": "1m",
+     "name": "شهر",
+     "price": 15,
+     "compare": 0,
+     "war": "",
+     "instant": false,
+     "acct": "none"
+    },
+    {
+     "id": "6m",
+     "name": "6 أشهر",
+     "price": 60,
+     "compare": 0,
+     "war": "",
+     "instant": false,
+     "acct": "none"
+    },
+    {
+     "id": "tnwfaw",
+     "name": "1 سنة",
+     "price": 120,
+     "compare": 0,
+     "war": "",
+     "instant": false,
+     "acct": "none"
+    }
+   ]
+  },
+  {
+   "id": "autodesk",
+   "name": "Autodesk All Apps",
+   "cat": "design",
+   "features": [
+    "كل برامج Autodesk بحساب واحد",
+    "AutoCAD للرسم الهندسي ثنائي وثلاثي الأبعاد",
+    "Revit لتصميم المباني والعمارة",
+    "3ds Max وMaya للتصميم ثلاثي الأبعاد والأنيميشن",
+    "نسخ رسمية مع كل التحديثات"
+   ],
+   "keywords": "أوتوديسك، أوتوكاد",
+   "note": "",
+   "domain": "autodesk.com",
+   "active": true,
+   "sort": 7,
+   "badge": "",
+   "plans": [
+    {
+     "id": "1y",
+     "name": "سنة كاملة",
+     "price": 50,
+     "compare": 0,
+     "instant": false
+    }
+   ]
+  },
+  {
+   "id": "duolingo",
+   "name": "Duolingo Plus",
+   "cat": "study",
+   "features": [
+    "تعلّم بدون إعلانات",
+    "قلوب غير محدودة، يعني بتكمل بدون ما توقف",
+    "تمارين خاصة بتراجعلك أخطاءك",
+    "تحديات المستوى الأسطوري Legendary بدون حدود",
+    "بيشتغل على الجوال والكمبيوتر بنفس الحساب"
+   ],
+   "keywords": "دولينجو",
+   "note": "",
+   "domain": "duolingo.com",
+   "active": true,
+   "sort": 8,
+   "badge": "",
+   "plans": [
+    {
+     "id": "1y",
+     "name": "سنة كاملة",
+     "price": 25,
+     "compare": 0,
+     "instant": false
+    }
+   ]
+  },
+  {
+   "id": "office",
+   "name": "Office 365 Plus",
+   "cat": "study",
+   "features": [
+    "Word وExcel وPowerPoint وOutlook بالنسخ الكاملة",
+    "بيشتغل على الكمبيوتر والجوال والآيباد",
+    "مساحة تخزين سحابية على OneDrive",
+    "شغل ومشاركة على نفس الملف مع غيرك أونلاين",
+    "نسخة رسمية مع كل التحديثات"
+   ],
+   "keywords": "أوفيس 365، مايكروسوفت أوفيس",
+   "note": "",
+   "domain": "microsoft365.com",
+   "active": true,
+   "sort": 9,
+   "badge": "",
+   "plans": [
+    {
+     "id": "1y",
+     "name": "سنة كاملة",
+     "price": 35,
+     "compare": 0,
+     "instant": false
+    }
+   ]
+  },
+  {
+   "id": "p-mqvy",
+   "name": "تفعيل تيليجرام",
+   "cat": "",
+   "features": [],
+   "keywords": "حل مشكلة دفع التيليجرام",
+   "note": "دفع تيليجرام",
+   "domain": "",
+   "active": true,
+   "sort": 10,
+   "badge": "",
+   "plans": [
+    {
+     "id": "on9lhk",
+     "name": "مدة الحياة",
+     "price": 12,
+     "compare": 0,
+     "instant": false
+    }
+   ]
+  },
+  {
+   "id": "esim-24jz",
+   "name": "شرائح الكترونية (ESim)",
+   "cat": "c-wgr8s3",
+   "features": [
+    "تفعيل فوري بمسح رمز QR بدون شريحة ورقية",
+    "إنترنت مباشرة على الشبكة بدون تركيب أو انتظار",
+    "بتضل شريحتك الأساسية شغالة مع الإلكترونية",
+    "باقات بأحجام ومدد مختلفة حسب احتياجك",
+    "مساعدة بالتركيب خطوة بخطوة على واتساب"
+   ],
+   "keywords": "شرائح الكترونية للانترنت",
+   "note": "شرائح انترنت",
+   "domain": "",
+   "active": true,
+   "sort": 11,
+   "badge": "انترنت",
+   "plans": [
+    {
+     "id": "yux458",
+     "name": "شريحة ويكوم الالكترونية ( شهر )",
+     "price": 50,
+     "compare": 0,
+     "instant": false
+    },
+    {
+     "id": "cv35oc",
+     "name": "شريحة ويكوم الالكترونية  3 ( أشهر )",
+     "price": 110,
+     "compare": 0,
+     "instant": false
+    },
+    {
+     "id": "sa1wnf",
+     "name": "شريحة هوت موبايل الالكترونية ( شهر )",
+     "price": 65,
+     "compare": 0,
+     "instant": false
+    },
+    {
+     "id": "bnsgzx",
+     "name": "شريحة هوت موبايل الالكترونية ( 3 أشهر )",
+     "price": 120,
+     "compare": 0,
+     "instant": false
+    },
+    {
+     "id": "5qbxsd",
+     "name": "شريحة بارتنر الالكترونية ( شهر )",
+     "price": 65,
+     "compare": 0,
+     "instant": false
+    },
+    {
+     "id": "9kg2az",
+     "name": "شريحة بارتنر الالكترونية 3 ( أشهر )",
+     "price": 130,
+     "compare": 0,
+     "instant": false
+    },
+    {
+     "id": "2mex8r",
+     "name": "شريحة سيلكوم الالكترونية ( شهر )",
+     "price": 65,
+     "compare": 0,
+     "instant": false
+    },
+    {
+     "id": "7117s4",
+     "name": "شريحة سيلكوم الالكترونية  3 ( أشهر )",
+     "price": 130,
+     "compare": 0,
+     "instant": false
+    },
+    {
+     "id": "61ex4d",
+     "name": "شريحة بيلفون الالكترونية ( شهر )",
+     "price": 65,
+     "compare": 0,
+     "instant": false
+    },
+    {
+     "id": "04bz5b",
+     "name": "شريحة 019 الالكترونية ( شهر )",
+     "price": 65,
+     "compare": 0,
+     "instant": false
+    }
+   ]
+  },
+  {
+   "id": "meta-ads",
+   "name": "إعلان ممول فيسبوك وإنستغرام",
+   "cat": "social",
+   "features": [
+    "إعلان ممول لمدة أسبوع كامل على فيسبوك وإنستغرام",
+    "استهداف المنطقة اللي بتختارها",
+    "استهداف الفئة العمرية المناسبة لزبائنك",
+    "هدف الإعلان حسب رغبتك: رسائل، متابعين، تفاعل أو زيارات",
+    "متابعة نتائج الإعلان معك على واتساب"
+   ],
+   "keywords": "اعلان ممول، إعلانات فيسبوك، اعلان انستغرام، تمويل اعلان، ترويج صفحة، Facebook Ads، Instagram Ads",
+   "note": "إعلان أسبوعي",
+   "domain": "facebook.com",
+   "active": true,
+   "sort": 12,
+   "badge": "",
+   "plans": [
+    {
+     "id": "cni1ts",
+     "name": "أسبوع",
+     "price": 80,
+     "compare": 0,
+     "instant": false
+    }
+   ]
+  },
+  {
+   "id": "x-verified",
+   "name": "توثيق حساب X (تويتر)",
+   "cat": "social",
+   "features": [
+    "علامة التوثيق الزرقاء على حسابك بمنصة X",
+    "ردودك بتظهر بأولوية أعلى",
+    "تعديل المنشورات بعد نشرها",
+    "منشورات أطول من العادي",
+    "بنجهزلك التوثيق خطوة بخطوة"
+   ],
+   "keywords": "توثيق تويتر، توثيق اكس، العلامة الزرقاء تويتر، X Premium",
+   "note": "X Premium",
+   "domain": "x.com",
+   "active": true,
+   "sort": 13,
+   "badge": "",
+   "plans": [
+    {
+     "id": "ltec1k",
+     "name": "شهر",
+     "price": 70,
+     "compare": 0,
+     "instant": false
+    }
+   ]
+  },
+  {
+   "id": "meta-verified",
+   "name": "توثيق فيسبوك وإنستغرام",
+   "cat": "social",
+   "features": [
+    "علامة التوثيق الزرقاء الرسمية على حسابك",
+    "حماية أقوى للحساب من الانتحال",
+    "دعم مباشر من فريق ميتا",
+    "مصداقية أكبر عند متابعينك وزبائنك",
+    "بنجهزلك التوثيق خطوة بخطوة"
+   ],
+   "keywords": "توثيق فيسبوك، توثيق انستغرام، العلامة الزرقاء، Meta Verified",
+   "note": "Meta Verified",
+   "domain": "meta.com",
+   "active": true,
+   "sort": 14,
+   "badge": "",
+   "plans": [
+    {
+     "id": "9v9a6n",
+     "name": "فيسبوك · شهر",
+     "price": 65,
+     "compare": 0,
+     "instant": false
+    },
+    {
+     "id": "udnhb6",
+     "name": "إنستغرام · شهر",
+     "price": 65,
+     "compare": 0,
+     "instant": false
+    },
+    {
+     "id": "19f23f",
+     "name": "فيسبوك وإنستغرام · شهر",
+     "price": 65,
+     "compare": 0,
+     "instant": false
+    }
+   ]
+  },
+  {
+   "id": "perplexity-max",
+   "name": "Perplexity Max",
+   "cat": "ai",
+   "features": [
+    "أعلى باقة من Perplexity",
+    "بحث بالذكاء الاصطناعي مع مصادر لكل جواب",
+    "وصول لأقوى النماذج المتاحة بالمنصة",
+    "بحث معمّق وتقارير مفصّلة",
+    "كود تفعيل بتفعّله على حسابك"
+   ],
+   "keywords": "بربلكسيتي، Perplexity، بيربلكسيتي ماكس",
+   "note": "كود تفعيل",
+   "domain": "perplexity.ai",
+   "active": true,
+   "sort": 15,
+   "badge": "",
+   "plans": [
+    {
+     "id": "h4lmli",
+     "name": "شهر",
+     "price": 90,
+     "compare": 0,
+     "instant": false,
+     "acct": ""
+    }
+   ]
+  },
+  {
+   "id": "lovable-pro",
+   "name": "Lovable Pro",
+   "cat": "ai",
+   "features": [
+    "بناء مواقع وتطبيقات كاملة بالكتابة",
+    "رصيد رسائل أكثر بكتير من المجاني",
+    "ربط دومين خاص بموقعك",
+    "مشاريع خاصة ونشر بضغطة",
+    "تعديل الكود ومزامنة مع GitHub"
+   ],
+   "keywords": "لوفابل، Lovable، بناء موقع بالذكاء الاصطناعي",
+   "note": "بناء مواقع بالذكاء الاصطناعي",
+   "domain": "lovable.dev",
+   "active": true,
+   "sort": 16,
+   "badge": "",
+   "plans": [
+    {
+     "id": "s3zmwx",
+     "name": "شهر",
+     "price": 25,
+     "compare": 0,
+     "instant": false,
+     "acct": "email"
+    }
+   ]
+  },
+  {
+   "id": "wispr-flow",
+   "name": "Wispr Flow Pro",
+   "cat": "ai",
+   "features": [
+    "كتابة بالصوت بأي تطبيق على الكمبيوتر والجوال",
+    "بيرتب الكلام وبيصححه تلقائياً",
+    "بيدعم لغات كثير منها العربي",
+    "أسرع من الكتابة بالكيبورد بمرات",
+    "كلمات بدون حدود بالنسخة المدفوعة"
+   ],
+   "keywords": "ويسبر فلو، Wispr Flow، كتابة بالصوت",
+   "note": "Education",
+   "domain": "wisprflow.ai",
+   "active": true,
+   "sort": 17,
+   "badge": "",
+   "plans": [
+    {
+     "id": "6m9rca",
+     "name": "12 شهر",
+     "price": 60,
+     "compare": 0,
+     "instant": false,
+     "acct": "email"
+    }
+   ]
+  },
+  {
+   "id": "muse-ai",
+   "name": "MUSE AI",
+   "cat": "ai",
+   "features": [
+    "حساب جاهز ومفعّل",
+    "بتستلم بيانات الدخول مباشرة",
+    "أكثر من باقة حسب احتياجك",
+    "مساعدة بالتفعيل على واتساب",
+    "سعر مناسب"
+   ],
+   "keywords": "ميوز، MUSE AI",
+   "note": "حساب جاهز",
+   "domain": "",
+   "active": true,
+   "soldOut": true,
+   "sort": 18,
+   "badge": "",
+   "plans": [
+    {
+     "id": "uy533w",
+     "name": "حساب",
+     "price": 20,
+     "compare": 0,
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
+    }
+   ]
+  },
+  {
+   "id": "adobe-express",
+   "name": "Adobe Express Premium",
+   "cat": "design",
+   "features": [
+    "كل القوالب والخطوط والصور المدفوعة",
+    "إزالة خلفية الصور بضغطة",
+    "أدوات Adobe Firefly للذكاء الاصطناعي",
+    "تصميم بوستات وفيديوهات للسوشال ميديا",
+    "تفعيل برابط لمدة 12 شهر"
+   ],
+   "keywords": "ادوبي اكسبريس، Adobe Express، تصميم",
+   "note": "رابط تفعيل",
+   "domain": "adobe.com",
+   "active": true,
+   "sort": 19,
+   "badge": "",
+   "plans": [
+    {
+     "id": "fwpu3m",
+     "name": "12 شهر",
+     "price": 30,
+     "compare": 0,
+     "instant": false,
+     "acct": ""
+    }
+   ]
+  },
+  {
+   "id": "miro",
+   "name": "Miro",
+   "cat": "design",
+   "features": [
+    "لوح أبيض أونلاين للأفكار والتخطيط",
+    "قوالب جاهزة للعصف الذهني والخرائط",
+    "شغل جماعي مع فريقك بنفس الوقت",
+    "بيشتغل على الكمبيوتر والجوال",
+    "دعوة على إيميلك مدى الحياة"
+   ],
+   "keywords": "ميرو، Miro، سبورة اونلاين",
+   "note": "دعوة مدى الحياة",
+   "domain": "miro.com",
+   "active": true,
+   "sort": 20,
+   "badge": "",
+   "plans": [
+    {
+     "id": "6x7f7n",
+     "name": "دعوة مدى الحياة",
+     "price": 15,
+     "compare": 0,
+     "instant": false,
+     "acct": "email"
+    }
+   ]
+  },
+  {
+   "id": "notion",
+   "name": "Notion",
+   "cat": "study",
+   "features": [
+    "مساحة شغل لا محدودة للملاحظات والمشاريع",
+    "رفع ملفات بحجم أكبر",
+    "سجل تعديلات الصفحات لفترة أطول",
+    "مشاركة وشغل جماعي مع فريقك",
+    "تفعيل برابط على حسابك"
+   ],
+   "keywords": "نوشن، Notion",
+   "note": "رابط تفعيل",
+   "domain": "notion.so",
+   "active": true,
+   "sort": 21,
+   "badge": "",
+   "plans": [
+    {
+     "id": "5k1s7j",
+     "name": "Business · 3 أشهر",
+     "price": 25,
+     "compare": 0,
+     "instant": false,
+     "acct": ""
+    }
+   ]
+  },
+  {
+   "id": "ilovepdf",
+   "name": "iLovePDF Premium",
+   "cat": "study",
+   "features": [
+    "كل أدوات PDF بدون حدود: دمج، تقسيم، ضغط، تحويل",
+    "تحويل PDF لـ Word وExcel وPowerPoint والعكس",
+    "قراءة النص من الصور OCR",
+    "توقيع ملفات PDF إلكترونياً",
+    "بدون إعلانات وبملفات أكبر"
+   ],
+   "keywords": "اي لاف بي دي اف، iLovePDF، تحويل PDF",
+   "note": "سنة كاملة",
+   "domain": "ilovepdf.com",
+   "active": true,
+   "sort": 22,
+   "badge": "",
+   "plans": [
+    {
+     "id": "6jgvo9",
+     "name": "سنة",
+     "price": 20,
+     "compare": 0,
+     "instant": false,
+     "acct": ""
+    }
+   ]
+  },
+  {
+   "id": "jetbrains",
+   "name": "JetBrains All Products",
+   "cat": "dev",
+   "features": [
+    "كل برامج JetBrains: IntelliJ وPyCharm وWebStorm وغيرها",
+    "النسخ الكاملة المدفوعة",
+    "بيشتغل على ويندوز وماك ولينكس",
+    "تحديثات رسمية طول السنة",
+    "الترخيص على حساب JetBrains تبعك"
+   ],
+   "keywords": "جيت برينز، JetBrains، IntelliJ، PyCharm",
+   "note": "سنة كاملة",
+   "domain": "jetbrains.com",
+   "active": true,
+   "sort": 23,
+   "badge": "",
+   "plans": [
+    {
+     "id": "ev6gso",
+     "name": "سنة",
+     "price": 30,
+     "compare": 0,
+     "instant": false,
+     "acct": "email"
+    }
+   ]
+  },
+  {
+   "id": "telegram-us",
+   "name": "حساب تيليجرام برقم أمريكي",
+   "cat": "social",
+   "features": [
+    "حساب تيليجرام جديد ومفعّل",
+    "رقم أمريكي بيبدأ بـ +1",
+    "بتستلم بيانات الدخول جاهزة",
+    "بتقدر تغيّر الاسم والصورة واليوزر",
+    "مساعدة بتسجيل الدخول على واتساب"
+   ],
+   "keywords": "حساب تلجرام، رقم امريكي، تيليجرام امريكي، Telegram",
+   "note": "رقم +1",
+   "domain": "telegram.org",
+   "active": true,
+   "sort": 24,
+   "badge": "",
+   "plans": [
+    {
+     "id": "6xclzd",
+     "name": "حساب واحد",
+     "price": 15,
+     "compare": 0,
+     "instant": false,
+     "acct": ""
+    }
+   ]
+  },
+  {
+   "id": "shahid-vip-0iyv",
+   "name": "ٍShahid Vip",
+   "cat": "c-38pgkf",
+   "features": [
+    "1. مشاهدة حصرية لأحدث المسلسلات والأفلام العربية والعالمية.",
+    "2. متابعة المباريات الرياضية والبطولات عبر باقات الرياضة المتاحة.",
+    "3. مشاهدة المحتوى بجودة عالية HD و4K حسب المحتوى والجهاز والباقة.",
+    "4. مشاهدة بدون إعلانات في المحتوى المشمول بهذه الميزة.",
+    "5. إمكانية المشاهدة على عدة أجهزة مثل التلفاز والهاتف والكمبيوتر، حسب شروط الباقة."
+   ],
+   "keywords": "شاهد في اي بي",
+   "note": "افلام ومسلسلات",
+   "domain": "",
+   "active": true,
+   "sort": 25,
+   "badge": "",
+   "plans": [
+    {
+     "id": "c9j2ht",
+     "name": "شهر (خاص)",
+     "price": 20,
+     "compare": 0,
+     "war": "yes",
+     "instant": false,
+     "acct": "none"
+    },
+    {
+     "id": "4rk3co",
+     "name": "3 اشهر (خاص)",
+     "price": 45,
+     "compare": 0,
+     "war": "yes",
+     "instant": false,
+     "acct": "login"
+    },
+    {
+     "id": "66cpek",
+     "name": "3 اشهر ( مشترك)",
+     "price": 25,
+     "compare": 0,
+     "war": "yes",
+     "instant": false,
+     "acct": "none"
+    }
+   ]
+  },
+  {
+   "id": "p-hddf",
+   "name": "حسابات انستغرام",
+   "cat": "social",
+   "features": [
+    "عمر الحساب: حساب قديم نسبيًا وله تاريخ إنشاء يعود إلى 2020 أو 2021.",
+    "المصداقية: قد يعطي انطباعًا بالثقة أكثر من الحسابات المنشأة حديثًا، حسب نشاطه وسجله.",
+    "اسم المستخدم: إمكانية امتلاك اسم مستخدم مميز أو مرغوب إذا كان متاحًا بالفعل.",
+    "سجل النشاط: قد يحتوي على منشورات وتفاعلات ومتابعين من سنوات سابقة.",
+    "الاستمرارية: وجود تاريخ استخدام ممتد قد يساعد في بناء حضور رقمي مستقر"
+   ],
+   "keywords": "انستغرام instagram",
+   "note": "حساب انستغرام",
+   "domain": "instagram.com",
+   "active": true,
+   "sort": 26,
+   "badge": "",
+   "plans": [
+    {
+     "id": "uxk84d",
+     "name": "حساب انستغرام انشاء 2020-2021",
+     "price": 25,
+     "compare": 0,
+     "war": "no",
+     "instant": false,
+     "acct": "none"
+    }
+   ]
+  }
+ ],
+ "reviews": []
+}

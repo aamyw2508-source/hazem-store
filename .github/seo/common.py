@@ -1,0 +1,73 @@
+# -*- coding: utf-8 -*-
+"""Shared look and policy texts for the static pages (moved from tools/pages.py)."""
+CSS = r"""
+.ic-l{font:800 24px var(--f-d);color:var(--brand)}
+:root{--bg:#f3f6fd;--surface:#fff;--surface-2:#edf2fc;--line:#e1e8f6;--line-2:#cad5ee;--fg:#0a1640;--fg-2:#34446f;--muted:#5d6a92;--brand:#1f55e8;--brand-soft:#e6eeff;--navy:#071233;--on-navy-2:#a9bbe9;--price:#1f55e8;--good:#0b7f53;--good-bg:#e1f5eb;--warn:#975600;--warn-bg:#fff2d6;--wa:#15803d;--ribbon:linear-gradient(115deg,#38c2f7 0%,#1f7bff 42%,#1f55e8 72%,#1a33bf 100%);--shadow:0 1px 2px rgba(16,40,120,.06),0 18px 36px -22px rgba(16,40,120,.38);--f-d:-apple-system,BlinkMacSystemFont,"Alexandria","Segoe UI",Tahoma,sans-serif;--f-b:-apple-system,BlinkMacSystemFont,"Alexandria","Segoe UI",Tahoma,sans-serif;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#050a1c;--surface:#0b1430;--surface-2:#111d40;--line:#1a2851;--line-2:#26396c;--fg:#e9efff;--fg-2:#b4c1e6;--muted:#8190bb;--brand:#4a86ff;--brand-soft:rgba(74,134,255,.16);--navy:#030817;--price:#7cc8ff;--good:#45d99c;--good-bg:rgba(69,217,156,.12);--warn:#ffc164;--warn-bg:rgba(255,193,100,.12);--shadow:0 18px 36px -20px rgba(0,0,0,.8);color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#050a1c;--surface:#0b1430;--surface-2:#111d40;--line:#1a2851;--line-2:#26396c;--fg:#e9efff;--fg-2:#b4c1e6;--muted:#8190bb;--brand:#4a86ff;--brand-soft:rgba(74,134,255,.16);--navy:#030817;--price:#7cc8ff;--good:#45d99c;--good-bg:rgba(69,217,156,.12);--warn:#ffc164;--warn-bg:rgba(255,193,100,.12);--shadow:0 18px 36px -20px rgba(0,0,0,.8);color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:400 15.5px/1.75 var(--f-b);direction:rtl}
+a{color:var(--brand)}img{max-width:100%;display:block}
+.wrap{max-width:960px;margin:0 auto;padding:0 16px}@media(min-width:760px){.wrap{padding:0 28px}}
+.hdr{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.hdr .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;height:64px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;font:700 18px var(--f-d)}
+.brand img{width:40px;height:40px;border-radius:11px;border:1px solid var(--line);background:#fff}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 18px;border-radius:13px;border:1px solid var(--line-2);background:var(--surface);color:var(--fg);font:600 14.5px var(--f-b);text-decoration:none;white-space:nowrap}
+.btn.pri{background:var(--ribbon);border:0;color:#fff;box-shadow:0 10px 22px -12px rgba(31,85,232,.7)}
+.btn.wa{background:var(--wa);border-color:var(--wa);color:#fff}
+.crumbs{font-size:13px;color:var(--muted);margin:18px 0 0}.crumbs a{color:var(--muted);text-decoration:none}.crumbs a:hover{color:var(--brand)}
+.hero{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;margin:16px 0 0;padding:20px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow)}
+.ic{width:72px;height:72px;border-radius:20px;background:#fff;border:1px solid var(--line);display:grid;place-items:center;overflow:hidden}
+.ic img{width:70%;height:70%;object-fit:contain}
+h1{margin:0;font:800 clamp(23px,5vw,32px)/1.3 var(--f-d);letter-spacing:-.3px}
+.hero p{margin:6px 0 0;color:var(--fg-2)}
+.hero .cta{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px}
+@media(max-width:560px){.hero .cta .btn{flex:1}}
+h2{margin:34px 0 12px;font:800 clamp(19px,4vw,24px)/1.35 var(--f-d)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px}
+.plans{display:grid;gap:10px}
+.plan{display:flex;align-items:center;gap:12px;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px}
+.plan .n{flex:1;min-width:0;font-weight:700}.plan small{display:block;font-weight:600;font-size:12.5px;color:var(--muted)}.plan small.y{color:var(--good)}.plan small.w{color:var(--warn)}
+.plan .p{font:800 20px var(--f-d);color:var(--price);white-space:nowrap}
+.plan .btn{padding:9px 14px}.plan.out .p{color:var(--muted);text-decoration:line-through}
+.muted{color:var(--muted)}
+.feat{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.feat li{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.feat li::before{content:"";flex:none;width:20px;height:20px;margin-top:4px;border-radius:50%;background:var(--good-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230b7f53' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E") center/12px no-repeat}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:10px;counter-reset:s}
+@media(min-width:760px){.steps{grid-template-columns:repeat(3,1fr)}}
+.steps li{counter-increment:s;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px}
+.steps li::before{content:counter(s);display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--brand);color:#fff;font:800 14px var(--f-d);margin-bottom:6px}
+.steps b{display:block;font-family:var(--f-d)}.steps span{color:var(--muted);font-size:14px}
+details{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:0 16px;margin-bottom:10px}
+summary{cursor:pointer;list-style:none;padding:14px 0;font:700 15px var(--f-d)}summary::-webkit-details-marker{display:none}
+details p{margin:0 0 14px;color:var(--fg-2)}
+.rel{display:flex;flex-wrap:wrap;gap:8px}.rel a{padding:8px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line);text-decoration:none;color:var(--fg-2);font-size:14px;font-weight:600}.rel a:hover{border-color:var(--brand);color:var(--brand)}
+.doc{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:22px 20px;margin-top:18px}
+.doc h1{margin-bottom:6px}.doc h2{margin:26px 0 8px;font-size:19px}.doc p,.doc li{color:var(--fg-2)}.doc ul{padding-inline-start:20px;margin:6px 0}
+.note{padding:12px 14px;border-radius:14px;background:var(--good-bg);color:var(--good);font-weight:600}
+.foot{margin-top:46px;padding:26px 0 40px;border-top:1px solid var(--line);background:var(--surface);font-size:14px;color:var(--muted)}
+.foot .wrap{display:grid;gap:12px}.foot nav{display:flex;flex-wrap:wrap;gap:6px 16px}.foot a{color:var(--muted);text-decoration:none}.foot a:hover{color:var(--brand)}
+"""
+EARLY = "<script>try{var t=localStorage.getItem('hazem-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>"
+FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400..800&display=swap">'
+
+
+GUAR = """<p class="note">المدد المكتوب جنبها «مع ضمان» مضمونة طول مدة الاشتراك.</p>
+<h2>شو بيشمل الضمان؟</h2><p>إذا الاشتراك اللي عليه ضمان وقف أو صار فيه خلل خلال مدته، بنصلّحه أو بنبدّلك ياه بنفس المدة الباقية، بدون أي تكلفة عليك.</p>
+<h2>الاشتراكات بدون ضمان</h2><p>سعرها أقل. بنتأكد إنها شغالة وقت التسليم، بس إذا وقفت بعد التسليم ما بتنبدل ولا بينرجع ثمنها. إذا بدك تكون مرتاح اختار المدة اللي عليها ضمان.</p>
+<h2>متى ما بيشتغل الضمان؟</h2><ul><li>إذا غيّرت كلمة السر أو الإيميل لحساب مسلّم من عندنا.</li><li>إذا شاركت الحساب مع ناس ثانيين، أو دخلت من أجهزة أكثر من المسموح.</li><li>إذا خالفت شروط الشركة صاحبة التطبيق وتسكّر الحساب لهالسبب.</li><li>للاشتراكات على حسابك الشخصي: الضمان على التفعيل نفسه، ومش على مشاكل الحساب اللي سببها من عندك.</li></ul>
+<h2>كيف تطلب الضمان؟</h2><p>افتح تذكرة دعم من الموقع (زر «الدعم الفني») أو راسلنا على واتساب، واكتب رقم طلبك واشرح المشكلة مع سكرين إذا بتقدر. بنرد بأسرع وقت، وعادةً بنحل المشكلة خلال 24 ساعة.</p>
+<h2>استرجاع المبلغ</h2><ul><li>إذا ما قدرنا نفعّلك الاشتراك أو نسلّمك ياه، بنرجعلك المبلغ كامل على نفس طريقة الدفع أو كرصيد بحسابك بالموقع، حسب ما بتختار.</li><li>بعد ما يتسلم الاشتراك ويشتغل، ما في استرجاع للمبلغ، بس بيشمله الضمان إذا كان «مع ضمان».</li><li>الرصيد المشحون بالموقع بتستخدمه للشراء من المتجر.</li></ul>"""
+TERMS = """<h2>عن المتجر</h2><p>حازم ستور متجر إلكتروني بفلسطين ببيع اشتراكات رقمية وخدمات. أسماء التطبيقات وشعاراتها ملك لأصحابها، وحازم ستور مش تابع إلهم ولا ممثل رسمي عنهم.</p>
+<h2>الطلبات والدفع</h2><ul><li>الأسعار بالشيكل ومكتوبة جنب كل مدة، وممكن تتغير من وقت لوقت. السعر اللي بيلزم هو السعر وقت الطلب.</li><li>طرق الدفع: جوال باي، بال باي، بنك فلسطين، USDT، والرصيد بالموقع.</li><li>الطلب بيتأكد بعد ما نتأكد من وصول الحوالة. لازم تكتب بيانات الحوالة صح أو ترفع سكرين واضح.</li></ul>
+<h2>التسليم</h2><ul><li>بنسلّم الاشتراك على واتساب أو بحسابك بالموقع، وبعض المدد بتتسلم فوراً بكود جاهز.</li><li>بعض المدد بتتفعّل على إيميلك الشخصي، وبنطلب منك وقتها بيانات الدخول، ومكتوب هالشي جنب المدة قبل ما تشتري.</li></ul>
+<h2>مسؤوليتك</h2><ul><li>تكتب بياناتك صح، وتحافظ على بيانات أي حساب بنسلّمك ياه وما تشاركها.</li><li>تستخدم الاشتراكات حسب شروط الشركات صاحبة التطبيقات.</li></ul>
+<h2>الضمان والاسترجاع</h2><p>التفاصيل كاملة بصفحة <a href="/guarantee.html">الضمان والاسترجاع</a>.</p>
+<h2>تواصل معنا</h2><p>عن طريق «الدعم الفني» بالموقع أو واتساب <span dir="ltr">+970 59 482 6482</span>.</p>"""
+PRIV = """<h2>شو المعلومات اللي بنجمعها؟</h2><ul><li>اسمك ورقم واتساب وإيميلك، لما تطلب أو تعمل حساب.</li><li>تفاصيل طلباتك، وبيانات الحوالة أو سكرين الإثبات.</li><li>رسائلك بتذاكر الدعم وتجاربك اللي بتكتبها.</li></ul>
+<h2>كلمات السر</h2><p>إذا المدة بتتفعّل على حسابك الشخصي وكتبت كلمة السر، بتوصلنا برسالة واتساب بس وما بتنحفظ على الموقع، وبنستخدمها للتفعيل وبس. ننصحك تغيّرها بعد التفعيل.</p>
+<h2>ليش بنستخدمها؟</h2><p>عشان ننفّذ طلباتك، نتواصل معك، نذكّرك قبل ما يخلص اشتراكك، ونرد على الدعم الفني. ما بنبيع معلوماتك لحدا، وما بنشاركها إلا بالقدر اللازم لتفعيل الخدمة.</p>
+<h2>وين بتنحفظ؟</h2><p>على خدمة Google Firebase. وجهازك بيحفظ أشياء بسيطة زي السلة واختيار الوضع الليلي.</p>
+<h2>حذف معلوماتك</h2><p>إذا بدك نحذف بياناتك، تواصل معنا عن طريق الدعم الفني أو واتساب.</p>"""
+

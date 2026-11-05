@@ -1,0 +1,44 @@
+name: SEO pages refresh
+# Every 6 hours: pull products/prices/reviews from Firestore, rebuild the crawlable pages,
+# publish them, then ping IndexNow (Bing / ChatGPT search) with the pages that changed.
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: seo-refresh
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Fetch catalogue
+        run: python3 .github/seo/fetch.py
+      - name: Build pages
+        env:
+          SEO_CHANGED: ${{ runner.temp }}/seo-changed.txt
+        run: python3 .github/seo/build.py .
+      - name: Publish
+        id: pub
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then echo "No changes"; exit 0; fi
+          git config user.name "hazem-store-seo"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Refresh catalogue pages (prices, products, reviews)"
+          git push origin HEAD:main
+          git push origin HEAD:gh-pages
+          echo "pushed=1" >> "$GITHUB_OUTPUT"
+      - name: Ping IndexNow
+        if: steps.pub.outputs.pushed == '1'
+        env:
+          SEO_CHANGED: ${{ runner.temp }}/seo-changed.txt
+        run: |
+          sleep 150
+          python3 .github/seo/indexnow.py

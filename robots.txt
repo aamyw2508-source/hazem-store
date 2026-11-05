@@ -1,4 +1,110 @@
+# حازم ستور: محركات البحث ومساعدات الذكاء الاصطناعي مرحّب فيها
 User-agent: *
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: Googlebot
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: Bingbot
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: GPTBot
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: Claude-SearchBot
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: Claude-User
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: Perplexity-User
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: Applebot
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: DuckDuckBot
+Allow: /
+Disallow: /admin.html
+Disallow: /__/
+Disallow: /worker/
+Disallow: /README.md
+
+User-agent: YandexBot
 Allow: /
 Disallow: /admin.html
 Disallow: /__/
