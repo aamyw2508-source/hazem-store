@@ -5,6 +5,11 @@ on:
   schedule:
     - cron: '23 */6 * * *'
   workflow_dispatch:
+    inputs:
+      ping_all:
+        description: 'Send every page to IndexNow, not only the changed ones'
+        type: boolean
+        default: false
 permissions:
   contents: write
 concurrency:
@@ -36,9 +41,10 @@ jobs:
           git push origin HEAD:gh-pages
           echo "pushed=1" >> "$GITHUB_OUTPUT"
       - name: Ping IndexNow
-        if: steps.pub.outputs.pushed == '1'
+        if: steps.pub.outputs.pushed == '1' || inputs.ping_all
         env:
           SEO_CHANGED: ${{ runner.temp }}/seo-changed.txt
+          PING_ALL: ${{ inputs.ping_all }}
         run: |
-          sleep 150
+          if [ "${{ steps.pub.outputs.pushed }}" = "1" ]; then sleep 150; fi
           python3 .github/seo/indexnow.py
