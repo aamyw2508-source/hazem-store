@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-10-29T00:00:00Z",
+ "fetchedAt": "2026-11-05T13:44:21Z",
  "storeName": "حازم ستور",
  "cats": [
   {
@@ -33,6 +33,14 @@
  ],
  "payments": [
   {
+   "name": "مال شات",
+   "auto": false
+  },
+  {
+   "name": "USDT",
+   "auto": true
+  },
+  {
    "name": "جوال باي",
    "auto": false
   },
@@ -47,14 +55,6 @@
   {
    "name": "بنك فلسطين",
    "auto": false
-  },
-  {
-   "name": "مال شات",
-   "auto": false
-  },
-  {
-   "name": "USDT",
-   "auto": true
   }
  ],
  "products": [
@@ -62,6 +62,7 @@
    "id": "chatgpt",
    "name": "ChatGPT",
    "cat": "ai",
+   "desc": "اشتراك ChatGPT المدفوع من OpenAI: حدود استخدام أعلى، ووصول للنماذج المتقدمة، وتوليد الصور وتحليل الملفات.",
    "features": [
     "وصول لأقوى نماذج ChatGPT مع وضع التفكير للمهام الصعبة",
     "رسائل واستخدام أكثر بكتير من النسخة المجانية",
@@ -127,6 +128,7 @@
    "id": "claude",
    "name": "Claude Pro",
    "cat": "ai",
+   "desc": "اشتراك Claude Pro من Anthropic: استخدام أعلى بكثير من الخطة المجانية، للكتابة والبرمجة والتحليل والمشاريع.",
    "features": [
     "استخدام أكثر بكتير من النسخة المجانية",
     "Claude Code للبرمجة مشمول بالاشتراك",
@@ -138,6 +140,7 @@
    "note": "",
    "domain": "claude.ai",
    "active": true,
+   "soldOut": false,
    "sort": 2,
    "badge": "",
    "plans": [
@@ -146,14 +149,20 @@
      "name": "شهر",
      "price": 75,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     },
     {
      "id": "ogmroj",
      "name": "Claude Pro (مشترك مع شخص)",
      "price": 40,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     }
    ]
   },
@@ -161,6 +170,7 @@
    "id": "grok",
    "name": "Grok",
    "cat": "ai",
+   "desc": "اشتراك Grok من xAI ضمن X Premium+: استخدام أعلى لـ Grok مع مزايا X Premium+.",
    "features": [
     "Grok بأقوى نماذجه وحدود استخدام أعلى",
     "علامة التوثيق الزرقاء على حسابك بمنصة X",
@@ -188,6 +198,7 @@
    "id": "canva",
    "name": "Canva Pro",
    "cat": "design",
+   "desc": "Canva Pro: قوالب وعناصر مميزة، إزالة الخلفية، وتغيير المقاس بضغطة، ومساحة لهوية علامتك.",
    "features": [
     "كل القوالب والصور والعناصر المدفوعة مفتوحة",
     "إزالة خلفية الصور بضغطة وحدة",
@@ -196,18 +207,32 @@
     "هوية لعلامتك Brand Kit ومساحة تخزين أكبر"
    ],
    "keywords": "كانفا برو",
-   "note": "EDU",
+   "note": "",
    "domain": "canva.com",
    "active": true,
+   "soldOut": false,
    "sort": 5,
    "badge": "",
    "plans": [
     {
      "id": "1y",
-     "name": "سنة كاملة",
+     "name": "سنة كاملة برو تعليمي",
      "price": 15,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
+    },
+    {
+     "id": "9gx14l",
+     "name": "كانفا برو",
+     "price": 20,
+     "compare": 0,
+     "war": "yes",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     }
    ]
   },
@@ -215,6 +240,7 @@
    "id": "gemini",
    "name": "Gemini Pro",
    "cat": "ai",
+   "desc": "اشتراك Gemini Pro من Google: نماذج Gemini المتقدمة ومزاياها داخل تطبيقات Google.",
    "features": [
     "Gemini بأقوى نماذجه وحدود استخدام أعلى",
     "البحث المعمّق Deep Research",
@@ -226,28 +252,18 @@
    "note": "",
    "domain": "gemini.google.com",
    "active": true,
-   "soldOut": true,
+   "soldOut": false,
    "sort": 5,
    "badge": "",
    "plans": [
     {
      "id": "18m",
-     "name": "18 شهر",
-     "price": 18,
-     "compare": 0,
-     "war": "no",
-     "out": false,
-     "instant": true,
-     "acct": "none"
-    },
-    {
-     "id": "qicrnf",
-     "name": "18 شهر",
-     "price": 30,
+     "name": "18 شهر ( بدون ضمان )",
+     "price": 20,
      "compare": 0,
      "war": "yes",
      "out": false,
-     "instant": true,
+     "instant": false,
      "acct": "none"
     }
    ]
@@ -256,6 +272,7 @@
    "id": "capcut",
    "name": "CapCut Pro",
    "cat": "design",
+   "desc": "CapCut Pro: مونتاج فيديو بمؤثرات وقوالب وأدوات ذكاء اصطناعي مميزة، وتصدير بجودة عالية.",
    "features": [
     "تصدير الفيديو بدون علامة مائية",
     "كل الفلاتر والمؤثرات والانتقالات المدفوعة",
@@ -303,6 +320,7 @@
    "id": "autodesk",
    "name": "Autodesk All Apps",
    "cat": "design",
+   "desc": "وصول لبرامج Autodesk مثل AutoCAD وRevit و3ds Max وMaya لمدة سنة.",
    "features": [
     "كل برامج Autodesk بحساب واحد",
     "AutoCAD للرسم الهندسي ثنائي وثلاثي الأبعاد",
@@ -330,6 +348,7 @@
    "id": "duolingo",
    "name": "Duolingo Plus",
    "cat": "study",
+   "desc": "تعلّم اللغات على Duolingo بدون إعلانات، مع مزايا التدريب والمراجعة الإضافية.",
    "features": [
     "تعلّم بدون إعلانات",
     "قلوب غير محدودة، يعني بتكمل بدون ما توقف",
@@ -357,6 +376,7 @@
    "id": "office",
    "name": "Office 365 Plus",
    "cat": "study",
+   "desc": "Microsoft 365: برامج Word وExcel وPowerPoint وOutlook مع مساحة OneDrive سحابية.",
    "features": [
     "Word وExcel وPowerPoint وOutlook بالنسخ الكاملة",
     "بيشتغل على الكمبيوتر والجوال والآيباد",
@@ -383,12 +403,14 @@
   {
    "id": "p-mqvy",
    "name": "تفعيل تيليجرام",
-   "cat": "",
+   "cat": "social",
+   "desc": "دفع اشتراك التيليجرام الخاص بك لتتمكن من تسجيل الدخول",
    "features": [],
    "keywords": "حل مشكلة دفع التيليجرام",
    "note": "دفع تيليجرام",
    "domain": "",
    "active": true,
+   "soldOut": false,
    "sort": 10,
    "badge": "",
    "plans": [
@@ -397,7 +419,10 @@
      "name": "مدة الحياة",
      "price": 12,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     }
    ]
   },
@@ -405,6 +430,7 @@
    "id": "esim-24jz",
    "name": "شرائح الكترونية (ESim)",
    "cat": "c-wgr8s3",
+   "desc": "",
    "features": [
     "تفعيل فوري بمسح رمز QR بدون شريحة ورقية",
     "إنترنت مباشرة على الشبكة بدون تركيب أو انتظار",
@@ -416,6 +442,7 @@
    "note": "شرائح انترنت",
    "domain": "",
    "active": true,
+   "soldOut": false,
    "sort": 11,
    "badge": "انترنت",
    "plans": [
@@ -424,70 +451,100 @@
      "name": "شريحة ويكوم الالكترونية ( شهر )",
      "price": 50,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     },
     {
      "id": "cv35oc",
      "name": "شريحة ويكوم الالكترونية  3 ( أشهر )",
      "price": 110,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     },
     {
      "id": "sa1wnf",
      "name": "شريحة هوت موبايل الالكترونية ( شهر )",
      "price": 65,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     },
     {
      "id": "bnsgzx",
      "name": "شريحة هوت موبايل الالكترونية ( 3 أشهر )",
      "price": 120,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     },
     {
      "id": "5qbxsd",
      "name": "شريحة بارتنر الالكترونية ( شهر )",
      "price": 65,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     },
     {
      "id": "9kg2az",
      "name": "شريحة بارتنر الالكترونية 3 ( أشهر )",
      "price": 130,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     },
     {
      "id": "2mex8r",
      "name": "شريحة سيلكوم الالكترونية ( شهر )",
      "price": 65,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     },
     {
      "id": "7117s4",
      "name": "شريحة سيلكوم الالكترونية  3 ( أشهر )",
      "price": 130,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     },
     {
      "id": "61ex4d",
      "name": "شريحة بيلفون الالكترونية ( شهر )",
      "price": 65,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     },
     {
      "id": "04bz5b",
      "name": "شريحة 019 الالكترونية ( شهر )",
      "price": 65,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     }
    ]
   },
@@ -495,6 +552,7 @@
    "id": "meta-ads",
    "name": "إعلان ممول فيسبوك وإنستغرام",
    "cat": "social",
+   "desc": "بنجهزلك إعلان ممول على فيسبوك وإنستغرام لمدة أسبوع، وبنستهدف المنطقة والفئة العمرية اللي بتختارها، وبنضبط الإعلان حسب هدفك.",
    "features": [
     "إعلان ممول لمدة أسبوع كامل على فيسبوك وإنستغرام",
     "استهداف المنطقة اللي بتختارها",
@@ -522,6 +580,7 @@
    "id": "x-verified",
    "name": "توثيق حساب X (تويتر)",
    "cat": "social",
+   "desc": "بنوثّقلك حسابك على X (تويتر سابقاً) بالعلامة الزرقاء من خلال اشتراك X Premium.",
    "features": [
     "علامة التوثيق الزرقاء على حسابك بمنصة X",
     "ردودك بتظهر بأولوية أعلى",
@@ -549,6 +608,7 @@
    "id": "meta-verified",
    "name": "توثيق فيسبوك وإنستغرام",
    "cat": "social",
+   "desc": "بنوثّقلك حسابك على فيسبوك أو إنستغرام بالعلامة الزرقاء الرسمية من ميتا، وبنجهز كل الخطوات معك.",
    "features": [
     "علامة التوثيق الزرقاء الرسمية على حسابك",
     "حماية أقوى للحساب من الانتحال",
@@ -590,6 +650,7 @@
    "id": "perplexity-max",
    "name": "Perplexity Max",
    "cat": "ai",
+   "desc": "اشتراك Perplexity Max، أعلى باقة بمحرك البحث بالذكاء الاصطناعي، بيوصلك كود تفعيل بتفعّله على حسابك.",
    "features": [
     "أعلى باقة من Perplexity",
     "بحث بالذكاء الاصطناعي مع مصادر لكل جواب",
@@ -618,6 +679,7 @@
    "id": "lovable-pro",
    "name": "Lovable Pro",
    "cat": "ai",
+   "desc": "اشتراك Lovable Pro لبناء مواقع وتطبيقات كاملة بالكتابة بالذكاء الاصطناعي.",
    "features": [
     "بناء مواقع وتطبيقات كاملة بالكتابة",
     "رصيد رسائل أكثر بكتير من المجاني",
@@ -646,6 +708,7 @@
    "id": "wispr-flow",
    "name": "Wispr Flow Pro",
    "cat": "ai",
+   "desc": "اشتراك Wispr Flow Pro للكتابة بالصوت بأي تطبيق، بنسخة التعليم لمدة 12 شهر.",
    "features": [
     "كتابة بالصوت بأي تطبيق على الكمبيوتر والجوال",
     "بيرتب الكلام وبيصححه تلقائياً",
@@ -674,6 +737,7 @@
    "id": "muse-ai",
    "name": "MUSE AI",
    "cat": "ai",
+   "desc": "حساب MUSE AI جاهز، وفي أكثر من باقة حسب احتياجك.",
    "features": [
     "حساب جاهز ومفعّل",
     "بتستلم بيانات الدخول مباشرة",
@@ -685,7 +749,7 @@
    "note": "حساب جاهز",
    "domain": "",
    "active": true,
-   "soldOut": true,
+   "soldOut": false,
    "sort": 18,
    "badge": "",
    "plans": [
@@ -705,6 +769,7 @@
    "id": "adobe-express",
    "name": "Adobe Express Premium",
    "cat": "design",
+   "desc": "اشتراك Adobe Express Premium لمدة 12 شهر، بيوصلك رابط تفعيل على حسابك.",
    "features": [
     "كل القوالب والخطوط والصور المدفوعة",
     "إزالة خلفية الصور بضغطة",
@@ -733,6 +798,7 @@
    "id": "miro",
    "name": "Miro",
    "cat": "design",
+   "desc": "دعوة على إيميلك لمساحة Miro مدفوعة مدى الحياة، للتخطيط والعصف الذهني والشغل الجماعي.",
    "features": [
     "لوح أبيض أونلاين للأفكار والتخطيط",
     "قوالب جاهزة للعصف الذهني والخرائط",
@@ -761,6 +827,7 @@
    "id": "notion",
    "name": "Notion",
    "cat": "study",
+   "desc": "اشتراك Notion المدفوع، بيوصلك رابط تفعيل على حسابك.",
    "features": [
     "مساحة شغل لا محدودة للملاحظات والمشاريع",
     "رفع ملفات بحجم أكبر",
@@ -789,6 +856,7 @@
    "id": "ilovepdf",
    "name": "iLovePDF Premium",
    "cat": "study",
+   "desc": "اشتراك iLovePDF Premium لمدة سنة لكل أدوات ملفات PDF.",
    "features": [
     "كل أدوات PDF بدون حدود: دمج، تقسيم، ضغط، تحويل",
     "تحويل PDF لـ Word وExcel وPowerPoint والعكس",
@@ -817,6 +885,7 @@
    "id": "jetbrains",
    "name": "JetBrains All Products",
    "cat": "dev",
+   "desc": "ترخيص JetBrains لكل برامجهم لمدة سنة، على حساب JetBrains تبعك.",
    "features": [
     "كل برامج JetBrains: IntelliJ وPyCharm وWebStorm وغيرها",
     "النسخ الكاملة المدفوعة",
@@ -845,6 +914,7 @@
    "id": "telegram-us",
    "name": "حساب تيليجرام برقم أمريكي",
    "cat": "social",
+   "desc": "حساب تيليجرام جديد ومفعّل على رقم أمريكي، بتستلمه جاهز للاستخدام.",
    "features": [
     "حساب تيليجرام جديد ومفعّل",
     "رقم أمريكي بيبدأ بـ +1",
@@ -871,8 +941,9 @@
   },
   {
    "id": "shahid-vip-0iyv",
-   "name": "ٍShahid Vip",
+   "name": "Shahidvip",
    "cat": "c-38pgkf",
+   "desc": "ايميل وكلمة سر",
    "features": [
     "1. مشاهدة حصرية لأحدث المسلسلات والأفلام العربية والعالمية.",
     "2. متابعة المباريات الرياضية والبطولات عبر باقات الرياضة المتاحة.",
@@ -884,6 +955,7 @@
    "note": "افلام ومسلسلات",
    "domain": "",
    "active": true,
+   "soldOut": false,
    "sort": 25,
    "badge": "",
    "plans": [
@@ -893,6 +965,7 @@
      "price": 20,
      "compare": 0,
      "war": "yes",
+     "out": false,
      "instant": false,
      "acct": "none"
     },
@@ -902,6 +975,7 @@
      "price": 45,
      "compare": 0,
      "war": "yes",
+     "out": false,
      "instant": false,
      "acct": "login"
     },
@@ -911,6 +985,7 @@
      "price": 25,
      "compare": 0,
      "war": "yes",
+     "out": false,
      "instant": false,
      "acct": "none"
     }
@@ -920,6 +995,7 @@
    "id": "p-hddf",
    "name": "حسابات انستغرام",
    "cat": "social",
+   "desc": "حساب انستغرام جاهز",
    "features": [
     "عمر الحساب: حساب قديم نسبيًا وله تاريخ إنشاء يعود إلى 2020 أو 2021.",
     "المصداقية: قد يعطي انطباعًا بالثقة أكثر من الحسابات المنشأة حديثًا، حسب نشاطه وسجله.",
@@ -931,6 +1007,7 @@
    "note": "حساب انستغرام",
    "domain": "instagram.com",
    "active": true,
+   "soldOut": false,
    "sort": 26,
    "badge": "",
    "plans": [
@@ -940,11 +1017,213 @@
      "price": 25,
      "compare": 0,
      "war": "no",
+     "out": false,
      "instant": false,
      "acct": "none"
     }
    ]
+  },
+  {
+   "id": "snapchat-plus-2ezo",
+   "name": "Snapchat Plus",
+   "cat": "social",
+   "desc": "",
+   "features": [],
+   "keywords": "سناب شات بلس",
+   "note": "",
+   "domain": "",
+   "active": true,
+   "soldOut": false,
+   "sort": 27,
+   "badge": "",
+   "plans": [
+    {
+     "id": "jhpes8",
+     "name": "إشتراك بلس 3 أشهر",
+     "price": 45,
+     "compare": 0,
+     "war": "yes",
+     "out": false,
+     "instant": false,
+     "acct": "email"
+    },
+    {
+     "id": "tbgxjw",
+     "name": "إشتراك بلس 6 أشهر",
+     "price": 70,
+     "compare": 0,
+     "war": "yes",
+     "out": false,
+     "instant": false,
+     "acct": "email"
+    },
+    {
+     "id": "6iowi5",
+     "name": "إشتراك بلس سنة",
+     "price": 120,
+     "compare": 0,
+     "war": "yes",
+     "out": false,
+     "instant": false,
+     "acct": "email"
+    }
+   ]
   }
  ],
- "reviews": []
+ "reviews": [
+  {
+   "name": "أسماء",
+   "rating": 5,
+   "text": "التجربة ممتازة وتم الاشتراك في أقل وقت ممكن موفق",
+   "product": "ChatGPT",
+   "at": "2026-11-04"
+  },
+  {
+   "name": "أبو",
+   "rating": 5,
+   "text": "تجربة رائعة ، وخدمة فورية ، يعتمد 🤍",
+   "product": "ChatGPT",
+   "at": "2026-11-04"
+  },
+  {
+   "name": "Rania",
+   "rating": 5,
+   "text": "ممتاز",
+   "product": "Gemini Pro",
+   "at": "2026-11-04"
+  },
+  {
+   "name": "نعيم",
+   "rating": 5,
+   "text": "سرعة في الرد و تعامل ممتاز بنصح الكل يتعامل معاه ❤️",
+   "product": "ChatGPT",
+   "at": "2026-11-04"
+  },
+  {
+   "name": "أثير",
+   "rating": 4,
+   "text": "تجربتي كانت ممتازة جدًا، التعامل راقٍ والمصداقية عالية، وأنصح فيه 🤍",
+   "product": "ChatGPT",
+   "at": "2026-11-03"
+  },
+  {
+   "name": "جابر",
+   "rating": 5,
+   "text": "اشتراك سهل وتسليم مباشر",
+   "product": "Gemini Pro",
+   "at": "2026-11-01"
+  },
+  {
+   "name": "براء",
+   "rating": 5,
+   "text": "5 نجوم",
+   "product": "ChatGPT",
+   "at": "2026-11-01"
+  },
+  {
+   "name": "محسن",
+   "rating": 5,
+   "text": "100%",
+   "product": "ChatGPT",
+   "at": "2026-11-01"
+  },
+  {
+   "name": "حسين",
+   "rating": 5,
+   "text": "للأمانة تجربة محترمة \nأداء أفضل سرعة أفضل  معاملة محترمة",
+   "product": "ChatGPT",
+   "at": "2026-11-01"
+  },
+  {
+   "name": "خالد",
+   "rating": 5,
+   "text": "رائعة وحازم أروع",
+   "product": "ChatGPT",
+   "at": "2026-11-01"
+  },
+  {
+   "name": "حسن",
+   "rating": 5,
+   "text": "معاملة محترمة والمتابعة خطوة بخطوة كل التقدير لكم",
+   "product": "ChatGPT + 1",
+   "at": "2026-10-31"
+  },
+  {
+   "name": "هبة",
+   "rating": 5,
+   "text": "ممتازة",
+   "product": "ChatGPT",
+   "at": "2026-10-31"
+  },
+  {
+   "name": "محمد",
+   "rating": 5,
+   "text": "ثقة في مكانها تفعيل خلا مدة خطوات تفعيل الاشتراك \nكل الاحترام حازم....",
+   "product": "ChatGPT",
+   "at": "2026-10-31"
+  },
+  {
+   "name": "روان",
+   "rating": 5,
+   "text": "ممتاز",
+   "product": "ChatGPT",
+   "at": "2026-10-29"
+  },
+  {
+   "name": "امل",
+   "rating": 5,
+   "text": "ممتازين سرعة ودقة وتميز بارك الله فيكم🤍",
+   "product": "ChatGPT",
+   "at": "2026-10-28"
+  },
+  {
+   "name": "بيان",
+   "rating": 5,
+   "text": "👍",
+   "product": "Gemini Pro",
+   "at": "2026-10-28"
+  },
+  {
+   "name": "Majd",
+   "rating": 5,
+   "text": "تجربة جيدة",
+   "product": "ChatGPT",
+   "at": "2026-10-25"
+  },
+  {
+   "name": "هيثم",
+   "rating": 5,
+   "text": "المعاملة صدق وسهلة",
+   "product": "Gemini Pro",
+   "at": "2026-10-25"
+  },
+  {
+   "name": "Eid",
+   "rating": 5,
+   "text": "لو في 6 نجوم اقسم بالله بيستاهلو د",
+   "product": "Gemini Pro",
+   "at": "2026-10-24"
+  },
+  {
+   "name": "Nadia",
+   "rating": 5,
+   "text": "الخدمة جدا رائعة ، كنت فقدت الامل من الاشتراك رغم كل شغلي عليه ، لكن المتابعة ماقصرت وكانت معي خطوة بخطوووة فمشكورين جدا❤️",
+   "product": "ChatGPT",
+   "at": "2026-10-22"
+  },
+  {
+   "name": "mohammed",
+   "rating": 5,
+   "text": "تسليم سريع وتعامل مميز احسن متجر",
+   "product": "ChatGPT",
+   "at": "2026-10-21"
+  },
+  {
+   "name": "Eng",
+   "rating": 5,
+   "text": "تجربة رائعة وتسليم فوري",
+   "product": "ChatGPT",
+   "at": "2026-10-20"
+  }
+ ]
 }

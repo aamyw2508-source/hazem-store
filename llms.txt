@@ -1,6 +1,6 @@
 # حازم ستور (Hazem Store)
 
-> متجر إلكتروني فلسطيني للاشتراكات الرقمية: 26 اشتراك وخدمة بأسعار بالشيكل، دفع بـجوال باي، جوال باي تاجر، بال باي، بنك فلسطين، مال شات وUSDT، وتفعيل على واتساب وبحساب الزبون بالموقع. الموقع: https://hazem-store.com/
+> متجر إلكتروني فلسطيني للاشتراكات الرقمية: 27 اشتراك وخدمة بأسعار بالشيكل، دفع بـمال شات، USDT، جوال باي، جوال باي تاجر، بال باي وبنك فلسطين، وتفعيل على واتساب وبحساب الزبون بالموقع. الموقع: https://hazem-store.com/
 
 - واتساب: +970 59 482 6482
 - المدد المكتوب جنبها «مع ضمان» مضمونة طول مدة الاشتراك.
@@ -10,13 +10,13 @@
 - [ChatGPT Plus](https://hazem-store.com/chatgpt-plus/): الذكاء الاصطناعي. Plus · شهر 80 ₪، ChatGPT Go · شهر 40 ₪، Plus · شهر (مشترك مع شخص) 40 ₪، Plus · شهر (مشترك مع شخصين ) 30 ₪، Plus · شهر (ايميل من طرفي ) 60 ₪
 - [Claude Pro](https://hazem-store.com/claude-pro/): الذكاء الاصطناعي. شهر 75 ₪، Claude Pro (مشترك مع شخص) 40 ₪
 - [Grok + X Premium+](https://hazem-store.com/grok/): الذكاء الاصطناعي. شهر 70 ₪
-- [Canva Pro](https://hazem-store.com/canva-pro/): التصميم والمونتاج. سنة كاملة 15 ₪
-- [Gemini Pro](https://hazem-store.com/gemini-pro/): الذكاء الاصطناعي. 18 شهر 18 ₪، 18 شهر 30 ₪
+- [Canva Pro](https://hazem-store.com/canva-pro/): التصميم والمونتاج. سنة كاملة برو تعليمي 15 ₪، كانفا برو 20 ₪
+- [Gemini Pro](https://hazem-store.com/gemini-pro/): الذكاء الاصطناعي. 18 شهر ( بدون ضمان ) 20 ₪
 - [CapCut Pro](https://hazem-store.com/capcut-pro/): التصميم والمونتاج. شهر 15 ₪، 6 أشهر 60 ₪، 1 سنة 120 ₪
 - [Autodesk All Apps](https://hazem-store.com/autodesk/): التصميم والمونتاج. سنة كاملة 50 ₪
 - [Duolingo Super](https://hazem-store.com/duolingo/): التعليم والإنتاجية. سنة كاملة 25 ₪
 - [Office 365](https://hazem-store.com/office-365/): التعليم والإنتاجية. سنة كاملة 35 ₪
-- [تفعيل تيليجرام](https://hazem-store.com/telegram-activation/): اشتراكات ثانية. مدة الحياة 12 ₪
+- [تفعيل تيليجرام](https://hazem-store.com/telegram-activation/): خدمات السوشال ميديا. مدة الحياة 12 ₪
 - [شرائح إلكترونية eSIM](https://hazem-store.com/esim/): انترنت لأهل غزة. شريحة ويكوم الالكترونية ( شهر ) 50 ₪، شريحة ويكوم الالكترونية  3 ( أشهر ) 110 ₪، شريحة هوت موبايل الالكترونية ( شهر ) 65 ₪، شريحة هوت موبايل الالكترونية ( 3 أشهر ) 120 ₪، شريحة بارتنر الالكترونية ( شهر ) 65 ₪
 - [إعلان ممول فيسبوك وإنستغرام](https://hazem-store.com/facebook-instagram-ads/): خدمات السوشال ميديا. أسبوع 80 ₪
 - [توثيق حساب X (تويتر)](https://hazem-store.com/x-verified/): خدمات السوشال ميديا. شهر 70 ₪
@@ -33,6 +33,7 @@
 - [حساب تيليجرام برقم أمريكي](https://hazem-store.com/telegram-us-number/): خدمات السوشال ميديا. حساب واحد 15 ₪
 - [Shahid VIP](https://hazem-store.com/shahid-vip/): افلام ومسلسلات. شهر (خاص) 20 ₪، 3 اشهر (خاص) 45 ₪، 3 اشهر ( مشترك) 25 ₪
 - [حسابات انستغرام](https://hazem-store.com/instagram-accounts/): خدمات السوشال ميديا. حساب انستغرام انشاء 2020-2021 25 ₪
+- [Snapchat Plus](https://hazem-store.com/snapchat-plus-2ezo/): خدمات السوشال ميديا. إشتراك بلس 3 أشهر 45 ₪، إشتراك بلس 6 أشهر 70 ₪، إشتراك بلس سنة 120 ₪
 
 ## صفحات مهمة
 - [عن حازم ستور](https://hazem-store.com/about/)
