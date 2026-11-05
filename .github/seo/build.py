@@ -26,7 +26,8 @@ def clean(n): return re.sub(r'^[ً-ٰٟ\s]+', '', str(n or '')).strip()
 
 # ---------- catalogue ----------
 CATS = {c['id']: c['name'] for c in CAT['cats']}
-PAY = [m['name'] for m in CAT['payments']] or ['جوال باي', 'بال باي', 'بنك فلسطين', 'USDT']
+ORDER = ['جوال باي', 'بال باي', 'بنك فلسطين', 'جوال باي تاجر', 'مال شات', 'USDT']
+PAY = sorted([m['name'] for m in CAT['payments']], key=lambda n: ORDER.index(n) if n in ORDER else 50) or ['جوال باي', 'بال باي', 'بنك فلسطين', 'USDT']
 PAY_TXT = '، '.join(PAY[:-1]) + ' و' + PAY[-1] if len(PAY) > 1 else PAY[0]
 AUTO = [m['name'] for m in CAT['payments'] if m.get('auto')]
 CUR = {p['id']: p for p in PAGES}
@@ -34,10 +35,14 @@ NEW_SLUG = {'esim-24jz': 'esim', 'p-hddf': 'instagram-accounts', 'p-mqvy': 'tele
 TITLE_OV = {'esim-24jz': 'شرائح إنترنت إلكترونية eSIM لغزة', 'shahid-vip-0iyv': 'اشتراك شاهد VIP في فلسطين', 'p-mqvy': 'تفعيل تيليجرام وحل مشكلة الدفع', 'p-hddf': 'حسابات انستغرام', 'telegram-us': 'حساب تيليجرام برقم أمريكي'}
 NAME_OV = {'shahid-vip-0iyv': 'Shahid VIP', 'esim-24jz': 'شرائح إلكترونية eSIM'}
 NEW_AR = {'esim-24jz': 'شرائح إلكترونية eSIM', 'shahid-vip-0iyv': 'شاهد VIP', 'p-mqvy': 'تفعيل تيليجرام', 'p-hddf': 'حسابات انستغرام', 'telegram-us': 'حساب تيليجرام برقم أمريكي'}
+TAKEN = {p['slug'] for p in PAGES} | set(NEW_SLUG.values())
 def slug_for(p):
     if p['id'] in CUR: return CUR[p['id']]['slug']
     if p['id'] in NEW_SLUG: return NEW_SLUG[p['id']]
-    s = re.sub(r'[^a-z0-9-]+', '-', p['id'].lower()).strip('-'); return s or 'p-' + hashlib.md5(p['id'].encode()).hexdigest()[:6]
+    s = re.sub(r'[^a-z0-9-]+', '-', p['id'].lower()).strip('-')
+    m = re.match(r'^([a-z][a-z0-9-]{3,})-[a-z0-9]{4}$', s)   # ids made from the name + a random tail
+    if m and m.group(1) not in TAKEN: s = m.group(1)
+    return s or 'p-' + hashlib.md5(p['id'].encode()).hexdigest()[:6]
 ITEMS = []
 for p in CAT['products']:
     if p.get('active') is False or not p.get('plans'): continue
