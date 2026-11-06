@@ -30,7 +30,7 @@ const CHUNKS = 8; // getLogs calls per check (each covers SPAN blocks, SPAN shri
 const SITE = 'https://hazem-store.com';
 let BUDGET = 45; // outside calls left in this run (Cloudflare allows 50 on the free plan)
 function xf(url, init) { if (BUDGET <= 0) { const e = fail('busy, try again', 503); e.budget = true; throw e; } BUDGET--; return fetch(url, init); }
-const VERSION = 10;
+const VERSION = 11;
 const STORE = 'حازم ستور';
 
 export default {
@@ -72,6 +72,11 @@ function json(o, status, headers) { return new Response(JSON.stringify(o), { sta
 function fail(msg, status) { const e = new Error(msg); e.status = status || 400; return e; }
 
 // GET / : is the server set up and can it read the store?
+function castInfo(raw, settings) {
+  let C = {};
+  try { C = JSON.parse(raw || '{}') || {}; } catch (e) {}
+  return { on: !settings || settings.tgCast !== false, waiting: (C.jobs || []).length, lastLook: C.scan || 0, err: C.err || '' };
+}
 async function health(env) {
   if (!env.SA_JSON) return { ok: false, service: 'hazem-pay', error: 'SA_JSON missing', notify: channels(env) };
   const fs = await firestore(env);
@@ -79,7 +84,7 @@ async function health(env) {
   const m = s && (s.data.payments || []).find(isUsdt);
   const st = await fs.get('payState/main');
   const sd = (st && st.data) || {};
-  return { ok: true, service: 'hazem-pay', version: VERSION, project: fs.project, usdt: m ? { auto: !!m.auto, bsc: validAddr('bsc', m.number), tron: validAddr('tron', m.tron) } : null, notify: channels(env), bot: !!env.SHOP_BOT_TOKEN, cron: sd.cronAt || 0, cronErr: sd.cronErr || '', cronFail: sd.cronFail || 0 };
+  return { ok: true, service: 'hazem-pay', version: VERSION, project: fs.project, usdt: m ? { auto: !!m.auto, bsc: validAddr('bsc', m.number), tron: validAddr('tron', m.tron) } : null, notify: channels(env), bot: !!env.SHOP_BOT_TOKEN, ...(env.SHOP_BOT_TOKEN ? { botNews: castInfo(sd.tgCast, s && s.data) } : {}), cron: sd.cronAt || 0, cronErr: sd.cronErr || '', cronFail: sd.cronFail || 0 };
 }
 
 // ---------------------------------------------------------------- /pay/start : reserve an exact amount
@@ -261,6 +266,11 @@ async function cron(env) {
     } catch (e) { errs.push(col + ': ' + (e && e.message)); }
   }
   fields.cur = cur; mask.push('cur');
+  // 3. announcements from the Telegram bot (new products, back in stock, new codes, lower prices)
+  if (env.SHOP_BOT_TOKEN) {
+    try { fields.tgCast = await tgCastRun(fs, env, s, now); mask.push('tgCast'); }
+    catch (e) { errs.push('cast: ' + (e && e.message)); }
+  }
   fields.cronErr = errs.join(' | ').slice(0, 600); mask.push('cronErr');
   await fs.commit([fs.wUpdate('payState/main', fields, mask)]);
   return { checked: Object.keys(w).length };
@@ -309,6 +319,7 @@ async function notifyPaid(fs, env, kind, id, d, r) {
   }
   const done = r.status === 'done';
   await notifyAdmin(env, '✅ وصلت دفعة USDT — طلب ' + (d.orderNo || ''), [...itemLines(d), ...mixLine(d), ...(r.walletShort ? ['⚠️ رصيد الزبون ما كفى للجزء ' + money(d.walletPart) + '، اطلب منه الباقي قبل التسليم'] : []), 'وصل: ' + paid, 'الزبون: ' + who(d) + (d.email ? ' · ' + d.email : ''), done ? 'الحالة: تسلّم تلقائياً بكود ✓' : 'الحالة: قيد التسليم — سلّمه الاشتراك'], SITE + '/admin.html');
+  if (d.source === 'telegram') return; // the bot tells them on Telegram, no email with a link to the site
   let to = d.email || '';
   if (!to && d.uid) { const w = await fs.get('wallets/' + d.uid); to = (w && w.data.email) || ''; }
   if (!to) return;
@@ -521,12 +532,15 @@ async function tg(env, method, body) {
   const r = await xf(TGB + env.SHOP_BOT_TOKEN + '/' + method, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   let j = null;
   try { j = await r.json(); } catch (e) {}
+  TGERR = '';
   if (j && j.ok) return j.result;
   const why = (j && j.description) || 'http ' + r.status;
   if (/message is not modified/.test(why)) return {};
   console.error('tg', method, why);
+  TGERR = why;
   return null;
 }
+let TGERR = ''; // why the last Telegram call failed
 
 // GET /tg/setup : connect the bot to this server (open it once in the browser after adding SHOP_BOT_TOKEN)
 async function tgSetup(env, url) {
@@ -535,9 +549,9 @@ async function tgSetup(env, url) {
   if (!me) return { ok: false, error: 'Telegram did not accept SHOP_BOT_TOKEN: copy it again from @BotFather' };
   const hook = url.origin + '/tg/hook';
   const set = await tg(env, 'setWebhook', { url: hook, secret_token: await tgSecret(env), allowed_updates: ['message', 'callback_query'], drop_pending_updates: true, max_connections: 10 });
-  await tg(env, 'setMyCommands', { commands: [{ command: 'start', description: 'الصفحة الرئيسية' }, { command: 'shop', description: 'تصفّح الاشتراكات' }, { command: 'orders', description: 'طلباتي' }, { command: 'help', description: 'مساعدة وتواصل' }] });
+  await tg(env, 'setMyCommands', { commands: [{ command: 'start', description: 'الصفحة الرئيسية' }, { command: 'products', description: 'المنتجات' }, { command: 'orders', description: 'طلباتي' }, { command: 'help', description: 'مساعدة وتواصل' }] });
   await tg(env, 'setMyDescription', { description: STORE + ': كل اشتراكاتك الرقمية بالشيكل. ChatGPT وClaude وCanva وCapCut وشاهد وغيرهم، دفع بجوال باي أو بال باي أو بنك فلسطين أو USDT، وتسليم خلال دقائق.' });
-  await tg(env, 'setMyShortDescription', { short_description: 'اشتراكات رقمية بالشيكل، وتسليم خلال دقائق · hazem-store.com' });
+  await tg(env, 'setMyShortDescription', { short_description: 'اشتراكات رقمية بالشيكل، اطلب وادفع واستلم هون خلال دقائق' });
   return { ok: !!set, bot: '@' + me.username, link: 'https://t.me/' + me.username, webhook: hook };
 }
 
@@ -593,7 +607,13 @@ async function tgUpdate(env, u) {
     await tgOnButton(c, String(cb.data || ''));
     await tg(env, 'answerCallbackQuery', c.alert ? { callback_query_id: cb.id, text: c.alert, show_alert: true } : { callback_query_id: cb.id });
   } else await tgOnMessage(c, m);
-  if (c.dirty) await fs.commit([fs.wUpdate('tgBot/' + c.chat, { ...c.S, at: Date.now() })]);
+  // everyone who talks to the bot goes on the list for announcements (tgUsers), once
+  const fresh = !sd || !sd.data.reg;
+  if (c.dirty || fresh) {
+    const w = [fs.wUpdate('tgBot/' + c.chat, { ...c.S, at: Date.now(), reg: 1 })];
+    if (fresh) w.push(fs.wUpdate('tgUsers/' + c.chat, { name: tgWho(c.from), user: c.from.username || '', at: Date.now(), off: false }, ['name', 'user', 'at', 'off']));
+    await fs.commit(w);
+  }
 }
 function tgSay(c, text, kb, extra) {
   return tg(c.env, 'sendMessage', { chat_id: c.chat, text, parse_mode: 'HTML', disable_web_page_preview: true, ...(kb ? { reply_markup: Array.isArray(kb) ? { inline_keyboard: kb } : kb } : {}), ...(extra || {}) });
@@ -609,42 +629,93 @@ function tgClosed(c) { return c.data.settings.siteOrders === false; }
 async function tgHome(c, fresh) {
   const names = c.data.products.slice(0, 5).map(p => tgClean(p.name)).join(' و');
   const hi = c.from.first_name ? ' ' + esc(c.from.first_name) : '';
-  const text = `أهلين${hi} في <b>${esc(c.data.settings.storeName || STORE)}</b> 👋\nكل اشتراكاتك الرقمية بالشيكل: ${esc(names)} وغيرهم.\nادفع بـ${esc(tgPayList(c))}، واستلم خلال دقائق.\n\nاختار من تحت 👇`;
-  const kb = [[tgBtn('🛍️ تصفّح الاشتراكات', 'cats')], [tgBtn('⭐ الأكثر طلباً', 'best'), tgBtn('🔎 بحث', 'find')], [tgBtn('📦 طلباتي', 'orders'), tgUrl('💬 كلّمنا', tgWa(c))], [tgUrl('🌐 افتح الموقع', SITE)]];
+  const text = `أهلين${hi} في <b>${esc(c.data.settings.storeName || STORE)}</b> 👋\nكل اشتراكاتك الرقمية بالشيكل: ${esc(names)} وغيرهم.\nادفع بـ${esc(tgPayList(c))}، واستلم هون خلال دقائق.\n\nاختار من تحت 👇`;
+  const kb = [[tgBtn('🛒 المنتجات', 'prods')], [tgBtn('🔎 بحث', 'find'), tgBtn('📦 طلباتي', 'orders')], [tgBtn('❓ كيف بشتري', 'help'), tgUrl('💬 الدعم', tgWa(c))]];
   return fresh ? tgSay(c, text, kb) : tgShow(c, text, kb);
 }
-function tgCats(c) {
-  const ps = c.data.products, cats = (c.data.settings.categories || []).map(x => ({ id: x.id, name: x.name, n: ps.filter(p => p.cat === x.id).length })).filter(x => x.n);
-  const known = new Set(cats.map(x => x.id)), other = ps.filter(p => !known.has(p.cat)).length;
-  if (other) cats.push({ id: '_', name: 'اشتراكات ثانية', n: other });
-  return tgShow(c, '🛍️ <b>الاشتراكات</b>\nاختار القسم 👇', [...tgRows(cats.map(x => tgBtn(`${x.name} (${x.n})`, 'c:' + x.id)), 2), [tgBtn('« الرئيسية', 'home')]]);
+// an emoji for each product button: from its name, else from its section
+const TG_ICON = [[/chatgpt|openai/i, '🤖'], [/claude/i, '🧠'], [/grok/i, '⚡'], [/gemini/i, '✨'], [/perplexity/i, '🔎'], [/canva/i, '🎨'], [/capcut/i, '🎬'], [/adobe/i, '🅰️'], [/autodesk/i, '📐'],
+  [/duolingo/i, '🦉'], [/office|word|excel/i, '📄'], [/notion/i, '📝'], [/pdf/i, '📑'], [/jetbrains/i, '💻'], [/miro/i, '🧩'], [/lovable/i, '💜'], [/wispr/i, '🎙️'], [/muse/i, '🎵'],
+  [/shahid|شاهد|netflix|نتفلكس/i, '🎬'], [/esim|شرائح|شريحة|انترنت|إنترنت/i, '📶'], [/توثيق/, '☑️'], [/إعلان|اعلان|ممول/, '📣'], [/تيليجرام|تلغرام|telegram/i, '✈️'],
+  [/انستغرام|انستجرام|إنستغرام|instagram/i, '📸'], [/فيسبوك|facebook/i, '📘'], [/تويتر|twitter/i, '🐦'], [/snap|سناب/i, '👻'], [/youtube|يوتيوب/i, '▶️'], [/spotify|سبوتيفاي/i, '🎧']];
+const TG_CAT_ICON = [[/ذكاء/, '🤖'], [/تصميم|مونتاج/, '🎨'], [/تعليم|إنتاج|انتاج/, '📚'], [/انترنت|إنترنت/, '📶'], [/سوشال|تواصل/, '📱'], [/برمج/, '💻'], [/افلام|أفلام|مسلسل/, '🎬'], [/العاب|ألعاب/, '🎮']];
+function tgIcon(data, p) {
+  for (const [re, e] of TG_ICON) if (re.test(String(p.name || ''))) return e;
+  const cat = (data.settings.categories || []).find(x => x.id === p.cat);
+  if (cat) for (const [re, e] of TG_CAT_ICON) if (re.test(String(cat.name || ''))) return e;
+  return '🛍️';
 }
-function tgList(c, title, list, back) {
-  return tgShow(c, title, [...list.map(p => [tgBtn(`${tgClean(p.name)} · ${tgPrice(p)}`, 'p:' + p.id)]), [tgBtn('« رجوع', back), tgBtn('🏠 الرئيسية', 'home')]]);
+function tgOut(p) { return !!p.soldOut || !p.plans.some(x => +x.price > 0 && !x.out); }
+function tgName(data, p) { return `${tgOut(p) ? '🔴' : tgIcon(data, p)} ${tgClean(p.name).slice(0, 26)}`; }
+// all products as buttons, two in a row
+function tgGrid(c, fresh) {
+  const ps = c.data.products, kb = [...tgRows(ps.map(p => tgBtn(tgName(c.data, p), 'g:' + p.id)), 2), [tgBtn('🔎 بحث', 'find'), tgBtn('🏠 الرئيسية', 'home')]];
+  const text = `🛒 <b>المنتجات</b>\nاختار المنتج 👇${ps.some(tgOut) ? '\n🔴 = خلصت كميته هلأ' : ''}`;
+  return fresh ? tgSay(c, text, kb) : tgShow(c, text, kb);
 }
-function tgCat(c, id) {
-  const ps = c.data.products, cats = c.data.settings.categories || [];
-  const known = new Set(cats.map(x => x.id)), cat = cats.find(x => x.id === id);
-  const list = id === '_' ? ps.filter(p => !known.has(p.cat)) : ps.filter(p => p.cat === id);
-  if (!list.length) return tgCats(c);
-  return tgList(c, `<b>${esc(cat ? cat.name : 'اشتراكات ثانية')}</b>\nاختار الاشتراك 👇`, list, 'cats');
+// how many instant codes are left for the instant plans of these products (cached a minute)
+async function tgCounts(c, list) {
+  const st = c.data.stock || (c.data.stock = {}), want = [];
+  for (const p of list) for (const pl of p.plans || []) if (pl.instant && pl.id && +pl.price > 0 && !((p.id + '|' + pl.id) in st)) want.push([p.id, pl.id]);
+  await Promise.all(want.slice(0, 6).map(async ([pid, plan]) => {
+    try { st[pid + '|' + plan] = await c.fs.count('stock', [['pid', 'EQUAL', pid], ['plan', 'EQUAL', plan], ['owner', 'IS_NULL']]); } catch (e) {}
+  }));
 }
-function tgBest(c) {
-  const ps = c.data.products, list = ps.filter(p => p.badge).concat(ps.filter(p => !p.badge)).slice(0, 8);
-  return tgList(c, '⭐ <b>الأكثر طلباً</b>\nاختار الاشتراك 👇', list, 'home');
+// the product card: name, prices, what is left
+function tgCard(data, p, head, extra) {
+  const st = data.stock || {}, nm = tgClean(p.name), plans = p.plans.filter(x => +x.price > 0), one = plans.length === 1;
+  const gone = pl => !!p.soldOut || !!pl.out, live = plans.filter(x => !gone(x));
+  const cnt = pl => pl.instant ? +st[p.id + '|' + pl.id] || 0 : 0;
+  const price = pl => gone(pl) ? `<s>${tgN(pl.price)} ₪</s> نفدت` : (+pl.compare > +pl.price ? `<s>${tgN(pl.compare)} ₪</s> ` : '') + `<b>${tgN(pl.price)} ₪</b>`;
+  const auto = (data.settings.payments || []).some(m => m.active !== false && isUsdt(m) && m.auto);
+  const L = [];
+  if (head) L.push(head, '');
+  const pn = one ? tgClean(plans[0].name || '') : '';
+  L.push(`${live.length ? '🟢' : '🔴'} <b>${esc(pn && pn !== nm ? nm + ' — ' + pn : nm)}</b>${p.badge ? ' · ' + esc(p.badge) : ''}`);
+  if (extra && extra.length) L.push(...extra);
+  if (one) {
+    const pl = plans[0];
+    L.push(`💵 السعر: ${price(pl)}`);
+    if (!gone(pl)) L.push(cnt(pl) ? `📦 المتوفر: ${cnt(pl)}` : '✅ متوفر');
+    if (!gone(pl) && pl.war === 'yes') L.push('🛡 مضمون طول مدة الاشتراك');
+  } else {
+    L.push('💵 الأسعار:');
+    for (const pl of plans.slice(0, 10)) L.push(`▫️ ${esc(tgClean(pl.name || nm))} — ${price(pl)}${!gone(pl) && cnt(pl) ? ' · 📦 ' + cnt(pl) : ''}${!gone(pl) && pl.war === 'yes' ? ' 🛡' : ''}`);
+    if (live.some(x => x.war === 'yes')) L.push('🛡 = مضمون طول مدة الاشتراك');
+  }
+  if (auto && live.some(cnt)) L.push('⚡ تسليم فوري لما تدفع USDT');
+  return L.join('\n');
 }
-function tgProduct(c, id, fresh) {
+async function tgProduct(c, id, fresh) {
   const p = c.data.products.find(x => x.id === id);
-  if (!p) { c.alert = 'هالاشتراك مش متوفر هلأ'; return tgCats(c); }
-  const desc = String(p.desc || '').trim().split('\n').filter(Boolean).slice(0, 3).join('\n').slice(0, 420);
-  const feats = (p.features || []).filter(Boolean).slice(0, 4).map(f => '• ' + esc(f)).join('\n');
-  const text = `<b>${esc(tgClean(p.name))}</b>${p.badge ? ' · ' + esc(p.badge) : ''}\n${desc ? '\n' + esc(desc) + '\n' : ''}${feats ? '\n' + feats + '\n' : ''}${p.plans.some(x => x.war === 'yes') ? '\n🛡 = مضمون طول مدة الاشتراك' : ''}\nاختار المدة 👇`;
-  const kb = p.plans.map((pl, i) => ({ pl, i })).filter(x => +x.pl.price > 0).map(({ pl, i }) => {
-    const out = p.soldOut || pl.out;
-    return [tgBtn(`${tgClean(pl.name || p.name)} — ${tgN(pl.price)} ₪${pl.war === 'yes' ? ' 🛡' : ''}${out ? ' · نفدت' : ''}`, out ? 'out' : `pl:${p.id}:${i}`)];
-  });
-  kb.push([tgBtn('« رجوع', p.cat && (c.data.settings.categories || []).some(x => x.id === p.cat) ? 'c:' + p.cat : 'cats'), tgBtn('🏠 الرئيسية', 'home')]);
+  if (!p) { c.alert = 'هالاشتراك مش متوفر هلأ'; return tgGrid(c); }
+  await tgCounts(c, [p]);
+  const desc = String(p.desc || '').trim().split('\n').filter(Boolean).slice(0, 2).join('\n').slice(0, 300);
+  const extra = [...(desc ? [esc(desc)] : []), ...(p.features || []).filter(Boolean).slice(0, 3).map(f => '• ' + esc(f))];
+  const plans = p.plans.map((pl, i) => ({ pl, i })).filter(x => +x.pl.price > 0), live = plans.filter(x => !p.soldOut && !x.pl.out);
+  let text = tgCard(c.data, p, '', extra.length ? [...extra, ''] : []);
+  const kb = !live.length ? [[tgBtn('🔴 نفدت الكمية', 'out')]]
+    : plans.length === 1 ? [[tgBtn('🛒 اشتري الآن', `pl:${p.id}:${live[0].i}`)]]
+    : live.map(x => [tgBtn(`🛒 ${tgClean(x.pl.name || p.name).slice(0, 24)} · ${tgN(x.pl.price)} ₪`, `pl:${p.id}:${x.i}`)]);
+  if (plans.length > 1 && live.length) text += '\n\n👇 اختار المدة واكبس عليها';
+  kb.push([tgBtn('« المنتجات', 'prods'), tgBtn('🏠 الرئيسية', 'home')]);
   return fresh ? tgSay(c, text, kb) : tgShow(c, text, kb);
+}
+// 🛒 from an announcement: keep the announcement, carry on in a new message under it
+function tgBuy(c, pid) {
+  const p = c.data.products.find(x => x.id === pid);
+  if (!p) { c.alert = 'هالاشتراك مش متوفر هلأ'; return; }
+  if (tgOut(p)) { c.alert = 'خلصت كميته هلأ، اسألنا على واتساب ونبلّغك أول ما يرجع'; return; }
+  c.msgId = 0;
+  const plans = p.plans.map((pl, i) => ({ pl, i })).filter(x => +x.pl.price > 0);
+  if (plans.length === 1) return tgPlan(c, p.id, plans[0].i);
+  return tgProduct(c, p.id, true);
+}
+async function tgHelp(c, edit) {
+  const u = await c.fs.get('tgUsers/' + c.chat), muted = !!(u && u.data.mute);
+  const text = `<b>كيف بتشتري؟</b>\n1. اكبس 🛒 المنتجات واختار اللي بدك\n2. اختار المدة، وادفع بـ${esc(tgPayList(c))}\n3. ابعت سكرين التحويل هون\n4. بنفعّلك وبنبعتلك التفاصيل هون بالبوت\n\n🔔 الإعلانات ${muted ? '<b>موقفة</b>' : '<b>شغالة</b>'}: بنبعتلك لما ينزل منتج جديد أو كمية جديدة أو ينزل سعر.\n💬 لأي سؤال كلّمنا على واتساب.`;
+  const kb = [[tgBtn('🛒 المنتجات', 'prods'), tgUrl('💬 واتساب', tgWa(c))], [tgBtn(muted ? '🔔 شغّل الإعلانات' : '🔕 وقّف الإعلانات', muted ? 'unmute:h' : 'mute:h')]];
+  return edit ? tgShow(c, text, kb) : tgSay(c, text, kb);
 }
 function tgPick(c) {
   const p = c.data.products.find(x => x.id === c.S.pid);
@@ -721,17 +792,25 @@ async function tgAsk(c) {
 function tgNext(c) { c.S.q.shift(); c.dirty = true; return tgAsk(c); }
 
 async function tgOnButton(c, d) {
-  const nav = ['home', 'cats', 'best', 'find', 'orders'].includes(d) || /^(c|p|o):/.test(d);
+  const nav = ['home', 'prods', 'cats', 'best', 'find', 'orders', 'help'].includes(d) || /^(c|p|g|b|o):/.test(d);
   if (nav && (c.S.q || []).length) tgReset(c);           // browsing again ends a half-done order
   if (d === 'home') return tgHome(c);
-  if (d === 'cats') return tgCats(c);
-  if (d === 'best') return tgBest(c);
+  if (d === 'prods' || d === 'cats' || d === 'best' || /^c:/.test(d)) return tgGrid(c);   // cats/best/c: are buttons from the first version
   if (d === 'find') return tgSay(c, '🔎 اكتب اسم الاشتراك اللي بتدوّر عليه، مثلاً: <b>كانفا</b> أو <b>ChatGPT</b> أو <b>شاهد</b>');
   if (d === 'orders') return tgOrders(c);
+  if (d === 'help') { c.msgId = 0; return tgHelp(c); }
   if (d === 'out') { c.alert = 'هالمدة خلصت كميتها هلأ، اسألنا على واتساب ونبلّغك أول ما ترجع'; return; }
   if (d === 'cancel') { tgReset(c); return tgSay(c, 'تمام، لغينا الطلب 👍\nاضغط /start لترجع للرئيسية.', { remove_keyboard: true }); }
   let k;
-  if ((k = d.match(/^c:(.+)$/))) return tgCat(c, k[1]);
+  if ((k = d.match(/^(un)?mute(:h)?$/))) {
+    const mute = !k[1];
+    await c.fs.commit([c.fs.wUpdate('tgUsers/' + c.chat, { mute }, ['mute'])]);
+    if (k[2]) return tgHelp(c, true);
+    c.alert = mute ? '🔕 تمام، وقّفنا الإعلانات. بترجّعها من /help' : '🔔 رجعنا نبعتلك الإعلانات';
+    return;
+  }
+  if ((k = d.match(/^g:(.+)$/))) { c.msgId = 0; return tgProduct(c, k[1], true); }   // from the grid: the card comes under it
+  if ((k = d.match(/^b:(.+)$/))) return tgBuy(c, k[1]);
   if ((k = d.match(/^p:(.+)$/))) return tgProduct(c, k[1]);
   if ((k = d.match(/^pl:(.+):(\d+)$/))) return tgPlan(c, k[1], k[2]);
   if ((k = d.match(/^m:(.+)$/))) return tgMethod(c, k[1]);
@@ -754,12 +833,12 @@ async function tgOnMessage(c, m) {
   const cmd = text.match(/^\/(\w+)(?:@\w+)?(?:\s+(.+))?$/);
   if (cmd) {
     const name = cmd[1].toLowerCase();
-    if (name === 'start' || name === 'shop' || name === 'orders' || name === 'help') tgReset(c);
+    if (['start', 'products', 'shop', 'orders', 'help'].includes(name)) tgReset(c);
     if (name === 'start' && cmd[2] && /^p_[A-Za-z0-9_-]+$/.test(cmd[2])) return tgProduct(c, cmd[2].slice(2), true);
     if (name === 'start') return tgHome(c, true);
-    if (name === 'shop') { c.msgId = 0; return tgCats(c); }
+    if (name === 'products' || name === 'shop') return tgGrid(c, true);
     if (name === 'orders') { c.msgId = 0; return tgOrders(c); }
-    if (name === 'help') return tgSay(c, `<b>كيف بتشتري؟</b>\n1. اختار الاشتراك والمدة\n2. ادفع بـ${esc(tgPayList(c))} وابعت سكرين التحويل\n3. بنفعّلك وبنبعتلك التفاصيل هون\n\n💬 لأي سؤال كلّمنا على واتساب، أو زور الموقع.`, [[tgUrl('💬 واتساب', tgWa(c)), tgUrl('🌐 الموقع', SITE)], [tgBtn('🛍️ تصفّح الاشتراكات', 'cats')]]);
+    if (name === 'help') return tgHelp(c);
   }
   const step = (c.S.q || [])[0];
   if (!step) return tgSearch(c, text);
@@ -808,10 +887,11 @@ async function tgSearch(c, text) {
     const cat = cats.find(x => x.id === p.cat);
     const hay = tgNorm([p.name, p.keywords, p.desc, cat && cat.name, ...(p.plans || []).map(x => x.name)].join(' '));
     return words.every(w => hay.includes(w));
-  }).slice(0, 8);
-  if (!hits.length) return tgSay(c, `ما لقينا «${esc(text.slice(0, 40))}» 🤔\nاسألنا على واتساب وبنجيبلك أي اشتراك مش موجود.`, [[tgUrl('💬 اسألنا على واتساب', tgWa(c))], [tgBtn('🛍️ تصفّح الاشتراكات', 'cats')]]);
+  }).slice(0, 10);
+  if (!hits.length) return tgSay(c, `ما لقينا «${esc(text.slice(0, 40))}» 🤔\nاسألنا على واتساب وبنجيبلك أي اشتراك مش موجود.`, [[tgUrl('💬 اسألنا على واتساب', tgWa(c))], [tgBtn('🛒 كل المنتجات', 'prods')]]);
   c.msgId = 0;
-  return tgList(c, `🔎 لقينا ${hits.length === 1 ? 'اشتراك واحد' : hits.length + ' اشتراكات'} لـ «${esc(text.slice(0, 40))}»:`, hits, 'home');
+  if (hits.length === 1) return tgProduct(c, hits[0].id, true);
+  return tgSay(c, `🔎 لقينا ${hits.length} اشتراكات لـ «${esc(text.slice(0, 40))}» 👇`, [...tgRows(hits.map(p => tgBtn(tgName(c.data, p), 'g:' + p.id)), 2), [tgBtn('🛒 كل المنتجات', 'prods')]]);
 }
 
 async function tgPhoto(env, photos) {
@@ -832,7 +912,7 @@ function tgDocId() { const a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv
 
 async function tgFinish(c) {
   const x = tgPick(c), m = tgMethods(c).find(y => y.key === c.S.method);
-  if (!x || !m) { tgReset(c); return tgSay(c, 'انتهت صلاحية الطلب، ابدأ من جديد 🙏', [[tgBtn('🛍️ تصفّح الاشتراكات', 'cats')]]); }
+  if (!x || !m) { tgReset(c); return tgSay(c, 'انتهت صلاحية الطلب، ابدأ من جديد 🙏', [[tgBtn('🛒 المنتجات', 'prods')]]); }
   const { fs, env } = c, auto = isUsdt(m) && !!m.auto, id = tgDocId(), no = tgOrderNo();
   const info = (x.p.ask || []).map((a, k) => { const v = String((c.S.ans || {})[k] || '').trim(); return v ? a.l + ': ' + v : ''; }).filter(Boolean).join(' | ').slice(0, 600);
   const item = { productId: x.p.id, productName: tgClean(x.p.name).slice(0, 100), planId: x.pl.id, planName: tgClean(x.pl.name || '').slice(0, 60), price: +x.pl.price, qty: 1 };
@@ -877,7 +957,7 @@ function tgStatus(o) {
 }
 async function tgOrders(c) {
   const rows = (await c.fs.query('orders', [['tgChat', 'EQUAL', c.chat]], 30)).sort((a, b) => (+b.data.createdAt || 0) - (+a.data.createdAt || 0)).slice(0, 6);
-  if (!rows.length) return tgShow(c, '📦 لسا ما عندك طلبات من البوت.\nاختار اشتراكك وبيطلع طلبك هون 👇', [[tgBtn('🛍️ تصفّح الاشتراكات', 'cats')], [tgBtn('« الرئيسية', 'home')]]);
+  if (!rows.length) return tgShow(c, '📦 لسا ما عندك طلبات من البوت.\nاختار اشتراكك وبيطلع طلبك هون 👇', [[tgBtn('🛒 المنتجات', 'prods')], [tgBtn('« الرئيسية', 'home')]]);
   const text = '📦 <b>طلباتك</b>\n\n' + rows.map(r => { const o = r.data, it = (o.items || [])[0] || {}; return `<code>${esc(o.orderNo || '')}</code> · ${esc(it.productName || '')}${it.planName ? ' (' + esc(it.planName) + ')' : ''}\n${tgStatus(o)}`; }).join('\n\n') + '\n\nاضغط على طلب لتشوف تفاصيله 👇';
   return tgShow(c, text, [...rows.map(r => [tgBtn(`${r.data.orderNo || ''} · ${tgStatus(r.data)}`, 'o:' + r.id)]), [tgBtn('« الرئيسية', 'home')]]);
 }
@@ -918,7 +998,7 @@ async function tgNotifyStatus(fs, env, id, d, dlvSig) {
     if (d.delivery) text += `\n\n<b>تفاصيل التفعيل:</b>\n<pre>${esc(String(d.delivery).slice(0, 3000))}</pre>`;
     if (Array.isArray(d.stockIds) && d.stockIds.length) for (const k of await readCodes(fs, d)) text += `\n\n<b>${esc(k.name)}</b>\n<pre>${esc(k.value)}</pre>`;
     text += '\n\nاحفظ التفاصيل عندك، وإذا احتجت أي اشي كلّمنا برقم الطلب 🤍';
-    kb.push([tgBtn('🛍️ اشتراك جديد', 'cats'), tgBtn('📦 طلباتي', 'orders')]);
+    kb.push([tgBtn('🛒 اشتراك جديد', 'prods'), tgBtn('📦 طلباتي', 'orders')]);
   } else if (d.status === 'cancelled') text = `❌ انلغى طلبك ${no}\nإذا في أي سؤال كلّمنا على واتساب.`;
   if (!text) return false;
   const sent = await tg(env, 'sendMessage', { chat_id: d.tgChat, text, parse_mode: 'HTML', disable_web_page_preview: true, ...(kb.length ? { reply_markup: { inline_keyboard: kb } } : {}) });
@@ -939,6 +1019,115 @@ async function tgFollow(fs, env, id, exp) {
   return 'keep';
 }
 
+// ---------------------------------------------------------------- bot announcements
+// Every ~10 minutes the cron compares the products with the last look. A new product, a product or
+// duration that is back in stock, new instant codes, or a lower price becomes one message that goes
+// to everyone on tgUsers, about 25 people per run. Hazem can switch it off in the admin settings
+// (settings.tgCast = false); a customer can switch it off with 🔕.
+const CAST_EVERY = 9.5 * 60e3, CAST_GAP = 6 * 3600e3;
+async function tgCastRun(fs, env, s, now) {
+  let C = {};
+  try { C = JSON.parse(s.tgCast || '{}') || {}; } catch (e) {}
+  C.jobs = Array.isArray(C.jobs) ? C.jobs : [];
+  if (now - (+C.scan || 0) >= CAST_EVERY && BUDGET >= 12) {
+    try { await tgCastScan(fs, env, C, now); } catch (e) { C.err = String(e && e.message).slice(0, 200); }
+  }
+  if (C.jobs.length && BUDGET >= 7) {
+    try { await tgCastSend(fs, env, C); } catch (e) { C.err = String(e && e.message).slice(0, 200); }
+  }
+  return JSON.stringify(C);
+}
+function tgSnap(p) {
+  const o = p.soldOut || p.active === false ? 1 : 0, pl = {};
+  for (const x of p.plans || []) if (x && x.id && +x.price > 0) pl[x.id] = [+x.price, x.out ? 1 : 0];
+  return { o, p: pl };
+}
+async function tgCastScan(fs, env, C, now) {
+  const [rows, sd] = await Promise.all([fs.list('products'), fs.get('settings/main')]);
+  const settings = (sd && sd.data) || {}, all = rows.map(d => ({ ...d.data, id: d.id }));
+  const first = !C.base, base = C.base || {}, nb = {}, on = settings.tgCast !== false && settings.siteOrders !== false;
+  C.scan = now;
+  // instant codes added since the last look
+  const added = {};
+  if (!first && all.some(p => (p.plans || []).some(x => x && x.instant))) {
+    const rs = await fs.query('stock', [['createdAt', 'GREATER_THAN', new Date(+C.sc || now)]], 500, 'createdAt', ['pid', 'plan', 'createdAt']);
+    for (const r of rs) { const k = r.data.pid + '|' + r.data.plan; added[k] = (added[k] || 0) + 1; C.sc = Math.max(+C.sc || 0, (+r.data.createdAt || 0) + 1); }
+  }
+  if (!C.sc || first) C.sc = now;
+  C.ann = C.ann || {};
+  for (const k of Object.keys(C.ann)) if (now - C.ann[k] > CAST_GAP) delete C.ann[k];
+  const ev = [];
+  for (const p of all) {
+    const cur = tgSnap(p), b = base[p.id];
+    nb[p.id] = cur;
+    if (first || !on || !Array.isArray(p.plans)) continue;
+    const live = Object.keys(cur.p).filter(id => !cur.o && !cur.p[id][1]);
+    if (!live.length) continue;
+    let e = null;
+    if (!b) e = { k: 'new' };
+    else {
+      const codes = live.filter(id => added[p.id + '|' + id]);
+      const back = live.filter(id => b.o || !b.p[id] || b.p[id][1]);
+      const drop = live.filter(id => b.p[id] && cur.p[id][0] < b.p[id][0] - 0.001);
+      if (codes.length) e = { k: 'codes', plan: codes[0], n: added[p.id + '|' + codes[0]] };
+      else if (back.length) e = { k: back.some(id => !b.p[id]) && !b.o ? 'new' : 'back' };
+      else if (drop.length) e = { k: 'price', plan: drop[0], was: b.p[drop[0]][0] };
+    }
+    if (!e) continue;
+    if (C.ann[p.id] && now - C.ann[p.id] < CAST_GAP) continue; // one announcement per product every 6 hours
+    C.ann[p.id] = now;
+    ev.push({ ...e, p: { ...p, plans: p.plans.filter(x => x && +x.price > 0) } });
+  }
+  C.base = nb;
+  if (!ev.length) return;
+  const data = { settings, stock: {} };
+  for (const e of ev.filter(x => x.k === 'codes').slice(0, 3)) {
+    try { data.stock[e.p.id + '|' + e.plan] = await fs.count('stock', [['pid', 'EQUAL', e.p.id], ['plan', 'EQUAL', e.plan], ['owner', 'IS_NULL']]); } catch (err) {}
+  }
+  const mute = [tgBtn('🔕 وقّف الإعلانات', 'mute')];
+  let text, kb;
+  if (ev.length === 1) {
+    const e = ev[0], pl = e.plan && e.p.plans.find(x => x.id === e.plan), many = e.p.plans.length > 1;
+    const head = { new: '🆕 <b>جديد عنا!</b>', codes: '📢 <b>نزلت كمية جديدة!</b>', back: '✅ <b>رجع متوفر!</b>', price: '🔻 <b>نزل السعر!</b>' }[e.k];
+    const extra = e.k === 'codes' ? [`➕ انضاف: ${e.n}${many && pl ? ' (' + esc(tgClean(pl.name)) + ')' : ''}`]
+      : e.k === 'price' && pl ? [`💥 ${many ? esc(tgClean(pl.name)) + ': ' : ''}كان ${tgN(e.was)} ₪ وصار <b>${tgN(pl.price)} ₪</b>`] : [];
+    text = tgCard(data, e.p, head, extra);
+    kb = [[tgBtn('🛒 اشتري الآن', 'b:' + e.p.id)], mute];
+  } else {
+    const icon = { new: '🆕', codes: '➕', back: '✅', price: '🔻' };
+    const list = ev.slice(0, 8);
+    text = `📢 <b>جديد عنا!</b>\n\n` + list.map(e => {
+      const pl = e.plan && e.p.plans.find(x => x.id === e.plan);
+      const tail = e.k === 'codes' ? ` · انضاف ${e.n}` : e.k === 'price' && pl ? ` · كان ${tgN(e.was)} ₪` : e.k === 'back' ? ' · رجع متوفر' : ' · جديد';
+      return `${icon[e.k]} <b>${esc(tgClean(e.p.name))}</b> — ${e.k === 'price' && pl ? tgN(pl.price) + ' ₪' : tgPrice(e.p)}${tail}`;
+    }).join('\n') + '\n\nاختار واكبس 🛒 👇';
+    kb = [...tgRows(list.map(e => tgBtn('🛒 ' + tgClean(e.p.name).slice(0, 24), 'b:' + e.p.id)), 2), mute];
+  }
+  C.jobs.push({ t: text, k: kb, a: '', n: 0, at: now });
+  if (C.jobs.length > 4) C.jobs = C.jobs.slice(-4);
+}
+async function tgCastSend(fs, env, C) {
+  const job = C.jobs[0], lim = Math.min(25, BUDGET - 4);
+  if (lim < 2) return;
+  const rows = await fs.page('tgUsers', job.a, lim), off = [];
+  let done = 0, stop = false;
+  for (const r of rows) {
+    if (BUDGET < 3) { stop = true; break; }
+    if (!r.data.mute && !r.data.off) {
+      const ok = await tg(env, 'sendMessage', { chat_id: r.id, text: job.t, parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: { inline_keyboard: job.k } });
+      if (ok) job.n = (+job.n || 0) + 1;
+      else if (/too many|retry after/i.test(TGERR)) { stop = true; break; }   // Telegram says slow down: this person again next run
+      else if (/blocked|deactivated|chat not found|kicked|PEER_ID_INVALID|user not found/i.test(TGERR)) off.push(r.id);
+    }
+    job.a = r.id; done++;
+  }
+  if (!stop && done === rows.length && rows.length < lim) C.jobs.shift();   // reached the end of the list
+  if (off.length && BUDGET >= 2) {
+    // they blocked the bot: stop sending; if they come back, the bot puts them on the list again
+    try { await fs.commit(off.flatMap(id => [fs.wUpdate('tgUsers/' + id, { off: true }, ['off']), fs.wUpdate('tgBot/' + id, { reg: 0 }, ['reg'])])); } catch (e) {}
+  }
+}
+
 // ---------------------------------------------------------------- Firestore REST with the service account
 let tokenCache = null;
 async function firestore(env) {
@@ -950,6 +1139,15 @@ async function firestore(env) {
   const H = { authorization: 'Bearer ' + token, 'content-type': 'application/json' };
   const name = p => `${root}/${p}`;
   const parse = doc => ({ id: doc.name.split('/').pop(), data: fromFields(doc.fields || {}), updateTime: doc.updateTime });
+  const where = filters => {
+    const fl = filters.map(([f, op, v]) => op === 'IS_NULL' ? { unaryFilter: { op: 'IS_NULL', field: { fieldPath: f } } } : { fieldFilter: { field: { fieldPath: f }, op, value: toValue(v) } });
+    return fl.length > 1 ? { compositeFilter: { op: 'AND', filters: fl } } : fl[0];
+  };
+  const run = async body => {
+    const r = await xf(api + root + ':runQuery', { method: 'POST', headers: H, body: JSON.stringify(body) });
+    if (!r.ok) throw fail('firestore query ' + r.status + ' ' + (await r.text()).slice(0, 300), 502);
+    return (await r.json()).filter(x => x.document).map(x => parse(x.document));
+  };
   return {
     project, name,
     async get(p) {
@@ -971,13 +1169,24 @@ async function firestore(env) {
       }
       return out;
     },
-    async query(col, filters, limit, orderBy) {
-      const fl = filters.map(([f, op, v]) => op === 'IS_NULL' ? { unaryFilter: { op: 'IS_NULL', field: { fieldPath: f } } } : { fieldFilter: { field: { fieldPath: f }, op, value: toValue(v) } });
-      const body = { structuredQuery: { from: [{ collectionId: col }], where: fl.length > 1 ? { compositeFilter: { op: 'AND', filters: fl } } : fl[0], limit } };
+    async query(col, filters, limit, orderBy, select) {
+      const body = { structuredQuery: { from: [{ collectionId: col }], where: where(filters), limit } };
       if (orderBy) body.structuredQuery.orderBy = [{ field: { fieldPath: orderBy }, direction: 'ASCENDING' }];
-      const r = await xf(api + root + ':runQuery', { method: 'POST', headers: H, body: JSON.stringify(body) });
-      if (!r.ok) throw fail('firestore query ' + r.status + ' ' + (await r.text()).slice(0, 300), 502);
-      return (await r.json()).filter(x => x.document).map(x => parse(x.document));
+      if (select) body.structuredQuery.select = { fields: select.map(f => ({ fieldPath: f })) };
+      return run(body);
+    },
+    // one page of a whole collection in id order, starting after the id `after`
+    async page(col, after, limit) {
+      const q = { from: [{ collectionId: col }], orderBy: [{ field: { fieldPath: '__name__' }, direction: 'ASCENDING' }], limit };
+      if (after) q.startAt = { values: [{ referenceValue: name(col + '/' + after) }], before: false };
+      return run({ structuredQuery: q });
+    },
+    // how many documents match (one cheap read instead of reading them all)
+    async count(col, filters) {
+      const r = await xf(api + root + ':runAggregationQuery', { method: 'POST', headers: H, body: JSON.stringify({ structuredAggregationQuery: { structuredQuery: { from: [{ collectionId: col }], where: where(filters) }, aggregations: [{ alias: 'n', count: {} }] } }) });
+      if (!r.ok) throw fail('firestore count ' + r.status + ' ' + (await r.text()).slice(0, 300), 502);
+      const j = await r.json(), f = j && j[0] && j[0].result && j[0].result.aggregateFields && j[0].result.aggregateFields.n;
+      return f ? +(f.integerValue || 0) : 0;
     },
     wUpdate(p, fields, mask, pre, transforms) {
       const w = { update: { name: name(p), fields: toFields(fields) } };
