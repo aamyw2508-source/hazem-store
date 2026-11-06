@@ -30,7 +30,7 @@ const CHUNKS = 8; // getLogs calls per check (each covers SPAN blocks, SPAN shri
 const SITE = 'https://hazem-store.com';
 let BUDGET = 45; // outside calls left in this run (Cloudflare allows 50 on the free plan)
 function xf(url, init) { if (BUDGET <= 0) { const e = fail('busy, try again', 503); e.budget = true; throw e; } BUDGET--; return fetch(url, init); }
-const VERSION = 12;
+const VERSION = 13;
 const STORE = 'حازم ستور';
 
 export default {
@@ -594,7 +594,8 @@ async function tgData(fs) {
   const products = rows.map(d => ({ ...d.data, id: d.id }))
     .filter(p => p.active !== false && Array.isArray(p.plans) && p.plans.some(pl => +pl.price > 0))
     .sort((a, b) => (+a.sort || 0) - (+b.sort || 0));
-  TGC = { at: Date.now(), products, settings, icons: ic && ic.data.on !== false ? ic.data.map || {} : {}, ph: (TGC && TGC.ph) || {} };
+  const im = (ic && ic.data) || null;
+  TGC = { at: Date.now(), products, settings, im, icons: im && im.on !== false && (im.prem || im.force) ? im.map || {} : {}, ph: (TGC && TGC.ph) || {} };
   return TGC;
 }
 const tgBtn = (text, data) => ({ text, callback_data: data });
@@ -634,6 +635,11 @@ async function tgUpdate(env, u) {
     await tg(env, 'answerCallbackQuery', c.alert ? { callback_query_id: cb.id, text: c.alert, show_alert: true } : { callback_query_id: cb.id });
   } else await tgOnMessage(c, m);
   // everyone who talks to the bot goes on the list for announcements (tgUsers), once
+  // the icons show only when the bot owner has Telegram Premium: follow the admin's Premium (the owner) once icons exist
+  if (data.im && !data.im.force && tgIsAdmin(c) && !!c.from.is_premium !== !!data.im.prem) {
+    await fs.commit([fs.wUpdate('tgMeta/icons', { prem: !!c.from.is_premium }, ['prem'])]);
+    TGC.at = 0;
+  }
   const fresh = !sd || !sd.data.reg;
   if (c.dirty || fresh) {
     const w = [fs.wUpdate('tgBot/' + c.chat, { ...c.S, at: Date.now(), reg: 1 })];
@@ -651,6 +657,14 @@ function tgCall(env, method, body, kb) {
   if (!Array.isArray(kb) || !kb.some(r => r.some(x => x._e))) return tg(env, method, { ...body, ...tgMarkup(kb) });
   return (async () => {
     const r = await tg(env, method, { ...body, ...tgMarkup(kb) }, true);
+    if (r && r.message_id) {
+      const back = ((r.reply_markup && r.reply_markup.inline_keyboard) || []).flat();
+      if (back.length && !back.some(x => x.icon_custom_emoji_id)) {
+        ICON_OFF = Date.now() + 30 * 60e3;
+        await tg(env, 'editMessageReplyMarkup', { chat_id: body.chat_id, message_id: r.message_id, reply_markup: tgPlain({ reply_markup: { inline_keyboard: kb } }).reply_markup }, true);
+      }
+      return r;
+    }
     if (r || TG_GONE.test(TGERR) || /too many|retry after/i.test(TGERR)) return r;
     ICON_OFF = Date.now() + 30 * 60e3;
     return tg(env, method, tgPlain({ ...body, reply_markup: { inline_keyboard: kb } }), true);
@@ -855,6 +869,11 @@ async function tgIconsMake(c, arg) {
     TGC.at = 0;
     return tgSay(c, arg === 'on' ? '✅ رجّعت الأيقونات.' : '✅ وقّفت الأيقونات، الأزرار رجعت بالإيموجي العادي.');
   }
+  if (arg === 'force') { // the owner is another account that has Premium
+    await fs.commit([fs.wUpdate('tgMeta/icons', { force: true, on: true }, ['force', 'on'])]);
+    TGC.at = 0; ICON_OFF = 0;
+    return tgSay(c, '✅ شغّلت الأيقونات. إذا ما بيّنت، يعني حساب صاحب البوت مش عليه Premium.');
+  }
   const me = await tg(env, 'getMe', {});
   if (!me) return tgSay(c, 'ما قدرت أوصل لتيليجرام، جرّب بعد شوي.');
   const name = 'hzicons_by_' + me.username;
@@ -878,10 +897,13 @@ async function tgIconsMake(c, arg) {
   const set = await tg(env, 'getStickerSet', { name });
   const map = {};
   (set && set.stickers || []).forEach((st, i) => { if (ok[i] && st.custom_emoji_id) map[ok[i].p.id] = st.custom_emoji_id; });
-  await fs.commit([fs.wUpdate('tgMeta/icons', { on: true, map, set: name, at: Date.now() })]);
+  const prem = !!c.from.is_premium;
+  await fs.commit([fs.wUpdate('tgMeta/icons', { on: true, map, set: name, at: Date.now(), prem, force: false })]);
   TGC.at = 0; ICON_OFF = 0;
   const miss = list.length - ok.length;
-  await tgSay(c, `✅ جهزت ${Object.keys(map).length} أيقونة رسمية${miss ? ` (${miss} ما زبطوا)` : ''}.\nلو ما بيّنت بالأزرار، لازم الحساب اللي عمل البوت من BotFather يكون عليه Telegram Premium.\nلتوقيفها: /icons off`);
+  await tgSay(c, `✅ جهزت ${Object.keys(map).length} أيقونة رسمية${miss ? ` (${miss} ما زبطوا)` : ''}.\n` + (prem
+    ? 'حسابك عليه Premium، فالأيقونات شغالة 👇\nلتوقيفها: /icons off'
+    : '⚠️ حسابك مش عليه <b>Telegram Premium</b> هلأ، وتيليجرام ما بيعرض الأيقونات إلا إذا صاحب البوت عليه Premium. لحد ما تشترك بتضل الأزرار بالإيموجي العادي، وأول ما تشترك وتبعت أي رسالة للبوت من هالحساب، الأيقونات بتطلع لحالها.\n(إذا صاحب البوت حساب ثاني عليه Premium ابعت /icons force)'));
   c.data = await tgData(fs);
   return tgGrid(c, true);
 }
