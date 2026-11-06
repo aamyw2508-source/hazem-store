@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-06T01:37:16Z",
+ "fetchedAt": "2026-11-06T13:31:56Z",
  "storeName": "حازم ستور",
  "cats": [
   {
@@ -1071,6 +1071,13 @@
   }
  ],
  "reviews": [
+  {
+   "name": "فارس",
+   "rating": 5,
+   "text": "أكثر من رائع",
+   "product": "ChatGPT",
+   "at": "2026-11-06"
+  },
   {
    "name": "عمر",
    "rating": 5,
