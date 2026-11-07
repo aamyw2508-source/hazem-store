@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-07T13:17:38Z",
+ "fetchedAt": "2026-11-07T19:11:47Z",
  "storeName": "حازم ستور",
  "cats": [
   {
@@ -182,6 +182,7 @@
    "note": "مع X Premium+",
    "domain": "grok.com",
    "active": true,
+   "soldOut": false,
    "sort": 4,
    "badge": "",
    "plans": [
@@ -190,7 +191,10 @@
      "name": "شهر",
      "price": 70,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     }
    ]
   },
