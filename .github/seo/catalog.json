@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-07T19:11:47Z",
+ "fetchedAt": "2026-11-08T01:34:18Z",
  "storeName": "حازم ستور",
  "cats": [
   {
@@ -288,6 +288,7 @@
    "note": "",
    "domain": "capcut.com",
    "active": true,
+   "soldOut": false,
    "sort": 6,
    "badge": "",
    "plans": [
@@ -297,24 +298,27 @@
      "price": 15,
      "compare": 0,
      "war": "",
+     "out": false,
      "instant": false,
      "acct": "none"
     },
     {
      "id": "6m",
      "name": "6 أشهر",
-     "price": 60,
+     "price": 70,
      "compare": 0,
      "war": "",
+     "out": false,
      "instant": false,
      "acct": "none"
     },
     {
      "id": "tnwfaw",
      "name": "1 سنة",
-     "price": 120,
+     "price": 140,
      "compare": 0,
      "war": "",
+     "out": false,
      "instant": false,
      "acct": "none"
     }
