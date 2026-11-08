@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-08T13:17:40Z",
+ "fetchedAt": "2026-11-08T19:10:47Z",
  "storeName": "حازم ستور",
  "cats": [
   {
@@ -159,16 +159,6 @@
      "out": false,
      "instant": false,
      "acct": "none"
-    },
-    {
-     "id": "ogmroj",
-     "name": "Claude Pro (مشترك مع شخص)",
-     "price": 40,
-     "compare": 0,
-     "war": "",
-     "out": false,
-     "instant": false,
-     "acct": "none"
     }
    ]
   },
@@ -197,7 +187,7 @@
      "name": "شهر",
      "price": 70,
      "compare": 0,
-     "war": "",
+     "war": "yes",
      "out": false,
      "instant": false,
      "acct": "none"
@@ -229,7 +219,7 @@
      "name": "سنة كاملة برو تعليمي",
      "price": 15,
      "compare": 0,
-     "war": "",
+     "war": "yes",
      "out": false,
      "instant": false,
      "acct": "none"
@@ -248,7 +238,7 @@
   },
   {
    "id": "gemini",
-   "name": "Gemini Pro",
+   "name": "Gemini",
    "cat": "ai",
    "desc": "اشتراك Gemini Pro من Google: نماذج Gemini المتقدمة ومزاياها داخل تطبيقات Google.",
    "features": [
@@ -268,13 +258,23 @@
    "plans": [
     {
      "id": "18m",
-     "name": "18 شهر ( بدون ضمان )",
+     "name": "شهر gemini pro 18",
      "price": 20,
      "compare": 0,
-     "war": "yes",
+     "war": "no",
      "out": false,
      "instant": false,
      "acct": "none"
+    },
+    {
+     "id": "h4v3og",
+     "name": "gemini plus 6 اشهر",
+     "price": 15,
+     "compare": 0,
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "email"
     }
    ]
   },
@@ -303,7 +303,7 @@
      "name": "شهر",
      "price": 15,
      "compare": 0,
-     "war": "",
+     "war": "yes",
      "out": false,
      "instant": false,
      "acct": "none"
@@ -313,7 +313,7 @@
      "name": "6 أشهر",
      "price": 70,
      "compare": 0,
-     "war": "",
+     "war": "yes",
      "out": false,
      "instant": false,
      "acct": "none"
@@ -346,15 +346,19 @@
    "note": "",
    "domain": "autodesk.com",
    "active": true,
+   "soldOut": false,
    "sort": 7,
    "badge": "",
    "plans": [
     {
      "id": "1y",
      "name": "سنة كاملة",
-     "price": 50,
+     "price": 35,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     }
    ]
   },
@@ -374,6 +378,7 @@
    "note": "",
    "domain": "duolingo.com",
    "active": true,
+   "soldOut": false,
    "sort": 8,
    "badge": "",
    "plans": [
@@ -382,7 +387,10 @@
      "name": "سنة كاملة",
      "price": 25,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     }
    ]
   },
@@ -402,6 +410,7 @@
    "note": "",
    "domain": "microsoft365.com",
    "active": true,
+   "soldOut": false,
    "sort": 9,
    "badge": "",
    "plans": [
@@ -410,7 +419,10 @@
      "name": "سنة كاملة",
      "price": 35,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     }
    ]
   },
@@ -606,15 +618,19 @@
    "note": "X Premium",
    "domain": "x.com",
    "active": true,
+   "soldOut": false,
    "sort": 13,
    "badge": "",
    "plans": [
     {
      "id": "ltec1k",
      "name": "شهر",
-     "price": 70,
+     "price": 45,
      "compare": 0,
-     "instant": false
+     "war": "",
+     "out": false,
+     "instant": false,
+     "acct": "none"
     }
    ]
   },
@@ -661,64 +677,6 @@
    ]
   },
   {
-   "id": "perplexity-max",
-   "name": "Perplexity Max",
-   "cat": "ai",
-   "desc": "اشتراك Perplexity Max، أعلى باقة بمحرك البحث بالذكاء الاصطناعي، بيوصلك كود تفعيل بتفعّله على حسابك.",
-   "features": [
-    "أعلى باقة من Perplexity",
-    "بحث بالذكاء الاصطناعي مع مصادر لكل جواب",
-    "وصول لأقوى النماذج المتاحة بالمنصة",
-    "بحث معمّق وتقارير مفصّلة",
-    "كود تفعيل بتفعّله على حسابك"
-   ],
-   "keywords": "بربلكسيتي، Perplexity، بيربلكسيتي ماكس",
-   "note": "كود تفعيل",
-   "domain": "perplexity.ai",
-   "active": true,
-   "sort": 15,
-   "badge": "",
-   "plans": [
-    {
-     "id": "h4lmli",
-     "name": "شهر",
-     "price": 90,
-     "compare": 0,
-     "instant": false,
-     "acct": ""
-    }
-   ]
-  },
-  {
-   "id": "lovable-pro",
-   "name": "Lovable Pro",
-   "cat": "ai",
-   "desc": "اشتراك Lovable Pro لبناء مواقع وتطبيقات كاملة بالكتابة بالذكاء الاصطناعي.",
-   "features": [
-    "بناء مواقع وتطبيقات كاملة بالكتابة",
-    "رصيد رسائل أكثر بكتير من المجاني",
-    "ربط دومين خاص بموقعك",
-    "مشاريع خاصة ونشر بضغطة",
-    "تعديل الكود ومزامنة مع GitHub"
-   ],
-   "keywords": "لوفابل، Lovable، بناء موقع بالذكاء الاصطناعي",
-   "note": "بناء مواقع بالذكاء الاصطناعي",
-   "domain": "lovable.dev",
-   "active": true,
-   "sort": 16,
-   "badge": "",
-   "plans": [
-    {
-     "id": "s3zmwx",
-     "name": "شهر",
-     "price": 25,
-     "compare": 0,
-     "instant": false,
-     "acct": "email"
-    }
-   ]
-  },
-  {
    "id": "wispr-flow",
    "name": "Wispr Flow Pro",
    "cat": "ai",
@@ -734,6 +692,7 @@
    "note": "Education",
    "domain": "wisprflow.ai",
    "active": true,
+   "soldOut": true,
    "sort": 17,
    "badge": "",
    "plans": [
@@ -742,6 +701,8 @@
      "name": "12 شهر",
      "price": 60,
      "compare": 0,
+     "war": "",
+     "out": false,
      "instant": false,
      "acct": "email"
     }
@@ -772,7 +733,7 @@
      "name": "حساب",
      "price": 20,
      "compare": 0,
-     "war": "",
+     "war": "no",
      "out": false,
      "instant": false,
      "acct": "none"
@@ -795,16 +756,19 @@
    "note": "رابط تفعيل",
    "domain": "adobe.com",
    "active": true,
+   "soldOut": false,
    "sort": 19,
    "badge": "",
    "plans": [
     {
      "id": "fwpu3m",
      "name": "12 شهر",
-     "price": 30,
+     "price": 25,
      "compare": 0,
+     "war": "",
+     "out": false,
      "instant": false,
-     "acct": ""
+     "acct": "none"
     }
    ]
   },
@@ -824,6 +788,7 @@
    "note": "دعوة مدى الحياة",
    "domain": "miro.com",
    "active": true,
+   "soldOut": false,
    "sort": 20,
    "badge": "",
    "plans": [
@@ -832,6 +797,8 @@
      "name": "دعوة مدى الحياة",
      "price": 15,
      "compare": 0,
+     "war": "",
+     "out": false,
      "instant": false,
      "acct": "email"
     }
@@ -839,7 +806,7 @@
   },
   {
    "id": "notion",
-   "name": "Notion",
+   "name": "Notion plus 1 year",
    "cat": "study",
    "desc": "اشتراك Notion المدفوع، بيوصلك رابط تفعيل على حسابك.",
    "features": [
@@ -853,16 +820,19 @@
    "note": "رابط تفعيل",
    "domain": "notion.so",
    "active": true,
+   "soldOut": false,
    "sort": 21,
    "badge": "",
    "plans": [
     {
      "id": "5k1s7j",
-     "name": "Business · 3 أشهر",
+     "name": "Notion plus 1 year",
      "price": 25,
      "compare": 0,
+     "war": "",
+     "out": false,
      "instant": false,
-     "acct": ""
+     "acct": "none"
     }
    ]
   },
@@ -882,6 +852,7 @@
    "note": "سنة كاملة",
    "domain": "ilovepdf.com",
    "active": true,
+   "soldOut": false,
    "sort": 22,
    "badge": "",
    "plans": [
@@ -890,8 +861,10 @@
      "name": "سنة",
      "price": 20,
      "compare": 0,
+     "war": "",
+     "out": false,
      "instant": false,
-     "acct": ""
+     "acct": "none"
     }
    ]
   },
@@ -911,6 +884,7 @@
    "note": "سنة كاملة",
    "domain": "jetbrains.com",
    "active": true,
+   "soldOut": true,
    "sort": 23,
    "badge": "",
    "plans": [
@@ -919,6 +893,8 @@
      "name": "سنة",
      "price": 30,
      "compare": 0,
+     "war": "",
+     "out": false,
      "instant": false,
      "acct": "email"
     }
@@ -940,16 +916,19 @@
    "note": "رقم +1",
    "domain": "telegram.org",
    "active": true,
+   "soldOut": false,
    "sort": 24,
    "badge": "",
    "plans": [
     {
      "id": "6xclzd",
-     "name": "حساب واحد",
+     "name": "حساب تيليجرام برقم أمريكي",
      "price": 15,
      "compare": 0,
+     "war": "",
+     "out": false,
      "instant": false,
-     "acct": ""
+     "acct": "none"
     }
    ]
   },
