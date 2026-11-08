@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-08T01:34:18Z",
+ "fetchedAt": "2026-11-08T13:17:40Z",
  "storeName": "حازم ستور",
  "cats": [
   {
@@ -74,6 +74,7 @@
    "note": "",
    "domain": "chatgpt.com",
    "active": true,
+   "soldOut": false,
    "sort": 1,
    "badge": "الأكثر طلباً",
    "plans": [
@@ -83,6 +84,7 @@
      "price": 80,
      "compare": 0,
      "war": "yes",
+     "out": false,
      "instant": false,
      "acct": "login"
     },
@@ -92,6 +94,7 @@
      "price": 40,
      "compare": 0,
      "war": "yes",
+     "out": false,
      "instant": false,
      "acct": "login"
     },
@@ -101,6 +104,7 @@
      "price": 40,
      "compare": 0,
      "war": "yes",
+     "out": false,
      "instant": false,
      "acct": "none"
     },
@@ -110,15 +114,17 @@
      "price": 30,
      "compare": 0,
      "war": "yes",
+     "out": false,
      "instant": false,
      "acct": "none"
     },
     {
      "id": "gairvz",
      "name": "Plus · شهر (ايميل من طرفي )",
-     "price": 60,
-     "compare": 0,
+     "price": 35,
+     "compare": 60,
      "war": "yes",
+     "out": false,
      "instant": false,
      "acct": "none"
     }
