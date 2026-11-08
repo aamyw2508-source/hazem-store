@@ -37,7 +37,7 @@ settings = doc(get(f'{BASE}/settings/main?key={KEY}'))
 rq = {'structuredQuery': {'from': [{'collectionId': 'reviews'}], 'where': {'fieldFilter': {'field': {'fieldPath': 'status'}, 'op': 'EQUAL', 'value': {'stringValue': 'approved'}}}, 'limit': 500}}
 reviews = [doc(x['document']) for x in get(f'{BASE}:runQuery?key={KEY}', rq) if 'document' in x]
 
-KEEP_P = ('id', 'name', 'cat', 'desc', 'features', 'keywords', 'note', 'domain', 'active', 'soldOut', 'sort', 'acct', 'badge')
+KEEP_P = ('id', 'name', 'cat', 'desc', 'features', 'keywords', 'note', 'domain', 'active', 'soldOut', 'sort', 'acct', 'badge', 'where')
 KEEP_PL = ('id', 'name', 'price', 'compare', 'war', 'out', 'instant', 'acct')
 def first_name(n): return (str(n or '').strip().split() or [''])[0][:30]
 out = {

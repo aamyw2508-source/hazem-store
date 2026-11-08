@@ -45,7 +45,7 @@ def slug_for(p):
     return s or 'p-' + hashlib.md5(p['id'].encode()).hexdigest()[:6]
 ITEMS = []
 for p in CAT['products']:
-    if p.get('active') is False or not p.get('plans'): continue
+    if p.get('active') is False or not p.get('plans') or p.get('where') == 'bot': continue  # bot-only products stay off the site
     c = CUR.get(p['id'], {})
     name = c.get('name') or NAME_OV.get(p['id']) or clean(p['name'])
     kw = [k.strip() for k in re.split('[،,]', p.get('keywords') or '') if k.strip()]

@@ -30,7 +30,7 @@ const CHUNKS = 8; // getLogs calls per check (each covers SPAN blocks, SPAN shri
 const SITE = 'https://hazem-store.com';
 let BUDGET = 45; // outside calls left in this run (Cloudflare allows 50 on the free plan)
 function xf(url, init) { if (BUDGET <= 0) { const e = fail('busy, try again', 503); e.budget = true; throw e; } BUDGET--; return fetch(url, init); }
-const VERSION = 16;
+const VERSION = 17;
 const STORE = 'حازم ستور';
 
 export default {
@@ -593,7 +593,7 @@ async function tgData(fs) {
   if (TGC.products && Date.now() - TGC.at < TGC_MS) return TGC;
   const [rows, s, ic, ad, sl] = await Promise.all([fs.list('products'), fs.get('settings/main'), fs.get('tgMeta/icons'), fs.get('tgMeta/admins'), fs.get('tgMeta/sales')]);
   const settings = (s && s.data) || {};
-  const products = rows.map(d => ({ ...d.data, id: d.id }))
+  const products = rows.map(d => tgBotView({ ...d.data, id: d.id })).filter(Boolean)
     .filter(p => p.active !== false && Array.isArray(p.plans) && p.plans.some(pl => +pl.price > 0))
     .sort((a, b) => (+a.sort || 0) - (+b.sort || 0));
   const im = (ic && ic.data) || null;
@@ -602,6 +602,12 @@ async function tgData(fs) {
   return TGC;
 }
 const TGC_MS = 60e3;
+// what the bot sells: everything except products marked "site only", at the bot's own price where Hazem set one
+function tgBotView(p) {
+  if (!p || p.where === 'site') return null;
+  if (!Array.isArray(p.plans) || !p.plans.some(x => x && +x.tgPrice > 0)) return p;
+  return { ...p, plans: p.plans.map(x => x && +x.tgPrice > 0 ? { ...x, price: +x.tgPrice, sitePrice: +x.price } : x) };
+}
 const tgBtn = (text, data) => ({ text, callback_data: data });
 const tgUrl = (text, url) => ({ text, url });
 function tgRows(a, n) { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; }
@@ -701,6 +707,8 @@ async function tgHome(c, fresh) {
   const hi = c.from.first_name ? ' ' + esc(c.from.first_name) : '';
   const text = `أهلين${hi} في <b>${esc(c.data.settings.storeName || STORE)}</b> 👋\nكل اشتراكاتك الرقمية بالشيكل: ${esc(names)} وغيرهم.\nادفع بـ${esc(tgPayList(c))}، واستلم هون خلال دقائق.\n\nاختار من تحت 👇`;
   const kb = [[tgBtn('🛒 المنتجات', 'prods')], [tgBtn('🔎 بحث', 'find'), tgBtn('📦 طلباتي', 'orders')], [tgBtn('❓ كيف بشتري', 'help'), tgUrl('💬 الدعم', tgSup(c))]];
+  const ch = tgChan(c.data.settings);
+  if (ch && ch[0] === '@') kb.push([tgUrl('📣 قناتنا: العروض أول بأول', 'https://t.me/' + ch.slice(1))]);
   if (tgIsAdmin(c)) kb.push([tgBtn('⏳ الطلبات المعلّقة', 'apend'), tgBtn('🔥 عرض لوقت محدود', 'sl')], [tgBtn('📢 إعلان للمشتركين', 'post'), tgBtn('🎨 الأيقونات', 'seticon')]);
   return fresh ? tgSay(c, text, kb) : tgShow(c, text, kb);
 }
@@ -814,6 +822,7 @@ async function tgVariant(c, pid, k, fresh) {
   L.push(`💵 السعر: ${+pl.compare > +pl.price ? `<s>${tgN(pl.compare)} ₪</s> ` : ''}<b>${tgN(pl.price)} ₪</b>`);
   L.push(gone ? '🔴 خلصت الكمية هلأ' : n ? `📦 المتوفر: ${n} قطعة` : '✅ متوفر');
   if (String(pl.tgWar || '').trim()) L.push(`🛡 الضمان: ${esc(String(pl.tgWar).trim())}`);
+  if (!gone && pl.deal && +pl.deal.until > Date.now()) L.push(`🔥 عرض لحد ${tgWhen(+pl.deal.until, true)}`);
   L.push('', '📝 <b>الوصف:</b>', `<blockquote>${tgDesc(c.data, p, pl)}</blockquote>`);
   const kb = [gone ? [{ text: '🔔 نفدت، نبّهني لما ترجع', callback_data: `nt:${p.id}:${k}`, style: 'danger' }] : [{ text: '🛒 اشتري الآن', callback_data: `pl:${p.id}:${k}`, style: 'success' }]];
   const bot = await tgMe(c.env);
@@ -854,8 +863,9 @@ async function tgHelp(c, edit) {
 function tgPostMenu(c) {
   if (!tgIsAdmin(c)) return tgHome(c, !c.msgId);
   const ps = c.data.products.filter(p => !tgOut(p));
-  const kb = [...tgRows(ps.map(p => tgPBtn(c.data, p, 'ps:' + p.id)), 2), [tgBtn('« الرئيسية', 'home')]];
-  return tgShow(c, '📢 <b>إعلان لكل مشتركين البوت</b>\nاختار المنتج اللي بدك تعلن عنه 👇', kb);
+  const kb = [[{ ...tgBtn('📝 بوست حر (نص، صورة، فيديو)', 'pfree'), style: 'success' }], ...tgRows(ps.map(p => tgPBtn(c.data, p, 'ps:' + p.id)), 2), [tgBtn('« الرئيسية', 'home')]];
+  const ch = tgChan(c.data.settings);
+  return tgShow(c, `📢 <b>إعلان ${ch ? 'للمشتركين أو للقناة ' + esc(ch) : 'لكل مشتركين البوت'}</b>\nاكتب بوست حر، أو اختار منتج وبنعمله بطاقة 👇`, kb);
 }
 // the announcement card, like the shops on Telegram: icon + name, what's new, stock, price, one 🛒 button.
 // i = which duration (its index in the product), or null for one card with all the durations
@@ -899,20 +909,91 @@ async function tgPostPreview(c, pid, which) {
   await tgSay(c, j.t, j.k);
   let n = 0;
   try { n = await tgSubs(c.fs); } catch (e) {}
-  return tgSay(c, `👆 هيك رح يوصل.\nالمشتركين: <b>${n}</b>\nأبعته للكل؟`, [[{ ...tgBtn('📢 آه، ابعته للكل', `pc:${p.id}:${which}`), style: 'success' }], [tgBtn('« منتج ثاني', 'post'), { ...tgBtn('❌ لا', 'home'), style: 'danger' }]]);
+  return tgSay(c, `👆 هيك رح يوصل.\nالمشتركين: <b>${n}</b>\n${tgChan(c.data.settings) ? 'وين بدك تنشره؟' : 'أبعته للكل؟'}`, [...tgDestKb(c, `pc:${p.id}:${which}:`), [tgBtn('« منتج ثاني', 'post'), { ...tgBtn('❌ لا', 'home'), style: 'danger' }]]);
 }
-async function tgPostSend(c, pid, which) {
+async function tgPostSend(c, pid, which, dest) {
+  dest = dest || 'u';
   if (!tgIsAdmin(c)) return;
   const p = c.data.products.find(x => x.id === pid);
   if (!p) { c.alert = 'هالمنتج مش موجود'; return; }
   await tgCounts(c, [p]);
   const j = tgPostCard(c.data, p, which === 'a' ? null : which);
-  const id = 'p_' + p.id + '_' + which + '_' + Math.floor(Date.now() / 60e3); // pressing twice in the same minute sends once
+  const id = 'p_' + p.id + '_' + which + '_' + dest + '_' + Math.floor(Date.now() / 60e3); // pressing twice in the same minute sends once
   // tgSent keeps a small mark per post, so a second press can't send it again even after the first one finished
-  try { await c.fs.commit([c.fs.wUpdate('tgPosts/' + id, { ...j, a: '', n: 0, by: c.chat, at: Date.now(), lock: 0 }, null, { exists: false }), c.fs.wUpdate('tgSent/' + id, { at: Date.now() }, null, { exists: false })]); }
+  try { await c.fs.commit([c.fs.wUpdate('tgPosts/' + id, { ...j, ...tgDestJob(c, dest), a: '', n: 0, by: c.chat, at: Date.now(), lock: 0 }, null, { exists: false }), c.fs.wUpdate('tgSent/' + id, { at: Date.now() }, null, { exists: false })]); }
   catch (e) { c.alert = 'هاد الإعلان انبعت قبل شوي ✓'; return; }
-  await tgShow(c, `✅ <b>بلّشنا نبعت إعلان ${esc(tgClean(p.name))}</b>\nبيوصل للكل خلال دقايق (حوالي 25 شخص كل دقيقتين)، وبخبرك هون لما يخلص.`, [[tgBtn('📢 إعلان ثاني', 'post'), tgBtn('🏠 الرئيسية', 'home')]]);
+  await tgShow(c, `✅ <b>بلّشنا ننشر إعلان ${esc(tgClean(p.name))}</b>\nبيوصل ${tgDestDone(c, dest)}، وبخبرك هون لما يخلص.`, [[tgBtn('📢 إعلان ثاني', 'post'), tgBtn('🏠 الرئيسية', 'home')]]);
   await tgJobRun(c.fs, c.env); // the first people right away
+}
+// ---------------------------------------------------------------- the store's Telegram channel (admin settings → بوت تيليجرام)
+// The bot posts there as an admin of the channel. Buttons in a channel open the bot (links), since a channel has no chat with the bot.
+function tgChan(settings) {
+  const v = String((settings && settings.tgChannel) || '').trim().replace(/^.*t\.me\//i, '').replace(/^@/, '');
+  if (/^-100\d{5,}$/.test(v)) return v;
+  return /^[A-Za-z][A-Za-z0-9_]{3,}$/.test(v) ? '@' + v : '';
+}
+function tgChanAuto(settings) { return settings && settings.tgChanAuto !== false ? tgChan(settings) : ''; }
+function tgChanKb(kb, bot) {
+  const link = start => 'https://t.me/' + bot + (start ? '?start=' + start : '');
+  const out = [];
+  for (const row of kb || []) {
+    const r = [];
+    for (const b of row) {
+      const d = String(b.callback_data || ''), m = d.match(/^b:([^:]+)(?::(\d+))?$/);
+      if (b.url) r.push(b);
+      else if (m && bot) r.push({ ...b, callback_data: undefined, url: link(m[2] != null ? `v_${m[1]}_${m[2]}` : 'p_' + m[1]) });
+      else if (d === 'prods' && bot) r.push({ ...b, callback_data: undefined, url: link('shop') });
+    }
+    if (r.length) out.push(r.map(x => { const y = { ...x }; delete y.callback_data; return y; }));
+  }
+  return out;
+}
+async function tgChanCheck(c) {
+  if (!tgIsAdmin(c)) return;
+  const ch = tgChan(c.data.settings);
+  if (!ch) return tgSay(c, '📣 ما في قناة محطوطة.\nحط يوزر القناة بلوحة الأدمن: الإعدادات ← بوت تيليجرام ← قناة تيليجرام.');
+  const me = await tg(c.env, 'getMe', {}, true), chat = await tg(c.env, 'getChat', { chat_id: ch }, true);
+  if (!chat) return tgSay(c, `⚠️ ما لقيت القناة ${esc(ch)}.\nتأكد من اليوزر، وإنه البوت مضاف فيها كأدمن.`);
+  const mem = me && await tg(c.env, 'getChatMember', { chat_id: ch, user_id: me.id }, true);
+  const ok = mem && (mem.status === 'creator' || (mem.status === 'administrator' && mem.can_post_messages !== false));
+  return tgSay(c, ok ? `✅ البوت أدمن بالقناة <b>${esc(chat.title || ch)}</b> وبيقدر ينشر فيها.` : `⚠️ البوت مش أدمن بالقناة <b>${esc(chat.title || ch)}</b>، أو ما معه صلاحية النشر.\nمن إعدادات القناة: المشرفين ← إضافة مشرف ← @${esc((me && me.username) || 'البوت')} ← فعّل «نشر الرسائل».`);
+}
+// where a post goes: subscribers (u), the channel (c) or both (a)
+function tgDestKb(c, prefix, okLabel) {
+  const ch = tgChan(c.data.settings);
+  if (!ch) return [[{ ...tgBtn(okLabel || '📢 آه، ابعته للمشتركين', prefix + 'u'), style: 'success' }]];
+  return [[{ ...tgBtn('👥 للمشتركين', prefix + 'u'), style: 'success' }, { ...tgBtn('📣 للقناة', prefix + 'c'), style: 'success' }], [{ ...tgBtn('👥 + 📣 الاثنين', prefix + 'a'), style: 'success' }]];
+}
+function tgDestJob(c, dest) {
+  const ch = tgChan(c.data.settings);
+  return { chan: dest !== 'u' && ch ? ch : '', ...(dest === 'c' ? { to: [] } : {}) };
+}
+function tgDestDone(c, dest) {
+  return dest === 'c' ? 'بالقناة' : dest === 'a' ? 'بالقناة ولكل المشتركين خلال دقايق (حوالي 25 شخص كل دقيقتين)' : 'لكل المشتركين خلال دقايق (حوالي 25 شخص كل دقيقتين)';
+}
+// 📝 a free post: whatever Hazem sends (text, a photo with words, a video…) is copied as it is, with a button to the products
+function tgFreeAsk(c) {
+  if (!tgIsAdmin(c)) return;
+  c.S = { free: 'wait' }; c.dirty = true; c.msgId = 0;
+  return tgSay(c, '📝 ابعتلي البوست زي ما بدك يوصل: نص، أو صورة مع كلام، أو فيديو.\nتحته بنحط زر «🛒 تصفّح المنتجات».', [[tgBtn('❌ إلغاء', 'home')]]);
+}
+async function tgFreeGot(c, m) {
+  c.S = { free: 'ready', fc: c.chat, mid: m.message_id }; c.dirty = true;
+  const kb = [[{ ...tgBtn('🛒 تصفّح المنتجات', 'prods'), style: 'success' }]];
+  await tgCall(c.env, 'copyMessage', { chat_id: c.chat, from_chat_id: c.chat, message_id: m.message_id }, kb);
+  let n = 0;
+  try { n = await tgSubs(c.fs); } catch (e) {}
+  return tgSay(c, `👆 هيك رح يوصل.\nالمشتركين: <b>${n}</b>\nوين بدك تنشره؟`, [...tgDestKb(c, 'pfs:'), [tgBtn('✏️ بوست ثاني', 'pfree'), { ...tgBtn('❌ إلغاء', 'home'), style: 'danger' }]]);
+}
+async function tgFreeSend(c, dest) {
+  if (!tgIsAdmin(c) || c.S.free !== 'ready') { c.alert = 'ابعت البوست من جديد: /post'; return; }
+  const { fc, mid } = c.S; tgReset(c);
+  const id = 'f_' + fc + '_' + mid + '_' + dest;
+  const job = { copy: { fc: String(fc), mid: +mid }, k: [[{ ...tgBtn('🛒 تصفّح المنتجات', 'prods'), style: 'success' }]], t: '', img: '', ...tgDestJob(c, dest), a: '', n: 0, by: c.chat, at: Date.now(), lock: 0 };
+  try { await c.fs.commit([c.fs.wUpdate('tgPosts/' + id, job, null, { exists: false }), c.fs.wUpdate('tgSent/' + id, { at: Date.now() }, null, { exists: false })]); }
+  catch (e) { c.alert = 'هاد البوست انبعت قبل ✓'; return; }
+  await tgShow(c, `✅ <b>بلّشنا ننشر البوست</b> ${tgDestDone(c, dest)}، وبخبرك هون لما يخلص.`, [[tgBtn('📢 إعلان ثاني', 'post'), tgBtn('🏠 الرئيسية', 'home')]]);
+  await tgJobRun(c.fs, c.env);
 }
 // /seticon: Hazem picks the icon of each product himself — any custom emoji, animated ones too —
 // by sending it to the bot (needs Telegram Premium to send one). These win over the /icons logos.
@@ -1075,6 +1156,7 @@ async function tgOnButton(c, d) {
   if (d === 'orders') return tgOrders(c);
   if (d === 'help') { c.msgId = 0; return tgHelp(c); }
   if (d === 'post') return tgPostMenu(c);
+  if (d === 'pfree') return tgFreeAsk(c);
   if (d === 'apend') return tgAdminPending(c);
   if (d === 'sl') return tgSaleMenu(c);
   if (d === 'sgo') return tgSaleGo(c);
@@ -1106,7 +1188,9 @@ async function tgOnButton(c, d) {
   if ((k = d.match(/^ps:(.+)$/))) return tgPostPlans(c, k[1]);
   if ((k = d.match(/^si:(.+)$/))) return tgSetIconAsk(c, k[1]);
   if ((k = d.match(/^pp:(.+):(\d+|a)$/))) return tgPostPreview(c, k[1], k[2]);
-  if ((k = d.match(/^pc:(.+):(\d+|a)$/))) return tgPostSend(c, k[1], k[2]);
+  if ((k = d.match(/^pc:(.+):(\d+|a):([uca])$/))) return tgPostSend(c, k[1], k[2], k[3]);
+  if ((k = d.match(/^pc:(.+):(\d+|a)$/))) return tgPostSend(c, k[1], k[2], 'u'); // buttons from before the channel
+  if ((k = d.match(/^pfs:([uca])$/))) return tgFreeSend(c, k[1]);
   if ((k = d.match(/^p:(.+)$/))) return tgProduct(c, k[1]);
   if ((k = d.match(/^pl:(.+):(\d+)$/))) return tgPlan(c, k[1], k[2]);
   if ((k = d.match(/^m:(.+)$/))) return tgMethod(c, k[1]);
@@ -1127,6 +1211,7 @@ async function tgOnButton(c, d) {
 async function tgOnMessage(c, m) {
   const text = String(m.text || m.caption || '').trim();
   const cmd = text.match(/^\/(\w+)(?:@\w+)?(?:\s+(.+))?$/);
+  if (!cmd && c.S.free === 'wait' && tgIsAdmin(c)) return tgFreeGot(c, m);
   if (!cmd && c.S.seticon && tgIsAdmin(c)) return tgSetIconGot(c, m);
   if (!cmd && c.S.dlv && tgIsAdmin(c)) return text ? tgAdminDeliver(c, text) : tgSay(c, 'ابعت تفاصيل التسليم كنص 🙏', [[tgBtn('❌ إلغاء', 'adx')]]);
   if (!cmd && c.S.sale && !c.S.sale.price && tgIsAdmin(c)) return tgSaleGotPrice(c, text);
@@ -1136,11 +1221,13 @@ async function tgOnMessage(c, m) {
     if (['start', 'products', 'shop', 'orders', 'help', 'post'].includes(name)) tgReset(c);
     if (name === 'post') return tgPostMenu(c);
     if (name === 'pending') { tgReset(c); return tgAdminPending(c); }
+    if (name === 'channel') { tgReset(c); return tgChanCheck(c); }
     if (name === 'sale') { tgReset(c); c.msgId = 0; return tgSaleMenu(c); }
     if (name === 'seticon' || name === 'seticons') { tgReset(c); return tgSetIconMenu(c); }
     if (name === 'icons') return tgIconsMake(c, String(cmd[2] || '').trim().toLowerCase());
     if (name === 'start' && cmd[2] && /^v_[A-Za-z0-9_-]+_\d+$/.test(cmd[2])) { const m2 = cmd[2].match(/^v_(.+)_(\d+)$/); return tgVariant(c, m2[1], m2[2], true); }
     if (name === 'start' && cmd[2] && /^p_[A-Za-z0-9_-]+$/.test(cmd[2])) return tgProduct(c, cmd[2].slice(2), true);
+    if (name === 'start' && cmd[2] === 'shop') return tgGrid(c, true);
     if (name === 'start') return tgHome(c, true);
     if (name === 'products' || name === 'shop') return tgGrid(c, true);
     if (name === 'orders') { c.msgId = 0; return tgOrders(c); }
@@ -1529,7 +1616,7 @@ async function tgRenewals(fs, env, C, now) {
   if (l.hour < 10 || C.rday === l.date || BUDGET < 12) return;
   C.rday = l.date;
   const [rows, prs] = await Promise.all([fs.query('orders', [['source', 'EQUAL', 'telegram'], ['status', 'EQUAL', 'done']], 500), fs.list('products')]);
-  const products = prs.map(d => ({ ...d.data, id: d.id })), marks = [];
+  const products = prs.map(d => tgBotView({ ...d.data, id: d.id })).filter(Boolean), marks = [];
   let ic = {};
   try { const d = await fs.get('tgMeta/icons'), im = d && d.data; ic = im && im.on !== false && (im.prem || im.force) ? { ...(im.map || {}), ...(im.man || {}) } : {}; } catch (e) {}
   for (const r of rows) {
@@ -1706,12 +1793,12 @@ async function tgSaleGo(c) {
   const p = doc && { ...doc.data, id: s.pid }, pl = p && (p.plans || [])[s.k];
   if (!pl) return tgSay(c, 'المنتج تغيّر، ابدأ من جديد: /sale');
   const key = s.pid + '|' + pl.id, until = Date.now() + s.h * 36e5;
-  const plans = p.plans.map((x, j) => j === s.k ? { ...x, price: s.price, compare: Math.max(+x.compare || 0, +x.price) } : x);
-  const card = tgSaleCard(c.data, { ...p, plans: p.plans }, s.k, s.price, until);
+  const plans = p.plans.map((x, j) => j === s.k ? { ...x, price: s.price, compare: Math.max(+x.compare || 0, +x.price), deal: { until, bot: 1 }, ...(+x.tgPrice > 0 ? { tgPrice: s.price } : {}) } : x);
+  const card = { ...tgSaleCard(c.data, tgBotView(p) || p, s.k, s.price, until), chan: tgChanAuto(c.data.settings) };
   try {
     await c.fs.commit([
       c.fs.wUpdate('products/' + s.pid, { plans }, ['plans'], { updateTime: doc.updateTime }),
-      c.fs.wUpdate('tgMeta/sales', { s: { [key]: { pid: s.pid, plan: pl.id, price: s.price, old: +pl.price, oldCmp: +pl.compare || 0, until, warned: s.h < 12 } } }, ['s.' + fp(key)]),
+      c.fs.wUpdate('tgMeta/sales', { s: { [key]: { pid: s.pid, plan: pl.id, price: s.price, old: +pl.price, oldCmp: +pl.compare || 0, oldTg: +pl.tgPrice || 0, until, warned: s.h < 12 } } }, ['s.' + fp(key)]),
       c.fs.wUpdate('tgPosts/s' + Date.now(), { ...card, a: '', n: 0, by: c.chat, at: Date.now(), lock: 0 }, null, { exists: false }),
     ]);
   } catch (e) { return tgSay(c, 'ما زبط، جرّب كمان مرة: /sale'); }
@@ -1728,11 +1815,34 @@ async function tgSaleStop(c, key) {
   c.alert = '⏹ وقّفنا العرض ورجع السعر';
   return tgSaleMenu(c);
 }
+// deals from the admin page with an end time: when it passes, the price goes back to the price before the discount
+async function tgDealsEnd(fs, rows, now) {
+  const w = [];
+  for (const r of rows) {
+    const plans = r.data.plans;
+    if (!Array.isArray(plans) || !plans.some(x => x && x.deal && !x.deal.bot && +x.deal.until && +x.deal.until <= now)) continue;
+    w.push(fs.wUpdate('products/' + r.id, { plans: plans.map(x => {
+      if (!x || !x.deal || x.deal.bot || !(+x.deal.until) || +x.deal.until > now) return x;
+      const y = { ...x };
+      if (+y.compare > +y.price) { y.price = +y.compare; y.compare = 0; }
+      delete y.deal;
+      return y;
+    }) }, ['plans'], { updateTime: r.updateTime }));
+  }
+  for (const x of w) await fs.commit([x]).catch(() => {});
+}
 // put the price back (only if nobody changed it meanwhile) and forget the sale
 async function tgSaleEnd(fs, key, sale) {
   const doc = await fs.get('products/' + sale.pid), w = [fs.wUpdate('tgMeta/sales', {}, ['s.' + fp(key)])];
   if (doc) {
-    const plans = (doc.data.plans || []).map(x => x && x.id === sale.plan && +x.price === +sale.price ? { ...x, price: sale.old, compare: sale.oldCmp } : x);
+    const plans = (doc.data.plans || []).map(x => {
+      if (!x || x.id !== sale.plan) return x;
+      const y = { ...x };
+      if (+x.price === +sale.price) { y.price = sale.old; y.compare = sale.oldCmp; }
+      if (y.deal && y.deal.bot) delete y.deal;
+      if (+sale.oldTg > 0 && +x.tgPrice === +sale.price) y.tgPrice = sale.oldTg;
+      return y;
+    });
     w.unshift(fs.wUpdate('products/' + sale.pid, { plans }, ['plans'], { updateTime: doc.updateTime }));
   }
   await fs.commit(w);
@@ -1746,7 +1856,7 @@ async function tgSales(fs, all, data, now) {
       const p = all.find(x => x.id === sale.pid), k = p ? (p.plans || []).findIndex(x => x && x.id === sale.plan) : -1;
       if (k >= 0) {
         const card = tgSaleCard(data, p, k, sale.price, +sale.until, `⏳ <b>آخر ${Math.max(1, Math.round((+sale.until - now) / 36e5))} ساعات على العرض!</b>`);
-        w.push(fs.wUpdate('tgPosts/r' + now + '_' + w.length, { ...card, a: '', n: 0, by: 0, at: now + w.length, lock: 0 }, null, { exists: false }));
+        w.push(fs.wUpdate('tgPosts/r' + now + '_' + w.length, { ...card, chan: tgChanAuto(data.settings), a: '', n: 0, by: 0, at: now + w.length, lock: 0 }, null, { exists: false }));
       }
       w.push(fs.wUpdate('tgMeta/sales', { s: { [key]: { ...sale, warned: true } } }, ['s.' + fp(key)]));
     }
@@ -1790,7 +1900,7 @@ function tgSnap(p) {
 }
 async function tgCastScan(fs, env, C, now) {
   const [rows, sd] = await Promise.all([fs.list('products'), fs.get('settings/main')]);
-  const settings = (sd && sd.data) || {}, all = rows.map(d => ({ ...d.data, id: d.id }));
+  const settings = (sd && sd.data) || {}, all = rows.map(d => tgBotView({ ...d.data, id: d.id }) || { ...d.data, id: d.id, active: false });
   const first = !C.base, base = C.base || {}, nb = {}, on = settings.tgCast !== false && settings.siteOrders !== false;
   C.scan = now;
   // sales whose time is up go back to their price; people waiting for a duration that is back get told
@@ -1798,6 +1908,7 @@ async function tgCastScan(fs, env, C, now) {
   try { const ic = await fs.get('tgMeta/icons'), im = ic && ic.data; pre.icons = im && im.on !== false && (im.prem || im.force) ? { ...(im.map || {}), ...(im.man || {}) } : {}; } catch (e) {}
   let sales = {};
   try { sales = await tgSales(fs, all, pre, now); } catch (e) { C.err = 'sales: ' + String(e && e.message).slice(0, 180); }
+  try { await tgDealsEnd(fs, rows, now); } catch (e) { C.err = 'deals: ' + String(e && e.message).slice(0, 180); }
   try { await tgWatchers(fs, all, pre, now); } catch (e) { C.err = 'watch: ' + String(e && e.message).slice(0, 180); }
   // instant codes added since the last look
   const added = {};
@@ -1840,9 +1951,10 @@ async function tgCastScan(fs, env, C, now) {
   try { const ic = await fs.get('tgMeta/icons'), im = ic && ic.data; data.icons = im && im.on !== false && (im.prem || im.force) ? { ...(im.map || {}), ...(im.man || {}) } : {}; } catch (err) { data.icons = {}; }
   const w = ev.slice(0, 5).map((e, n) => {
     const k = e.plan ? e.p.plans.findIndex(x => x && x.id === e.plan) : -1, pl = k >= 0 ? e.p.plans[k] : null;
-    const extra = e.k === 'codes' ? [`➕ انضاف: ${e.n}`] : e.k === 'price' && pl ? [`🔻 نزل السعر (كان ${tgN(e.was)} ₪)`] : e.k === 'back' ? ['🔄 رجع متوفر'] : ['🆕 جديد عنا'];
+    const deal = pl && pl.deal && !pl.deal.bot ? pl.deal : null;
+    const extra = e.k === 'codes' ? [`➕ انضاف: ${e.n}`] : e.k === 'price' && pl ? (deal ? ['🔥 <b>عرض!</b>', ...(+deal.until > now ? [`⏳ لحد ${tgWhen(+deal.until, true)}`] : [])] : [`🔻 نزل السعر (كان ${tgN(e.was)} ₪)`]) : e.k === 'back' ? ['🔄 رجع متوفر'] : ['🆕 جديد عنا'];
     const job = tgPostCard(data, e.p, k >= 0 ? k : null, extra);
-    return fs.wUpdate('tgPosts/c' + now + '_' + n, { ...job, a: '', n: 0, by: 0, at: now + n, lock: 0 }, null, { exists: false });
+    return fs.wUpdate('tgPosts/c' + now + '_' + n, { ...job, chan: tgChanAuto(settings), a: '', n: 0, by: 0, at: now + n, lock: 0 }, null, { exists: false });
   });
   await fs.commit(w);
 }
@@ -1856,6 +1968,15 @@ async function tgJobRun(fs, env) {
   if (j.lock && Date.now() - j.lock < 90e3) return; // someone else is sending it right now
   try { await fs.commit([fs.wUpdate('tgPosts/' + doc.id, { lock: Date.now() }, ['lock'], { updateTime: doc.updateTime })]); } catch (e) { return; }
   const lim = Math.max(1, Math.min(25, BUDGET - 5));
+  if (j.chan && !j.chDone) { // the store's channel first, with buttons that open the bot
+    const bot = await tgMe(env);
+    const ok = await tgPostTo(env, { ...j, k: tgChanKb(j.k || [], bot) }, j.chan);
+    j.chDone = true;
+    if (!ok && j.by) await tg(env, 'sendMessage', { chat_id: j.by, text: `⚠️ ما قدرت أنشر بالقناة ${esc(j.chan)}: ${esc(TGERR || '')}\nتأكد إنه البوت أدمن بالقناة وإله صلاحية النشر (ابعت /channel).`, parse_mode: 'HTML' });
+    else if (ok && j.by && Array.isArray(j.to) && !j.to.length) await tg(env, 'sendMessage', { chat_id: j.by, text: `✅ انتشر بالقناة ${esc(j.chan)}.` });
+    if (Array.isArray(j.to) && !j.to.length) { await fs.commit([{ delete: fs.name('tgPosts/' + doc.id) }]); return; }
+    await fs.commit([fs.wUpdate('tgPosts/' + doc.id, { chDone: true }, ['chDone'])]);
+  }
   if (Array.isArray(j.to)) { // a message for some people only
     let i = +j.i || 0, stop2 = false;
     for (const chat of j.to.slice(i, i + lim)) {
@@ -1891,6 +2012,7 @@ async function tgJobRun(fs, env) {
 }
 async function tgPostTo(env, j, chat) {
   const kb = j.k || [];
+  if (j.copy) return !!(await tgCall(env, 'copyMessage', { chat_id: chat, from_chat_id: j.copy.fc, message_id: +j.copy.mid }, kb)); // a free post: copied as Hazem wrote it
   if ((j.ph || j.img) && String(j.t).length <= 1000) {
     const r = await tgCall(env, 'sendPhoto', { chat_id: chat, photo: j.ph || j.img, caption: j.t, parse_mode: 'HTML' }, kb);
     if (r) { if (!j.ph && r.photo && r.photo.length) j.ph = r.photo[r.photo.length - 1].file_id; return true; }
