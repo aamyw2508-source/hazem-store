@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-08T19:10:47Z",
+ "fetchedAt": "2026-11-09T13:39:40Z",
  "storeName": "حازم ستور",
  "cats": [
   {
@@ -121,8 +121,8 @@
     {
      "id": "gairvz",
      "name": "Plus · شهر (ايميل من طرفي )",
-     "price": 35,
-     "compare": 60,
+     "price": 60,
+     "compare": 0,
      "war": "yes",
      "out": false,
      "instant": false,
