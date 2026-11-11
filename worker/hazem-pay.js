@@ -30,7 +30,7 @@ const CHUNKS = 8; // getLogs calls per check (each covers SPAN blocks, SPAN shri
 const SITE = 'https://hazem-store.com';
 let BUDGET = 45; // outside calls left in this run (Cloudflare allows 50 on the free plan)
 function xf(url, init) { if (BUDGET <= 0) { const e = fail('busy, try again', 503); e.budget = true; throw e; } BUDGET--; return fetch(url, init); }
-const VERSION = 17;
+const VERSION = 18;
 const STORE = 'حازم ستور';
 
 export default {
@@ -77,6 +77,11 @@ function castInfo(raw, settings, waiting) {
   try { C = JSON.parse(raw || '{}') || {}; } catch (e) {}
   return { on: !settings || settings.tgCast !== false, waiting, lastLook: C.scan || 0, err: C.err || '' };
 }
+// waiting USDT payments, and how far the last look at each network got (bscBehind: blocks not looked at yet)
+function watchInfo(sd) {
+  const sc = sd.scan || {};
+  return { waiting: Object.keys(sd.w || {}).length, bscBehind: sc.bscLag ?? null, bscAt: sc.bscAt || 0, tronAt: sc.tron || 0, seen: Array.isArray(sd.seen) ? sd.seen.length : 0 };
+}
 async function health(env) {
   if (!env.SA_JSON) return { ok: false, service: 'hazem-pay', error: 'SA_JSON missing', notify: channels(env) };
   const fs = await firestore(env);
@@ -84,7 +89,7 @@ async function health(env) {
   const m = s && (s.data.payments || []).find(isUsdt);
   const st = await fs.get('payState/main');
   const sd = (st && st.data) || {};
-  return { ok: true, service: 'hazem-pay', version: VERSION, project: fs.project, usdt: m ? { auto: !!m.auto, bsc: validAddr('bsc', m.number), tron: validAddr('tron', m.tron) } : null, notify: channels(env), bot: !!env.SHOP_BOT_TOKEN, ...(env.SHOP_BOT_TOKEN ? { botNews: castInfo(sd.tgCast, s && s.data, await fs.count('tgPosts', []).catch(() => -1)) } : {}), cron: sd.cronAt || 0, cronErr: sd.cronErr || '', cronFail: sd.cronFail || 0 };
+  return { ok: true, service: 'hazem-pay', version: VERSION, project: fs.project, usdt: m ? { auto: !!m.auto, bsc: validAddr('bsc', m.number), tron: validAddr('tron', m.tron) } : null, notify: channels(env), bot: !!env.SHOP_BOT_TOKEN, ...(env.SHOP_BOT_TOKEN ? { botNews: castInfo(sd.tgCast, s && s.data, await fs.count('tgPosts', []).catch(() => -1)) } : {}), cron: sd.cronAt || 0, cronErr: sd.cronErr || '', cronFail: sd.cronFail || 0, usdtWatch: watchInfo(sd) };
 }
 
 // ---------------------------------------------------------------- /pay/start : reserve an exact amount
@@ -118,7 +123,7 @@ async function start(fs, env, b) {
         await fs.commit([
           fs.wUpdate(`payLocks/${lockId}`, { ref, exp: pay.lockExp }, null, lock ? { updateTime: lock.updateTime } : { exists: false }),
           fs.wUpdate(ref, { pay }, ['pay'], { updateTime: doc.updateTime }),
-          fs.wUpdate('payState/main', { w: { [wk]: pay.lockExp } }, ['w.' + fp(wk)]), // the cron keeps checking it
+          fs.wUpdate('payState/main', { w: { [wk]: watchOf(pay) } }, ['w.' + fp(wk)]), // the cron keeps checking it
         ]);
         return payOut(pay, d);
       } catch (e) {
@@ -223,6 +228,9 @@ async function settle(fs, env, kind, ref, id, hit, ctx, again) {
 // in a request: send after answering; in the cron: wait for it
 function later(ctx, p) { const q = p.catch(e => console.error('notify', e && e.message)); if (ctx && ctx.waitUntil) { ctx.waitUntil(q); return Promise.resolve(); } return q; }
 function watchKey(kind, id) { return (kind === 'topup' ? 't_' : 'o_') + id; }
+// what the cron needs to recognise a payment without reading its order: until, network, amount, address, start block / time
+function watchOf(p) { return { e: p.lockExp, n: p.net, a: p.amt, d: p.addr, b: p.startBlock || 0, t: p.startTs || 0 }; }
+const txLink = (net, tx) => net === 'tron' ? 'https://tronscan.org/#/transaction/' + tx : 'https://bscscan.com/tx/' + tx;
 function fp(seg) { return /^[A-Za-z_][A-Za-z0-9_]*$/.test(seg) ? seg : '`' + seg.replace(/[`\\]/g, '\\$&') + '`'; }
 
 // ---------------------------------------------------------------- cron: every 2 minutes
@@ -231,18 +239,7 @@ async function cron(env) {
   const st = await fs.get('payState/main'), s = (st && st.data) || {};
   const fields = { cronAt: now }, mask = ['cronAt'], errs = [];
   // 1. payments still waiting: keep checking them even if the customer closed the page
-  const w = s.w || {};
-  for (const key of shuffle(Object.keys(w)).slice(0, 4)) {
-    if (BUDGET < 22) break; // keep enough for new-order messages and saving
-    let done = w[key] < now;
-    if (!done) {
-      try {
-        const r = await check(fs, env, { kind: key[0] === 't' ? 'topup' : 'order', id: key.slice(2) }, null, 2);
-        done = r.status !== 'pending' || r.nopay || r.expired;
-      } catch (e) { done = e.status === 404 || e.status === 400; errs.push('check ' + key + ': ' + (e && e.message)); }
-    }
-    if (done) mask.push('w.' + fp(key));
-  }
+  try { await watchRun(fs, env, s, fields, mask, now, errs); } catch (e) { errs.push('usdt: ' + (e && e.message)); }
   // 1b. orders from the Telegram bot: tell the customer there when Hazem confirms, delivers or cancels
   if (env.SHOP_BOT_TOKEN) {
     const tw = s.tg || {};
@@ -273,8 +270,116 @@ async function cron(env) {
     catch (e) { errs.push('cast: ' + (e && e.message)); }
   }
   fields.cronErr = errs.join(' | ').slice(0, 600); mask.push('cronErr');
-  await fs.commit([fs.wUpdate('payState/main', fields, mask)]);
-  return { checked: Object.keys(w).length };
+  await fs.commit([fs.wUpdate('payState/main', fields, [...new Set(mask)])]);
+  return { checked: Object.keys(s.w || {}).length };
+}
+
+// All USDT payments go to the same address, so one look at the chain covers every waiting payment:
+// each run reads the new transfers to the address once (BSC from where the last run stopped, Tron since the
+// oldest waiting payment), keeps them for a day in payState/main.seen, and settles the payment whose exact amount
+// arrived. Money that matches no waiting payment is reported to Hazem once, with the closest order when there is one.
+async function watchRun(fs, env, s, fields, mask, now, errs) {
+  const w = s.w || {}, live = [], up = {};
+  for (const [key, v] of Object.entries(w)) {
+    const old = typeof v === 'number', exp = old ? v : v && +v.e;
+    if (!(exp > now)) { mask.push('w.' + fp(key)); continue; }
+    live.push({ key, kind: key[0] === 't' ? 'topup' : 'order', id: key.slice(2), ...(old ? { e: v, old } : v) });
+  }
+  // payments started before version 18 only hold their end time: read them once and remember the rest
+  for (const x of live.filter(x => x.old).slice(0, 4)) {
+    if (BUDGET < 30) break;
+    const doc = await fs.get((x.kind === 'topup' ? 'topups/' : 'orders/') + x.id).catch(() => null), p = doc && doc.data.pay;
+    if (!doc || doc.data.status !== 'pending' || !p || !p.amt) { x.drop = true; mask.push('w.' + fp(x.key)); continue; }
+    Object.assign(x, watchOf(p), { old: false });
+    up[x.key] = watchOf(p); mask.push('w.' + fp(x.key));
+  }
+  const ready = live.filter(x => !x.old && !x.drop && x.a > 0 && validAddr(x.n, x.d));
+  const seen = (Array.isArray(s.seen) ? s.seen : []).filter(t => t && t.at > now - (HOLD_H + 2) * 3600e3);
+  const scan = { ...(s.scan || {}) }, have = new Set(seen.map(t => t.n + t.x));
+  let changed = seen.length !== (Array.isArray(s.seen) ? s.seen.length : 0);
+  const add = (n, list, extra) => { for (const t of list) if (!have.has(n + t.tx)) { have.add(n + t.tx); seen.push({ n, x: t.tx, a: t.a, ...extra(t), at: now }); changed = true; } };
+
+  const bw = ready.filter(x => x.n === 'bsc'), tw = ready.filter(x => x.n === 'tron');
+  if (bw.length) {
+    try {
+      if (SPAN < SPAN0) SPAN = Math.min(SPAN0, SPAN * 2); // a node refused a big range before: try bigger steps again
+      const latest = (await bscBlock()) - 2, from = Math.max((+scan.bsc || 0) + 1, Math.min(...bw.map(x => x.b || latest)));
+      if (from <= latest) {
+        const r = await bscScan([...new Set(bw.map(x => x.d.toLowerCase()))], from, Math.min(latest, from + SPAN * 8 - 1), 28);
+        add('bsc', r.list, t => ({ b: t.blk }));
+        if (r.upto >= from) { scan.bsc = r.upto; scan.bscLag = latest - r.upto; scan.bscAt = now; }
+      } else { scan.bscLag = 0; scan.bscAt = now; }
+    } catch (e) { errs.push('bsc: ' + (e && e.message)); }
+  }
+  if (tw.length && BUDGET > 26) {
+    const since = Math.max(Math.min(...tw.map(x => x.t || now)), (+scan.tron || 0) - 30 * 60e3);
+    try {
+      for (const addr of [...new Set(tw.map(x => x.d))]) add('tron', await tronScan(env, addr, since), t => ({ s: t.ts }));
+      scan.tron = now;
+    } catch (e) { errs.push('tron: ' + (e && e.message)); }
+  }
+  const after = (t, x) => x.n === 'bsc' ? !(t.b < x.b) : !(t.s < x.t);
+
+  // the exact amount arrived → confirm it (and hand out the code) like the payment page does
+  for (const x of ready) {
+    const t = seen.find(t => t.n === x.n && !t.u && Math.abs(t.a - x.a) < 0.0005 && after(t, x));
+    if (!t || BUDGET < 16) continue;
+    let res = null;
+    try { res = await settle(fs, env, x.kind, (x.kind === 'topup' ? 'topups/' : 'orders/') + x.id, x.id, { tx: t.x, amt: r3(t.a) }, null); }
+    catch (e) { errs.push('settle ' + x.key + ': ' + (e && e.message)); }
+    if (res) { t.u = 1; x.done = true; delete up[x.key]; mask.push('w.' + fp(x.key)); }
+    else t.tries = (t.tries || 0) + 1;
+    if (t.tries >= 3) t.u = 1;
+    changed = true;
+  }
+  // money that fits no waiting payment: tell Hazem once (one per run, so the run stays within its calls)
+  for (const t of seen) {
+    if (t.u || t.k || BUDGET < 16) continue;
+    const open = ready.filter(x => !x.done && x.n === t.n);
+    if (open.some(x => Math.abs(t.a - x.a) < 0.0005 && after(t, x))) continue; // still being settled
+    const cands = open.filter(x => after(t, x));
+    t.k = 1; changed = true;
+    if (!cands.length) continue; // older than every waiting payment: not ours to explain
+    if (await fs.get(`usedTx/${t.n}_${String(t.x).toLowerCase()}`).catch(() => null)) { t.u = 1; continue; } // already paid an order
+    // fees make the money come in a little under what was asked, so those orders come first, then the closest
+    const near = cands.filter(x => Math.abs(x.a - t.a) <= Math.max(1, x.a * 0.05)).sort((p, q) => (q.a >= t.a) - (p.a >= t.a) || Math.abs(p.a - t.a) - Math.abs(q.a - t.a));
+    try { await usdtStray(fs, env, t, near); } catch (e) { errs.push('stray: ' + (e && e.message)); }
+    break;
+  }
+  if (Object.keys(up).length) fields.w = up;
+  if (changed) { fields.seen = seen.slice(-150); mask.push('seen'); }
+  fields.scan = scan; mask.push('scan');
+}
+// near: the waiting payments whose amount is close to what came (closest first), possibly none
+async function usdtStray(fs, env, t, near) {
+  const net = t.n === 'tron' ? 'TRC20' : 'BEP20', link = txLink(t.n, t.x), got = r3(t.a) + ' USDT (' + net + ')';
+  const rows = [], more = Math.max(0, near.length - 6);
+  for (const x of near.slice(0, 6)) {
+    const doc = await fs.get((x.kind === 'topup' ? 'topups/' : 'orders/') + x.id).catch(() => null);
+    if (doc && doc.data.status === 'pending') rows.push({ x, d: doc.data, name: x.kind === 'topup' ? 'شحن رصيد ' + money(doc.data.amount) : 'طلب ' + (doc.data.orderNo || x.id) });
+  }
+  if (!rows.length) {
+    await notifyAdmin(env, '💸 وصل تحويل USDT ما عرفنا لأي طلب', ['وصل: ' + got, 'ما في طلب بانتظار هالمبلغ. شوف مين حوّل وأكّد طلبه يدوي.', link], SITE + '/admin.html');
+    await tgAdminText(fs, env, `💸 <b>وصل تحويل USDT ما عرفنا لأي طلب</b>\nوصل: <b>${esc(got)}</b>\nما في طلب بانتظار هالمبلغ. شوف مين حوّل وأكّد طلبه يدوي.\n${link}`);
+    return;
+  }
+  if (rows.length === 1) {
+    const { x, d, name } = rows[0], want = x.a + ' USDT';
+    await notifyAdmin(env, '⚠️ وصل تحويل USDT بمبلغ مختلف', [name, 'المطلوب: ' + want + ' · وصل: ' + got, 'الزبون: ' + who(d), 'إذا هو نفس الزبون أكّد الدفع يدوي.', link], SITE + '/admin.html');
+    if (x.kind === 'order') await tgAdminNotify(fs, env, x.id, { ...d, proofText: 'المطلوب ' + want + ' · وصل ' + got + ' · ' + link }, '⚠️ <b>وصل تحويل USDT بمبلغ مختلف</b> لطلب').catch(() => {});
+    return;
+  }
+  // several waiting payments with a close amount: list them, Hazem knows who sent it
+  const list = rows.map(r => '• ' + r.name + ' — المطلوب ' + r.x.a + ' USDT — ' + who(r.d)).concat(more ? ['• و' + more + ' طلبات تانية بمبالغ قريبة'] : []);
+  await notifyAdmin(env, '⚠️ وصل تحويل USDT بمبلغ مختلف', ['وصل: ' + got, 'قريب من هالطلبات:', ...list, 'شوف مين حوّل وأكّد طلبه يدوي.', link], SITE + '/admin.html');
+  await tgAdminText(fs, env, `⚠️ <b>وصل تحويل USDT بمبلغ مختلف</b>\nوصل: <b>${esc(got)}</b>\nقريب من هالطلبات:\n${list.map(esc).join('\n')}\nشوف مين حوّل وأكّد طلبه يدوي.\n${link}`);
+}
+// a plain message to every admin who talks to the shop bot
+async function tgAdminText(fs, env, text) {
+  if (!env.SHOP_BOT_TOKEN) return 0;
+  let n = 0;
+  for (const chat of (await tgAdminChats(fs)).slice(0, 3)) { if (BUDGET < 3) break; if (await tg(env, 'sendMessage', { chat_id: chat, text, parse_mode: 'HTML', disable_web_page_preview: true })) n++; }
+  return n;
 }
 
 async function cronFailed(env, e) {
@@ -441,13 +546,13 @@ function validAddr(net, a) { return net === 'tron' ? /^T[1-9A-HJ-NP-Za-km-z]{33}
 function cleanId(v) { const id = String(v || ''); if (!/^[A-Za-z0-9_-]{6,40}$/.test(id)) throw fail('bad id'); return id; }
 
 // ---------------------------------------------------------------- chains
-let RPCS = BSC_PUBLIC, rpcI = 0, SPAN = 200;
+let RPCS = BSC_PUBLIC, rpcI = 0, SPAN = 200, SPAN0 = 200; // SPAN0: the step to go back to after a node refused a range
 const RANGE_ERR = /range|too (large|big|wide)|block limit|max(imum)? .{0,20}block|more than \d+ (blocks|results)|10000 results|response size/i;
 const rest = {}; // node → time it may be tried again (it said it is busy or needs a key)
 function useRpcs(env) {
   const own = String((env && env.BSC_RPC) || '').split(',').map(x => x.trim()).filter(x => /^https:\/\//.test(x));
   const list = own.concat(BSC_PUBLIC.filter(u => !own.includes(u)));
-  if (list.join() !== RPCS.join()) { RPCS = list; rpcI = 0; if (own.length && SPAN === 200) SPAN = 1000; } // a private node answers bigger ranges
+  if (list.join() !== RPCS.join()) { RPCS = list; rpcI = 0; SPAN0 = own.length ? 1000 : 200; if (own.length && SPAN === 200) SPAN = 1000; } // a private node answers bigger ranges
 }
 async function rpcOne(url, method, params) {
   const r = await xf(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }), signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
@@ -469,22 +574,29 @@ async function rpc(method, params) {
   throw last || new Error('rpc down');
 }
 async function bscBlock() { return parseInt(await rpc('eth_blockNumber', []), 16); }
-// returns the matches and the last block fully looked at (stops early if few calls are left)
-async function bscFind(addr, amt, from, to) {
-  const topic = '0x000000000000000000000000' + addr.toLowerCase().replace(/^0x/, ''), hits = [];
+// every USDT transfer to the address(es) in [from, to], and the last block fully looked at
+// (stops early when only `keep` outside calls are left)
+async function bscScan(addrs, from, to, keep) {
+  const tops = addrs.map(x => '0x000000000000000000000000' + x.toLowerCase().replace(/^0x/, '')), list = [];
+  const topic = tops.length === 1 ? tops[0] : tops;
   let a = from;
-  while (a <= to && BUDGET > 12) {
+  while (a <= to && BUDGET > keep) {
     const b = Math.min(to, a + SPAN - 1);
     let logs;
     try { logs = await rpc('eth_getLogs', [{ address: USDT_BSC, fromBlock: '0x' + a.toString(16), toBlock: '0x' + b.toString(16), topics: [TRANSFER, null, topic] }]); }
     catch (e) { if (SPAN > 25 && RANGE_ERR.test(String(e && e.message))) { SPAN = Math.max(25, Math.floor(SPAN / 2)); continue; } if (a > from) break; throw e; }
     for (const l of logs || []) {
       const v = Number(BigInt(l.data) / 10n ** 12n) / 1e6; // 18 decimals → 6, no float drift
-      if (Math.abs(v - amt) < 0.0005) hits.push({ tx: l.transactionHash, amt: r3(v) });
+      list.push({ tx: l.transactionHash, a: v, blk: parseInt(l.blockNumber, 16) || b });
     }
     a = b + 1;
   }
-  return { hits, upto: a - 1 };
+  return { list, upto: a - 1 };
+}
+// returns the matches and the last block fully looked at (stops early if few calls are left)
+async function bscFind(addr, amt, from, to) {
+  const r = await bscScan([addr], from, to, 12);
+  return { hits: r.list.filter(t => Math.abs(t.a - amt) < 0.0005).map(t => ({ tx: t.tx, amt: r3(t.a) })), upto: r.upto };
 }
 // GET /?rpc=1 : which BNB Smart Chain nodes answer, and for how many blocks
 async function rpcProbe(env) {
@@ -506,17 +618,20 @@ async function rpcProbe(env) {
   try { const r = await xf('https://api.trongrid.io/v1/accounts/' + ((m && validAddr('tron', m.tron)) ? m.tron : 'THodKuiPeTJj6qq1QfEeGM8eVfuak1JLti') + '/transactions/trc20?limit=1&contract_address=' + USDT_TRON, { headers: env.TRONGRID_KEY ? { 'TRON-PRO-API-KEY': env.TRONGRID_KEY } : {} }); tron = r.ok ? 'ok' : 'http ' + r.status + ' ' + (await r.text()).slice(0, 60); } catch (e) { tron = String(e.message).slice(0, 60); }
   return { span: SPAN, own: !!(env.BSC_RPC), nodes: out, tron };
 }
-async function tronFind(env, addr, amt, sinceTs) {
+// every confirmed USDT transfer to the address since a time (newest 200)
+async function tronScan(env, addr, sinceTs) {
   const u = `https://api.trongrid.io/v1/accounts/${addr}/transactions/trc20?only_to=true&only_confirmed=true&limit=200&contract_address=${USDT_TRON}&min_timestamp=${Math.floor(sinceTs)}`;
   const r = await xf(u, { headers: env.TRONGRID_KEY ? { 'TRON-PRO-API-KEY': env.TRONGRID_KEY } : {}, signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined });
   if (!r.ok) throw new Error('trongrid ' + r.status);
-  const j = await r.json(), hits = [], want = Math.round(amt * 1e6);
+  const j = await r.json(), out = [];
   for (const t of j.data || []) {
     if (t.to !== addr || (t.token_info && t.token_info.address !== USDT_TRON)) continue;
-    const v = Number(t.value);
-    if (Math.abs(v - want) < 500) hits.push({ tx: t.transaction_id, amt: r3(v / 1e6) });
+    out.push({ tx: t.transaction_id, a: Number(t.value) / 1e6, ts: +t.block_timestamp || 0 });
   }
-  return hits;
+  return out;
+}
+async function tronFind(env, addr, amt, sinceTs) {
+  return (await tronScan(env, addr, sinceTs)).filter(t => Math.abs(t.a - amt) < 0.0005).map(t => ({ tx: t.tx, amt: r3(t.a) }));
 }
 
 // ================================================================ Telegram shop bot
@@ -1325,7 +1440,7 @@ async function tgFinish(c) {
     try { p = await start(fs, env, { kind: 'order', id, net }); }
     catch (e) { return tgSay(c, `انسجل طلبك <code>${no}</code>، بس ما قدرنا نجهّز دفع USDT هلأ 🙏\nكلّمنا على الدعم وبنكمّل معك.`, [[tgUrl('💬 كلّمنا', tgSup(c))]]); }
     if (p.status !== 'pending' || !p.amt) return tgOrder(c, id, true);
-    return tgSay(c, `💰 <b>حوّل بالضبط:</b>\n<code>${p.amt}</code> USDT\nعلى شبكة <b>${p.net === 'tron' ? 'TRC20 (Tron)' : 'BEP20 (BNB Smart Chain)'}</b> لهالعنوان:\n<code>${esc(p.addr)}</code>\n\n⏱ خلال ${PAY_MIN} دقيقة. لازم المبلغ يكون <b>بالضبط</b> عشان يتأكد لحاله.\nأول ما يوصل بنبعتلك هون ✓\n\nرقم طلبك: <code>${no}</code>`, [[tgBtn('🔄 حوّلت، افحص الدفع', 'chk:' + id)], [tgBtn('📦 طلباتي', 'orders')]]);
+    return tgSay(c, `💰 <b>حوّل بالضبط:</b>\n<code>${p.amt}</code> USDT\nعلى شبكة <b>${p.net === 'tron' ? 'TRC20 (Tron)' : 'BEP20 (BNB Smart Chain)'}</b> لهالعنوان:\n<code>${esc(p.addr)}</code>\n\n⏱ خلال ${PAY_MIN} دقيقة. لازم المبلغ يكون <b>بالضبط</b> لآخر رقم عشان يتأكد لحاله.\n⚠️ حوّل على ${p.net === 'tron' ? 'TRC20' : 'BEP20'} بس، مش أي شبكة تانية.\n⚠️ إذا بتحوّل من منصة زي بينانس، الرسوم بتنخصم من المبلغ، فتأكد إنه اللي بيوصل هو <code>${p.amt}</code> بالضبط.\nأول ما يوصل بنبعتلك هون ✓\n\nرقم طلبك: <code>${no}</code>`, [[tgBtn('🔄 حوّلت، افحص الدفع', 'chk:' + id)], [tgBtn('📦 طلباتي', 'orders')]]);
   }
   const d = { ...order };
   await notifyAdmin(env, '🤖 طلب جديد من بوت تيليجرام ' + no, [...itemLines(d), 'المجموع: ' + money(d.total), 'الدفع: ' + d.payment, d.proofText ? 'الإثبات: ' + d.proofText : img ? 'الإثبات: سكرين (مبعوت تحت)' : '', 'الزبون: ' + d.customer + (user ? ' · @' + user : '') + (d.phone ? ' · ' + d.phone : ''), d.email ? 'الإيميل: ' + d.email : '', info ? 'تفاصيل: ' + info : '', 'الحالة: بانتظار تأكيدك للحوالة'].filter(Boolean), SITE + '/admin.html').catch(e => console.error('notify', e && e.message));
