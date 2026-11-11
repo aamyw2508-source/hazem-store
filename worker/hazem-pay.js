@@ -290,8 +290,10 @@ async function watchRun(fs, env, s, fields, mask, now, errs) {
     if (BUDGET < 30) break;
     const doc = await fs.get((x.kind === 'topup' ? 'topups/' : 'orders/') + x.id).catch(() => null), p = doc && doc.data.pay;
     if (!doc || doc.data.status !== 'pending' || !p || !p.amt) { x.drop = true; mask.push('w.' + fp(x.key)); continue; }
-    Object.assign(x, watchOf(p), { old: false });
-    up[x.key] = watchOf(p); mask.push('w.' + fp(x.key));
+    // its own checks already looked up to p.scanned, so the shared look starts after that
+    const wo = { ...watchOf(p), b: Math.max(p.startBlock || 0, (+p.scanned || 0) + 1) };
+    Object.assign(x, wo, { old: false });
+    up[x.key] = wo; mask.push('w.' + fp(x.key));
   }
   const ready = live.filter(x => !x.old && !x.drop && x.a > 0 && validAddr(x.n, x.d));
   const seen = (Array.isArray(s.seen) ? s.seen : []).filter(t => t && t.at > now - (HOLD_H + 2) * 3600e3);
@@ -305,7 +307,7 @@ async function watchRun(fs, env, s, fields, mask, now, errs) {
       if (SPAN < SPAN0) SPAN = Math.min(SPAN0, SPAN * 2); // a node refused a big range before: try bigger steps again
       const latest = (await bscBlock()) - 2, from = Math.max((+scan.bsc || 0) + 1, Math.min(...bw.map(x => x.b || latest)));
       if (from <= latest) {
-        const r = await bscScan([...new Set(bw.map(x => x.d.toLowerCase()))], from, Math.min(latest, from + SPAN * 8 - 1), 28);
+        const r = await bscScan([...new Set(bw.map(x => x.d.toLowerCase()))], from, Math.min(latest, from + SPAN * 12 - 1), 28);
         add('bsc', r.list, t => ({ b: t.blk }));
         if (r.upto >= from) { scan.bsc = r.upto; scan.bscLag = latest - r.upto; scan.bscAt = now; }
       } else { scan.bscLag = 0; scan.bscAt = now; }
