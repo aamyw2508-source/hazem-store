@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-15T01:35:54Z",
+ "fetchedAt": "2026-11-15T19:10:46Z",
  "storeName": "حازم ستور",
  "cats": [
   {
@@ -262,7 +262,7 @@
      "price": 20,
      "compare": 0,
      "war": "no",
-     "out": true,
+     "out": false,
      "instant": false,
      "acct": "none"
     },
