@@ -1069,6 +1069,9 @@ small.ci-war{display:flex;margin-top:3px}
 .payv-left.late{color:var(--warn);background:var(--warn-bg);border-color:transparent}
 .payv .fine{margin:0}
 .payv-sw{justify-self:center;width:auto}
+.pay-rule{display:flex;gap:8px;align-items:flex-start;margin:0;padding:10px 12px;border-radius:12px;background:var(--warn-bg);color:var(--warn);font-size:13px;line-height:1.6}
+.pay-rule svg{flex:none;margin-top:3px}
+.pay-rule.ok{background:var(--good-bg);color:var(--good)}
 .pay-ok .pill{display:inline-flex;align-items:center;gap:6px}
 .pay-codes{display:grid;gap:8px;width:100%;text-align:start}
 .pay-last{display:grid;gap:8px;width:100%;padding:14px;border-radius:16px;background:var(--brand-soft);border:1px solid color-mix(in srgb,var(--brand) 30%,var(--line));text-align:start}
@@ -3311,7 +3314,7 @@ function payErrMsg(e){var t=String(e&&e.message||'');if(e&&e.code==='wallet/insu
   if(!e||!e.status)return 'ما قدرنا نوصل لخادم الدفع. تأكد من الإنترنت وجرّب كمان مرة.';
   return 'صار خلل بتجهيز الدفع، جرّب كمان مرة أو راسلنا على واتساب.'}
 function srvPayStepHTML(m,ctx){var o=ctx==='tp'?S.tp:S.co;if(!o)return '';
-  return '<h3><span class="sn">٢</span>شبكة التحويل</h3>'+netPickHTML(m,o,ctx)+'<p class="hint srv-hint">'+svg('bolt',14)+'<span>بعد ما تكمّل بيطلعلك المبلغ بالظبط بـ USDT مع العنوان وQR، وأول ما توصل دفعتك '+(ctx==='tp'?'بينضاف المبلغ لرصيدك':'بيتأكد طلبك')+' لحاله بدون ما تستنى.</span></p>'}
+  return '<h3><span class="sn">٢</span>شبكة التحويل</h3>'+netPickHTML(m,o,ctx)+'<p class="hint srv-hint">'+svg('bolt',14)+'<span>بعد ما تكمّل بيطلعلك المبلغ بالظبط بـ USDT مع العنوان وQR، وأول ما توصل دفعتك '+(ctx==='tp'?'بينضاف المبلغ لرصيدك':'بيتأكد طلبك')+' لحاله بدون ما تستنى.'+(ctx==='tp'?'':' عندك 10 دقائق تحوّل، وإذا ما وصل الدفع بينلغى الطلب لحاله.')+'</span></p>'}
 function coAllInstant(){var l=coLines();return l.length>0&&l.every(function(x){return x.plan.instant})}
 function srvDataHTML(o){var inst=coAllInstant(),need=acctNeed();
   var ph=''+phoneFieldHTML('co-phone',o.phone,'رقم واتساب <em>(ضروري)</em>')+'';
@@ -3336,7 +3339,7 @@ function payGoOrder(el){var o=S.co,m=o&&curMethod();if(!o||!isServerPay(m)||el.d
   (o.oid?Promise.resolve(o.oid):createOrderRec(orderRec(o,m,lines)).then(function(ref){o.oid=ref.id;saveMyPhone(o);return ref.id}))
   .then(function(id){return payPost(m,'/pay/start',{kind:'order',id:id,net:net})}).then(function(r){
     if(r.status!=='pending'||!r.amt)throw new Error('state '+r.status);
-    var P={kind:'order',id:o.oid,no:o.no,net:r.net,amt:r.amt,addr:r.addr,exp:r.exp,ils:r.ils,at:Date.now(),uid:S.user?S.user.uid:'',acct:acctNeed(),title:lines.map(function(x){return x.p.name}).filter(function(v,i,a){return a.indexOf(v)===i}).join('، ')};
+    var P={kind:'order',id:o.oid,no:o.no,net:r.net,amt:r.amt,addr:r.addr,exp:r.exp,ils:r.ils,ac:r.ac||0,said:!!r.said,at:Date.now(),uid:S.user?S.user.uid:'',acct:acctNeed(),title:lines.map(function(x){return x.p.name}).filter(function(v,i,a){return a.indexOf(v)===i}).join('، ')};
     var wa=orderText().replace('طلب جديد رقم','دفعت طلبي رقم')+'\nدفعت: '+r.amt+' USDT ('+NETS[r.net].short+') ✓';
     if(o.fromCart){CART=[];saveCart()}
     S.co=null;if(S.cosheet&&!S.cosheet.closed)S.cosheet.close(true);
@@ -3369,13 +3372,16 @@ function payDraw(){if(!PAY||PAY.sheet.closed)return;var box=PAY.sheet.el.querySe
 function payViewHTML(P){var n=NETS[P.net]||NETS.bsc,m=usdtSrv(),other=m?usdtNets(m).filter(function(k){return k!==P.net}):[];
   var h='<div class="payv"><div class="payv-head"><span class="pill info">'+(P.kind==='topup'?esc(P.title||'شحن رصيد'):'طلب <bdi dir="ltr">'+esc(P.no)+'</bdi>')+'</span><span class="payv-left" id="pay-left"></span></div>';
   h+='<h3><span class="sn">'+(P.kind==='topup'?'٣':'٤')+'</span>حوّل <bdi dir="ltr">'+P.amt+' USDT</bdi> على '+n.short+'</h3>';
+  if(P.ac)h+='<p class="pay-rule'+(P.said?' ok':'')+'" id="pay-rule">'+payRuleHTML(P)+'</p>';
   h+='<div class="usdt-box">'+usdtCoreHTML(P.amt,P.addr,P.net)+'<div class="usdt-st" id="pay-st">'+payStHTML()+'</div></div>';
   h+='<p class="fine">≈ '+fmt(P.ils)+' '+cur()+(P.kind!=='topup'&&P.title?' · <bdi>'+esc(P.title)+'</bdi>':'')+'</p>';
   h+='<button class="btn block" data-act="payNow">'+svg('search',17)+' حوّلت؟ افحص هلأ</button>';
   if(other.length)h+='<button class="btn sm block payv-sw" data-act="paySwitch" data-net="'+other[0]+'">بدك تحوّل على '+NETS[other[0]].short+' بدل '+n.short+'؟</button>';
   if(S.user)h+='<button class="btn sm block payv-cancel" data-act="payCancel">'+svg('x',15)+' إلغاء الطلب</button>';
-  h+='<p class="fine">فيك تسكّر هالصفحة وتحوّل من محفظتك وترجع، بنضل نفحص لحالنا وطلبك محفوظ. <a href="'+esc(waLink(payHelpText(P)))+'" target="_blank" rel="noopener">في مشكلة بالدفع؟ راسلنا</a></p></div>';
+  h+='<p class="fine">فيك تسكّر هالصفحة وتحوّل من محفظتك وترجع، بنضل نفحص لحالنا'+(P.ac&&!P.said?'.':' وطلبك محفوظ.')+' <a href="'+esc(waLink(payHelpText(P)))+'" target="_blank" rel="noopener">في مشكلة بالدفع؟ راسلنا</a></p></div>';
   return h}
+/* site orders: cancelled by the server if nothing comes within P.ac minutes, unless the customer says they sent it */
+function payRuleHTML(P){return P.said?svg('check',15)+'<span>سجّلنا إنك حوّلت، طلبك بيضل محفوظ لحد ما توصل الدفعة.</span>':svg('clock',15)+'<span>إذا ما وصل الدفع خلال '+P.ac+' دقائق بينلغى الطلب لحاله. حوّلت؟ اكبس «حوّلت؟ افحص هلأ» تحت وطلبك بيضل محفوظ.</span>'}
 function payHelpText(P){return 'مرحباً '+S.settings.storeName+'، عندي سؤال عن دفعة USDT '+(P.kind==='topup'?'لشحن الرصيد':'لطلب رقم '+P.no)+': '+P.amt+' USDT على '+(NETS[P.net]||NETS.bsc).short+'.'}
 function payStHTML(){var s=PAY;if(!s)return '';
   if(s.errs>=3)return '<span class="bad">'+svg('alert',16)+'الاتصال بخادم الدفع ضعيف، بنحاول كمان مرة…</span>';
@@ -3384,10 +3390,11 @@ function payStHTML(){var s=PAY;if(!s)return '';
 function payShowSt(){var el=$('#pay-st');if(el)el.innerHTML=payStHTML()}
 function payTick(){var s=PAY;if(!s)return;var el=$('#pay-left');if(!el)return;var left=Math.round((s.P.exp-Date.now())/1000);
   if(left>0){var mm=Math.floor(left/60),ss=left%60;el.textContent='باقي '+mm+':'+(ss<10?'0':'')+ss;el.classList.remove('late')}
-  else{el.textContent='خلص الوقت، إذا حوّلت بنضل نفحص';el.classList.add('late')}}
+  else{el.textContent=s.P.ac&&!s.P.said?'خلص الوقت، إذا ما وصل الدفع بينلغى الطلب':'خلص الوقت، إذا حوّلت بنضل نفحص';el.classList.add('late')}}
 function payKick(ms){var s=PAY;if(!s)return;clearTimeout(s.t);s.t=setTimeout(payPoll,ms==null?8000:ms)}
 function payPoll(){var s=PAY,m=usdtSrv();if(!s||s.sheet.closed)return;if(!m){payShowSt();return}if(s.busy)return;s.busy=true;payShowSt();
-  payPost(m,'/pay/check',{kind:s.P.kind,id:s.P.id}).then(function(r){if(PAY!==s)return;s.busy=false;s.manual=false;s.errs=0;
+  payPost(m,'/pay/check',{kind:s.P.kind,id:s.P.id,said:s.sayIt?1:0}).then(function(r){if(PAY!==s)return;s.busy=false;s.manual=false;s.errs=0;
+    if(r.said&&!s.P.said){s.P.said=true;s.sayIt=false;paySave(s.P,null);var re=$('#pay-rule');if(re){re.innerHTML=payRuleHTML(s.P);re.classList.add('ok')}payTick()}
     if(r.status==='paid'||r.status==='done'||r.status==='approved'){paySuccess(s,r);return}
     if(r.status==='cancelled'||r.status==='rejected'){payGone(s);return}
     if(r.nopay)return payRestart(s);
@@ -3396,9 +3403,9 @@ function payPoll(){var s=PAY,m=usdtSrv();if(!s||s.sheet.closed)return;if(!m){pay
 function payRestart(s,net){var m=usdtSrv();if(!m)return Promise.resolve();s.busy=true;
   return payPost(m,'/pay/start',{kind:s.P.kind,id:s.P.id,net:net||s.P.net}).then(function(r){s.busy=false;if(PAY!==s)return;
     if(r.status!=='pending'){payKick(200);return}
-    s.P.net=r.net;s.P.amt=r.amt;s.P.addr=r.addr;s.P.exp=r.exp;s.P.ils=r.ils;paySave(s.P,null);s.sheet.set(payViewHTML(s.P),null,true);payDraw();payTick();payKick()},
+    s.P.net=r.net;s.P.amt=r.amt;s.P.addr=r.addr;s.P.exp=r.exp;s.P.ils=r.ils;s.P.ac=r.ac||0;s.P.said=!!r.said;paySave(s.P,null);s.sheet.set(payViewHTML(s.P),null,true);payDraw();payTick();payKick()},
   function(e){s.busy=false;if(PAY!==s)return;toast(payErrMsg(e));payKick(15000)})}
-function payGone(s){payStop();payClear();PAY=null;s.sheet.set('<div class="done"><div class="done-ic bad">'+svg('alert',30)+'</div><h3>انلغى هالطلب</h3><p>إذا حوّلت المبلغ، راسلنا على واتساب ومعك رقم المعاملة وبنحلّها.</p><a class="btn wa block lg" href="'+esc(waLink(payHelpText(s.P)))+'" target="_blank" rel="noopener">'+svg('chat')+' راسلنا على واتساب</a></div>','الطلب ملغي')}
+function payGone(s){payStop();payClear();PAY=null;s.sheet.set('<div class="done"><div class="done-ic bad">'+svg('alert',30)+'</div><h3>انلغى هالطلب</h3><p>'+(s.P.ac?'ما وصل الدفع خلال '+s.P.ac+' دقائق. إذا حوّلت المبلغ ما تقلق: أول ما توصل دفعتك بيرجع الطلب ويتأكد لحاله. وإذا في مشكلة راسلنا ومعك رقم المعاملة.':'إذا حوّلت المبلغ، راسلنا على واتساب ومعك رقم المعاملة وبنحلّها.')+'</p><a class="btn wa block lg" href="'+esc(waLink(payHelpText(s.P)))+'" target="_blank" rel="noopener">'+svg('chat')+' راسلنا على واتساب</a></div>','الطلب ملغي')}
 function codeOut(c){if(!c.value)return '<div class="codebox"><span class="hint">ما قدرنا نعرض بيانات التفعيل هون، راسلنا على واتساب برقم الطلب.</span></div>';
   return '<div class="codebox"><small>'+esc(c.name||'بيانات التفعيل')+'</small><pre dir="ltr">'+esc(c.value)+'</pre><button class="copy" data-act="copy" data-text="'+esc(c.value)+'">'+svg('copy',15)+'<span>نسخ</span></button></div>'}
 function paySuccess(s,r){var P=s.P,wa=payWa(),n=NETS[r.net||P.net]||NETS.bsc,amt=r.amt||P.amt;payStop();payClear();PAY=null;
@@ -3411,7 +3418,7 @@ function paySuccess(s,r){var P=s.P,wa=payWa(),n=NETS[r.net||P.net]||NETS.bsc,amt
      :'<a class="btn wa block" href="'+esc(waLink(wa))+'" target="_blank" rel="noopener">'+svg('chat')+' ابعت تفاصيل طلبك على واتساب</a>')+tx+'</div>'}
   if(s.sheet&&!s.sheet.closed)s.sheet.set(h,title);else openSheet({title:title,body:h});
   toast(P.kind==='topup'?'انشحن رصيدك':r.status==='done'?'تم تسليم طلبك':'وصلت دفعتك، طلبك قيد التسليم')}
-function payNow(){var s=PAY;if(!s)return;if(s.busy){payShowSt();return}s.manual=true;clearTimeout(s.t);payPoll()}
+function payNow(){var s=PAY;if(!s)return;if(s.P.ac&&!s.P.said)s.sayIt=true;if(s.busy){payShowSt();return}s.manual=true;clearTimeout(s.t);payPoll()}
 function paySwitch(el){var s=PAY;if(!s||s.busy)return;el.disabled=true;el.innerHTML='<i class="spin"></i> جاري التبديل…';payRestart(s,el.dataset.net)}
 D.addEventListener('visibilitychange',function(){if(!D.hidden&&PAY&&!PAY.busy)payKick(400)});
 /* a payment left open (page closed while paying from another app) */
@@ -3972,12 +3979,12 @@ function openOrder(id){
   if(o.customer)rows.push(['الزبون',esc(o.customer)]);if(o.phone)rows.push(['رقم واتساب','<span class="ph-row"><span dir="ltr">'+esc(phoneShow(o.phone))+'</span><button class="mini-link" data-act="phoneEdit" data-id="'+esc(o.id)+'">تعديل المقدمة</button></span>']);if(o.email)rows.push([o.items.some(function(i){var p=product(i.productId);return p&&planAcct(p,planOf(p,i.planId))==='login'})?'إيميل حساب الزبون':'إيميل التفعيل','<span dir="ltr">'+esc(o.email)+'</span>']);
   if(o.payment)rows.push(['طريقة الدفع',esc(o.payment)]);rows=rows.concat(payRowsA(o,'order'));if(oWalletPart(o))rows.push(['من رصيد الزبون',money(oWalletPart(o))+walletStateHTML(o)],['الباقي المطلوب',money(r2(rev-oWalletPart(o)))]);if(o.proofText)rows.push([esc((m&&m.proofLabel)||'إثبات الدفع'),'<span dir="auto">'+esc(o.proofText)+'</span>']);
   if(isAutoUsdt(m)&&o.proofText&&!o.pay){rows.push(['فحص الدفعة','<span id="uv-'+esc(o.id)+'">'+usdtVHTML(usdtV[o.id])+'</span>']);usdtRowKick(o.id,o.proofText,o.createdAt)}
-  if(o.delivery)rows.push(['التسليم للزبون','<span class="dlv-a" dir="auto">'+esc(o.delivery).replace(/\n/g,'<br>')+'</span>']);if(o.cancelledBy==='customer')rows.push(['ألغاه','الزبون نفسه (ما دفع)']);if(o.note)rows.push(['ملاحظة',esc(o.note)]);rows.push(['المصدر',o.source==='site'?'طلب من الموقع':o.source==='wallet'?'دفع من رصيد الزبون':o.source==='telegram'?'بوت تيليجرام'+(o.tgUser?' · <a class="mini-link" style="color:var(--brand)" href="https://t.me/'+esc(o.tgUser)+'" target="_blank" rel="noopener" dir="ltr">@'+esc(o.tgUser)+'</a>':''):'بيعة واتساب (تسجيل يدوي)']);
+  if(o.delivery)rows.push(['التسليم للزبون','<span class="dlv-a" dir="auto">'+esc(o.delivery).replace(/\n/g,'<br>')+'</span>']);if(o.cancelledBy==='customer')rows.push(['ألغاه','الزبون نفسه (ما دفع)']);if(o.cancelledBy==='auto')rows.push(['انلغى','تلقائياً: '+esc(o.cancelNote||'ما وصل الدفع بالوقت')]);if(o.revivedAt)rows.push(['رجع','كان انلغى تلقائياً ورجع لما وصلت الدفعة']);if(o.pay&&o.pay.said&&!o.pay.tx&&o.status==='pending')rows.push(['الزبون قال','إنه حوّل (كبس «حوّلت؟ افحص هلأ»)، ما وصل إشي لهلأ']);if(o.note)rows.push(['ملاحظة',esc(o.note)]);rows.push(['المصدر',o.source==='site'?'طلب من الموقع':o.source==='wallet'?'دفع من رصيد الزبون':o.source==='telegram'?'بوت تيليجرام'+(o.tgUser?' · <a class="mini-link" style="color:var(--brand)" href="https://t.me/'+esc(o.tgUser)+'" target="_blank" rel="noopener" dir="ltr">@'+esc(o.tgUser)+'</a>':''):'بيعة واتساب (تسجيل يدوي)']);
   if(o.stockIds&&o.stockIds.length)rows.push(['التسليم','تلقائي بكود <button class="mini-link" style="color:var(--brand)" data-act="showCode" data-id="'+esc(o.stockIds[0])+'">عرض الكود</button>']);
   h+=priceWarnHTML(o)+'<div class="kvlist">'+rows.map(function(r){return '<div><span>'+r[0]+'</span><b>'+r[1]+'</b></div>'}).join('')+'</div>';
   if(o.proofImage)h+='<div class="stack"><b>سكرين الحوالة</b><img class="big-img" src="'+o.proofImage+'" alt="سكرين الحوالة"></div>';
   if(o.status==='done'&&o.phone)h+=inviteBtnHTML(o.customer,o.phone,oTitle(o),o.orderNo,'btn block');
-  else if(o.status==='pending')h+=waitPay(o)?'<p class="hint">الزبون لسا ما دفع. أول ما توصل دفعته بيتأكد الطلب لحاله، وإذا ما دفع خلال يوم فيك تلغيه.</p>':'<p class="hint">الزبون ما رفع سكرين؛ تأكد من الحوالة حسب الإثبات المكتوب، أو اطلب السكرين على واتساب.</p>';
+  else if(o.status==='pending')h+=waitPay(o)?'<p class="hint">الزبون لسا ما دفع. أول ما توصل دفعته بيتأكد الطلب لحاله، '+(o.pay&&o.pay.ac&&!o.pay.said?'وإذا ما وصلت خلال '+o.pay.ac+' دقائق بينلغى الطلب لحاله.':'وإذا ما دفع خلال يوم فيك تلغيه.')+'</p>':'<p class="hint">الزبون ما رفع سكرين؛ تأكد من الحوالة حسب الإثبات المكتوب، أو اطلب السكرين على واتساب.</p>';
   var acts='';
   if(o.phone)acts+='<a class="btn wa" href="'+esc(waLink('مرحباً '+(o.customer||'')+'، بخصوص طلبك رقم '+(o.orderNo||'')+' من '+S.settings.storeName,intlDigits(o.phone)))+'" target="_blank" rel="noopener">'+svg('chat',18)+' راسل الزبون</a>';
   if(o.delivery&&o.phone)acts+='<a class="btn wa" href="'+esc(waLink(dlvWaText(o),intlDigits(o.phone)))+'" target="_blank" rel="noopener">'+svg('gift',18)+' ابعت التسليم واتساب</a>';

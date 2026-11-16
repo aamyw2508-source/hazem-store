@@ -24,13 +24,14 @@ const TRANSFER = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523
 // To put your own node first (e.g. a free NodeReal or BlockPI key), set BSC_RPC in the Worker settings (comma separated).
 const BSC_PUBLIC = ['https://bsc-rpc.publicnode.com', 'https://bsc.blockpi.network/v1/rpc/public', 'https://binance.llamarpc.com', 'https://bsc.drpc.org', 'https://1rpc.io/bnb', 'https://bsc.meowrpc.com', 'https://bsc-mainnet.public.blastapi.io', 'https://bsc-dataseed.bnbchain.org'];
 const PAY_MIN = 60;             // minutes the customer is asked to pay within
+const ORDER_MIN = 10;           // site orders: not paid (and the customer did not say they sent it) within this → cancelled by the cron
 const HOLD_H = 24;              // hours an exact amount belongs to one payment, and we keep accepting it
 const CHUNKS = 8; // getLogs calls per check (each covers SPAN blocks, SPAN shrinks by itself if a node refuses)
 
 const SITE = 'https://hazem-store.com';
 let BUDGET = 45; // outside calls left in this run (Cloudflare allows 50 on the free plan)
 function xf(url, init) { if (BUDGET <= 0) { const e = fail('busy, try again', 503); e.budget = true; throw e; } BUDGET--; return fetch(url, init); }
-const VERSION = 18;
+const VERSION = 19;
 const STORE = 'حازم ستور';
 
 export default {
@@ -107,6 +108,9 @@ async function start(fs, env, b) {
     if (!isUsdt({ name: d.payment })) throw fail('not a USDT payment');
     if (d.createdAt && now - d.createdAt > 48 * 3600e3) throw fail('expired');
     if (d.pay && d.pay.net === net && d.pay.amt && d.pay.lockExp > now + 30 * 60e3) return payOut(d.pay, d);
+    // an order from the site waits ORDER_MIN minutes from when it was made (at least 5 more after a network change)
+    const ac = kind === 'order' && d.source === 'site';
+    const exp = ac ? Math.max((+d.createdAt || now) + ORDER_MIN * 60e3, now + 5 * 60e3) : now + PAY_MIN * 60e3;
     // part paid from the customer's balance (taken when the order was made) is not asked again
     const ils = kind === 'topup' ? +d.amount : Math.round((await orderTotal(fs, d) - (+d.walletPart > 0 ? +d.walletPart : 0)) * 100) / 100;
     if (!(ils > 0)) throw fail('bad amount');
@@ -117,7 +121,7 @@ async function start(fs, env, b) {
       const amt = r3(base + tag / 1000), lockId = `${net}_${amt.toFixed(3).replace('.', '_')}`;
       const lock = await fs.get(`payLocks/${lockId}`);
       if (lock && lock.data.exp > now && lock.data.ref !== ref) continue;
-      const pay = { net, amt, addr, ils, rate, exp: now + PAY_MIN * 60e3, lockExp: now + HOLD_H * 3600e3, startBlock: head ? head - 20 : 0, startTs: now - 120e3, scanned: 0, lock: lockId };
+      const pay = { net, amt, addr, ils, rate, exp, lockExp: now + HOLD_H * 3600e3, startBlock: head ? head - 20 : 0, startTs: now - 120e3, scanned: 0, lock: lockId, ...(ac ? { ac: ORDER_MIN } : {}) };
       try {
         const wk = watchKey(kind, id);
         await fs.commit([
@@ -134,7 +138,9 @@ async function start(fs, env, b) {
   }
   throw fail('busy, try again', 503);
 }
-function payOut(p, d) { return { status: 'pending', net: p.net, amt: p.amt, addr: p.addr, exp: p.exp, ils: p.ils, rate: p.rate, no: d.orderNo || '' }; }
+function payOut(p, d) { return { status: 'pending', net: p.net, amt: p.amt, addr: p.addr, exp: p.exp, ils: p.ils, rate: p.rate, no: d.orderNo || '', ac: p.ac || 0, said: !!p.said }; }
+// cancelled by the cron because nothing came in time: a payment that still arrives brings it back
+const autoGone = d => d.status === 'cancelled' && d.cancelledBy === 'auto';
 
 // ---------------------------------------------------------------- /pay/check : look for the payment on the chain
 async function check(fs, env, b, ctx, chunks) {
@@ -142,10 +148,12 @@ async function check(fs, env, b, ctx, chunks) {
   const col = kind === 'topup' ? 'topups' : 'orders', ref = `${col}/${id}`;
   const doc = await fs.get(ref);
   if (!doc) throw fail('not found', 404);
-  const d = doc.data, p = d.pay;
-  if (d.status !== 'pending') return finished(fs, d);
+  const d = doc.data, p = d.pay, gone = autoGone(d);
+  if (d.status !== 'pending' && !(gone && p && p.amt)) return finished(fs, d);
   if (!p || !p.amt) return { status: 'pending', nopay: true };
-  if (Date.now() > p.lockExp) return { status: 'pending', expired: true, amt: p.amt, net: p.net };
+  if (Date.now() > p.lockExp) return { status: d.status, expired: true, amt: p.amt, net: p.net };
+  // the customer pressed "I sent it": the order is not cancelled for being late
+  const said = !!b.said && !p.said && !gone;
   let hits = [], scanned = p.scanned || 0;
   if (p.net === 'bsc') {
     const latest = (await bscBlock()) - 2, from = scanned ? scanned + 1 : p.startBlock;
@@ -158,10 +166,14 @@ async function check(fs, env, b, ctx, chunks) {
     const res = await settle(fs, env, kind, ref, id, h, ctx);
     if (res) return res;
   }
-  if (p.net === 'bsc' && scanned !== p.scanned) {
-    try { await fs.commit([fs.wUpdate(ref, { pay: { scanned } }, ['pay.scanned'], { exists: true })]); } catch (e) {}
+  if ((p.net === 'bsc' && scanned !== p.scanned) || said) {
+    const f = { pay: { scanned } }, mk = ['pay.scanned'];
+    if (said) { f.pay.said = Date.now(); mk.push('pay.said'); }
+    const w = [fs.wUpdate(ref, f, mk, { exists: true })];
+    if (said && p.ac) w.push(fs.wUpdate('payState/main', { w: { [watchKey(kind, id)]: { ...watchOf(p), x: 0 } } }, ['w.' + fp(watchKey(kind, id))]));
+    try { await fs.commit(w); } catch (e) {}
   }
-  return { status: 'pending', amt: p.amt, net: p.net, exp: p.exp };
+  return { status: d.status, amt: p.amt, net: p.net, exp: p.exp, said: said || !!p.said };
 }
 async function finished(fs, d) {
   const out = { status: d.status, tx: (d.pay && d.pay.tx) || '', net: (d.pay && d.pay.net) || '', amt: (d.pay && d.pay.paidAmt) || 0 };
@@ -182,8 +194,8 @@ async function readCodes(fs, d) {
 async function settle(fs, env, kind, ref, id, hit, ctx, again) {
   const doc = await fs.get(ref);
   if (!doc) return null;
-  const d = doc.data;
-  if (d.status !== 'pending') return finished(fs, d);
+  const d = doc.data, revive = kind === 'order' && autoGone(d);
+  if (d.status !== 'pending' && !revive) return finished(fs, d);
   const txKey = `${d.pay.net}_${hit.tx.toLowerCase()}`;
   if (await fs.get(`usedTx/${txKey}`)) return null;
   const proof = `${d.pay.amt} USDT ${d.pay.net === 'tron' ? 'TRC20' : 'BEP20'} · ${hit.tx}`.slice(0, 120);
@@ -208,6 +220,7 @@ async function settle(fs, env, kind, ref, id, hit, ctx, again) {
     if (claims) { fields.stockIds = claims.map(c => c.id); mask.push('stockIds'); tr.push({ fieldPath: 'doneAt', setToServerValue: 'REQUEST_TIME' }); }
     if (wp && short) { fields.walletShort = true; mask.push('walletShort'); }
     if (wp && !short) { fields.walletDue = false; mask.push('walletDue'); tr.push({ fieldPath: 'walletPaidAt', setToServerValue: 'REQUEST_TIME' }); }
+    if (revive) { mask.push('cancelledBy', 'cancelNote'); tr.push({ fieldPath: 'revivedAt', setToServerValue: 'REQUEST_TIME' }); }
     writes.push(fs.wUpdate(ref, fields, mask, { updateTime: doc.updateTime }, tr));
     if (wp && !short) writes.push(fs.wUpdate('wallets/' + d.uid, { balance: Math.round(((+wal.data.balance || 0) - wp) * 100) / 100 }, ['balance'], { updateTime: wal.updateTime }));
     for (const c of claims || []) writes.push(fs.wUpdate(`stock/${c.id}`, { owner: d.uid || 'guest_' + id, order: id }, ['owner', 'order'], { updateTime: c.updateTime }, [{ fieldPath: 'claimedAt', setToServerValue: 'REQUEST_TIME' }]));
@@ -221,6 +234,7 @@ async function settle(fs, env, kind, ref, id, hit, ctx, again) {
   }
   const out = { status, tx: hit.tx, net: d.pay.net, amt: hit.amt };
   if (short) out.walletShort = true;
+  if (revive) out.revived = true;
   if (claims) out.codes = await readCodes(fs, { ...d, stockIds: claims.map(c => c.id) });
   await later(ctx, notifyPaid(fs, env, kind, id, d, out));
   return out;
@@ -229,7 +243,8 @@ async function settle(fs, env, kind, ref, id, hit, ctx, again) {
 function later(ctx, p) { const q = p.catch(e => console.error('notify', e && e.message)); if (ctx && ctx.waitUntil) { ctx.waitUntil(q); return Promise.resolve(); } return q; }
 function watchKey(kind, id) { return (kind === 'topup' ? 't_' : 'o_') + id; }
 // what the cron needs to recognise a payment without reading its order: until, network, amount, address, start block / time
-function watchOf(p) { return { e: p.lockExp, n: p.net, a: p.amt, d: p.addr, b: p.startBlock || 0, t: p.startTs || 0 }; }
+// x: when a site order is cancelled if nothing came (0: never, e.g. the customer said they sent it); z: already cancelled
+function watchOf(p) { return { e: p.lockExp, n: p.net, a: p.amt, d: p.addr, b: p.startBlock || 0, t: p.startTs || 0, x: p.ac && !p.said ? p.exp : 0 }; }
 const txLink = (net, tx) => net === 'tron' ? 'https://tronscan.org/#/transaction/' + tx : 'https://bscscan.com/tx/' + tx;
 function fp(seg) { return /^[A-Za-z_][A-Za-z0-9_]*$/.test(seg) ? seg : '`' + seg.replace(/[`\\]/g, '\\$&') + '`'; }
 
@@ -334,6 +349,23 @@ async function watchRun(fs, env, s, fields, mask, now, errs) {
     if (t.tries >= 3) t.u = 1;
     changed = true;
   }
+  // site orders whose time is up with nothing in and no "I sent it": cancelled. Only after this run's look at that
+  // network got near the top of the chain, and they stay watched: a payment that still arrives brings the order back.
+  const fresh = { bsc: scan.bscAt === now && (+scan.bscLag || 0) <= 40, tron: scan.tron === now };
+  const wf = x => ({ e: x.e, n: x.n, a: x.a, d: x.d, b: x.b, t: x.t });
+  let cut = 0;
+  for (const x of ready) {
+    if (x.done || x.z || !x.x || x.kind !== 'order' || now < x.x + 90e3 || !fresh[x.n] || cut >= 3 || BUDGET < 18) continue;
+    const ref = 'orders/' + x.id, doc = await fs.get(ref).catch(() => null), d = doc && doc.data, p = d && d.pay;
+    const taken = d && +d.walletPart > 0 && d.walletDue !== true; // balance already taken: Hazem decides (refund)
+    if (!d || d.status !== 'pending' || !p || p.tx || p.said || String(d.proofText || '').trim() || d.proofImage || taken) {
+      up[x.key] = { ...wf(x), x: 0 }; mask.push('w.' + fp(x.key)); continue;
+    }
+    try {
+      await fs.commit([fs.wUpdate(ref, { status: 'cancelled', cancelledBy: 'auto', cancelNote: 'ما وصل الدفع خلال ' + (+p.ac || ORDER_MIN) + ' دقائق' }, ['status', 'cancelledBy', 'cancelNote'], { updateTime: doc.updateTime }, [{ fieldPath: 'cancelledAt', setToServerValue: 'REQUEST_TIME' }])]);
+      cut++; up[x.key] = { ...wf(x), x: 0, z: 1 }; mask.push('w.' + fp(x.key));
+    } catch (e) { if (e.status !== 400 && e.status !== 409) errs.push('cancel ' + x.id + ': ' + (e && e.message)); }
+  }
   // money that fits no waiting payment: tell Hazem once (one per run, so the run stays within its calls)
   for (const t of seen) {
     if (t.u || t.k || BUDGET < 16) continue;
@@ -358,7 +390,7 @@ async function usdtStray(fs, env, t, near) {
   const rows = [], more = Math.max(0, near.length - 6);
   for (const x of near.slice(0, 6)) {
     const doc = await fs.get((x.kind === 'topup' ? 'topups/' : 'orders/') + x.id).catch(() => null);
-    if (doc && doc.data.status === 'pending') rows.push({ x, d: doc.data, name: x.kind === 'topup' ? 'شحن رصيد ' + money(doc.data.amount) : 'طلب ' + (doc.data.orderNo || x.id) });
+    if (doc && (doc.data.status === 'pending' || autoGone(doc.data))) rows.push({ x, d: doc.data, name: (x.kind === 'topup' ? 'شحن رصيد ' + money(doc.data.amount) : 'طلب ' + (doc.data.orderNo || x.id)) + (autoGone(doc.data) ? ' (انلغى تلقائياً)' : '') });
   }
   if (!rows.length) {
     await notifyAdmin(env, '💸 وصل تحويل USDT ما عرفنا لأي طلب', ['وصل: ' + got, 'ما في طلب بانتظار هالمبلغ. شوف مين حوّل وأكّد طلبه يدوي.', link], SITE + '/admin.html');
@@ -427,7 +459,7 @@ async function notifyPaid(fs, env, kind, id, d, r) {
   }
   const done = r.status === 'done';
   await tgAdminNotify(fs, env, id, { ...d, status: done ? 'done' : 'paid' }, done ? '⚡ <b>دفعة USDT وصلت وتسلّم تلقائياً</b>' : '💰 <b>وصلت دفعة USDT</b>').catch(() => {});
-  await notifyAdmin(env, '✅ وصلت دفعة USDT — طلب ' + (d.orderNo || ''), [...itemLines(d), ...mixLine(d), ...(r.walletShort ? ['⚠️ رصيد الزبون ما كفى للجزء ' + money(d.walletPart) + '، اطلب منه الباقي قبل التسليم'] : []), 'وصل: ' + paid, 'الزبون: ' + who(d) + (d.email ? ' · ' + d.email : ''), done ? 'الحالة: تسلّم تلقائياً بكود ✓' : 'الحالة: قيد التسليم — سلّمه الاشتراك'], SITE + '/admin.html');
+  await notifyAdmin(env, '✅ وصلت دفعة USDT — طلب ' + (d.orderNo || ''), [...itemLines(d), ...mixLine(d), ...(r.walletShort ? ['⚠️ رصيد الزبون ما كفى للجزء ' + money(d.walletPart) + '، اطلب منه الباقي قبل التسليم'] : []), ...(r.revived ? ['↩️ الطلب كان انلغى تلقائياً (ما وصل الدفع خلال ' + ORDER_MIN + ' دقائق) ورجع لما وصلت الدفعة'] : []), 'وصل: ' + paid, 'الزبون: ' + who(d) + (d.email ? ' · ' + d.email : ''), done ? 'الحالة: تسلّم تلقائياً بكود ✓' : 'الحالة: قيد التسليم — سلّمه الاشتراك'], SITE + '/admin.html');
   if (d.source === 'telegram') return; // the bot tells them on Telegram, no email with a link to the site
   let to = d.email || '';
   if (!to && d.uid) { const w = await fs.get('wallets/' + d.uid); to = (w && w.data.email) || ''; }
