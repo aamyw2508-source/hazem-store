@@ -31,7 +31,7 @@ const CHUNKS = 8; // getLogs calls per check (each covers SPAN blocks, SPAN shri
 const SITE = 'https://hazem-store.com';
 let BUDGET = 45; // outside calls left in this run (Cloudflare allows 50 on the free plan)
 function xf(url, init) { if (BUDGET <= 0) { const e = fail('busy, try again', 503); e.budget = true; throw e; } BUDGET--; return fetch(url, init); }
-const VERSION = 20;
+const VERSION = 21;
 const STORE = 'حازم ستور';
 
 export default {
@@ -717,11 +717,38 @@ async function tgSetup(env, url) {
   const me = await tg(env, 'getMe', {});
   if (!me) return { ok: false, error: 'Telegram did not accept SHOP_BOT_TOKEN: copy it again from @BotFather' };
   const hook = url.origin + '/tg/hook';
-  const set = await tg(env, 'setWebhook', { url: hook, secret_token: await tgSecret(env), allowed_updates: ['message', 'callback_query'], drop_pending_updates: true, max_connections: 10 });
-  await tg(env, 'setMyCommands', { commands: [{ command: 'start', description: 'الصفحة الرئيسية' }, { command: 'products', description: 'المنتجات' }, { command: 'orders', description: 'طلباتي' }, { command: 'help', description: 'مساعدة وتواصل' }] });
-  await tg(env, 'setMyDescription', { description: STORE + ': كل اشتراكاتك الرقمية بالشيكل. ChatGPT وClaude وCanva وCapCut وشاهد وغيرهم، دفع بجوال باي أو بال باي أو بنك فلسطين أو USDT، وتسليم خلال دقائق.' });
-  await tg(env, 'setMyShortDescription', { short_description: 'اشتراكات رقمية بالشيكل، اطلب وادفع واستلم هون خلال دقائق' });
+  const set = await tg(env, 'setWebhook', { url: hook, secret_token: await tgSecret(env), allowed_updates: TG_UPDATES, drop_pending_updates: true, max_connections: 10 });
+  try { const fs = await firestore(env); await tgProfile(env, url.origin, await tgData(fs)); await fs.commit([fs.wUpdate('tgMeta/bot', { v: TG_BOT_V, at: Date.now() }, ['v', 'at'])]); TGSET = TG_BOT_V; } catch (e) {}
   return { ok: !!set, bot: '@' + me.username, link: 'https://t.me/' + me.username, webhook: hook };
+}
+
+// ---------------------------------------------------------------- the bot's profile (v21): the ☰ Menu list, the text people see
+// before they press «ابدأ», and the kinds of updates we take (inline_query for sharing from any chat). Set again by the
+// first update after a new version (tgMeta/bot.v), so nobody has to open /tg/setup.
+const TG_BOT_V = 21;
+const TG_UPDATES = ['message', 'callback_query', 'inline_query'];
+const TG_CMDS = [{ command: 'start', description: '🏠 البدء' }, { command: 'products', description: '🛍 المنتجات' }, { command: 'help', description: '❓ المساعدة' }];
+function tgAbout(data) {
+  const names = (data.products || []).filter(p => /^[A-Za-z]/.test(tgClean(p.name))).slice(0, 5).map(p => tgClean(p.name).split(' ')[0]);
+  const pays = (data.settings.payments || []).filter(m => m.active !== false && m.name).map(m => tgClean(m.name)).slice(0, 4).join(' · ');
+  return `🛍 اشتراكات رقمية رسمية بالشيكل${names.length ? ': ' + names.join(' و') + ' وغيرهم' : ''}\n⚡ التفعيل خلال دقائق بعد تأكيد الدفع\n💳 ${pays || 'دفع محلي'}\n💬 دعم مباشر على تيليجرام\n\nاكبس «ابدأ» وتصفّح المنتجات 👇`.slice(0, 500);
+}
+async function tgProfile(env, origin, data) {
+  const ok = await tg(env, 'setMyCommands', { commands: TG_CMDS });
+  await tg(env, 'setMyDescription', { description: tgAbout(data) });
+  await tg(env, 'setMyShortDescription', { short_description: 'اشتراكات رقمية رسمية بالشيكل · تفعيل خلال دقائق · دعم مباشر' });
+  const hook = await tg(env, 'setWebhook', { url: origin + '/tg/hook', secret_token: await tgSecret(env), allowed_updates: TG_UPDATES, max_connections: 10 });
+  return !!ok && !!hook;
+}
+let TGSET = 0;
+async function tgProfileOnce(env, origin) {
+  if (TGSET === TG_BOT_V) return;
+  TGSET = TG_BOT_V;
+  try {
+    const fs = await firestore(env), cur = await fs.get('tgMeta/bot');
+    if (cur && +cur.data.v === TG_BOT_V) return;
+    if (await tgProfile(env, origin, await tgData(fs))) await fs.commit([fs.wUpdate('tgMeta/bot', { v: TG_BOT_V, at: Date.now() }, ['v', 'at'])]);
+  } catch (e) { console.error('tg profile', e && e.message); TGSET = 0; }
 }
 
 // POST /tg/hook : every message and button press from Telegram
@@ -731,6 +758,7 @@ async function tgHook(req, env) {
   if (req.headers.get('x-telegram-bot-api-secret-token') !== await tgSecret(env)) return new Response('forbidden', { status: 403 });
   let u;
   try { u = await req.json(); } catch (e) { return ok; }
+  await tgProfileOnce(env, new URL(req.url).origin);
   try { await tgUpdate(env, u); } catch (e) {
     console.error('tg update', e && (e.stack || e.message));
     const cb = u.callback_query, chat = (u.message && u.message.chat && u.message.chat.id) || (cb && cb.message && cb.message.chat.id);
@@ -783,12 +811,13 @@ function tgPayList(c) { const n = tgMethods(c).map(m => m.name).slice(0, 4); ret
 function tgWho(f) { return ([f.first_name, f.last_name].filter(Boolean).join(' ').trim() || f.username || 'زبون تيليجرام').slice(0, 60); }
 
 async function tgUpdate(env, u) {
+  if (u.inline_query) return tgInline(env, u.inline_query);
   const cb = u.callback_query, m = u.message;
   const chatObj = cb ? cb.message && cb.message.chat : m && m.chat;
   if (!chatObj || chatObj.type !== 'private') return;
   const fs = await firestore(env), data = await tgData(fs);
   const sd = await fs.get('tgBot/' + chatObj.id);
-  const c = { env, fs, data, chat: chatObj.id, from: (cb ? cb.from : m.from) || {}, S: (sd && sd.data) || {}, msgId: cb && cb.message ? cb.message.message_id : 0, dirty: false, alert: '' };
+  const c = { env, fs, data, chat: chatObj.id, from: (cb ? cb.from : m.from) || {}, S: (sd && sd.data) || {}, msgId: cb && cb.message ? cb.message.message_id : 0, dirty: false, alert: '', keys: (sd && +sd.data.keys) || 0 };
   c.isPhoto = !!(cb && cb.message && (cb.message.photo || cb.message.caption != null));
   if (cb) {
     await tgOnButton(c, String(cb.data || ''));
@@ -807,7 +836,7 @@ async function tgUpdate(env, u) {
   }
   const fresh = !sd || !sd.data.reg;
   if (c.dirty || fresh) {
-    const w = [fs.wUpdate('tgBot/' + c.chat, { ...c.S, at: Date.now(), reg: 1 })];
+    const w = [fs.wUpdate('tgBot/' + c.chat, { ...c.S, at: Date.now(), reg: 1, keys: c.keys })];
     if (fresh) w.push(fs.wUpdate('tgUsers/' + c.chat, { name: tgWho(c.from), user: c.from.username || '', at: Date.now(), off: false }, ['name', 'user', 'at', 'off']));
     await fs.commit(w);
   }
@@ -901,19 +930,73 @@ function tgDeals(c) {
   for (const p of c.data.products) if (!p.soldOut) (p.plans || []).forEach((pl, k) => { if (tgDealOf(pl)) out.push({ p, pl, k }); });
   return out;
 }
+// the keys that stay under the chat (Telegram's reply keyboard): each one opens a screen
+const TG_KEYS = [['🛍 المنتجات', '🔥 العروض'], ['📦 طلباتي', '📅 اشتراكاتي'], ['💬 الدعم', '❓ المساعدة']];
+const TG_KEYS_V = 1;
+const TG_KEY_GO = { '🛍 المنتجات': 'prods', '🔥 العروض': 'deals', '📦 طلباتي': 'orders', '📅 اشتراكاتي': 'subs', '💬 الدعم': 'sup', '❓ المساعدة': 'help' };
+function tgKeys() { return { keyboard: TG_KEYS.map(r => r.map(text => ({ text }))), resize_keyboard: true, is_persistent: true, input_field_placeholder: 'اكتب اسم اشتراك تدوّر عليه…' }; }
+// what we ask the customer for after the payment is confirmed (never before): the plan's account type and the product's questions
+function tgNeeds(products, o) {
+  const out = [];
+  for (const it of (o && o.items) || []) {
+    const p = (products || []).find(x => x.id === it.productId), pl = p && (p.plans || []).find(x => x.id === it.planId);
+    const a = (pl && pl.acct) || (p && p.acct) || '';
+    if (a === 'login') out.push('إيميل الحساب وكلمة السر'); else if (a === 'email') out.push('الإيميل');
+    for (const q of (p && p.ask) || []) if (q && q.l) out.push(tgClean(q.l).slice(0, 40));
+  }
+  return [...new Set(out)];
+}
+// after the payment: what we still need, and two ways to send it (our Telegram, our WhatsApp) with the order number written in
+function tgNeedBlock(settings, o) {
+  const need = tgNeeds(TGC.products, o);
+  if (!need.length) return null;
+  const it = (o.items || [])[0] || {}, msg = `مرحبا، طلبي ${o.orderNo || ''} (${tgClean(it.productName || '')}) تأكد دفعه. هاي معلومات التفعيل:`;
+  const sup = tgUserName(settings && settings.tgSupport) || 'hazemstoresupport', wa = String((settings && settings.whatsapp) || '').replace(/\D/g, '');
+  const text = `📩 <b>الخطوة الجاية:</b> بنتواصل معك هون بالخاص عشان ناخد ${esc(need.join('، '))}، أو ابعتها إنت مباشرة من الأزرار تحت 👇` +
+    (need.some(x => /كلمة السر/.test(x)) ? `\n🔒 كلمة السر بتبعتها بس لحسابنا الرسمي، وما حدا منا بيطلبها من حساب تاني.` : '');
+  const kb = [[{ ...tgUrl('📩 ابعت المعلومات على تيليجرام', `https://t.me/${sup}?text=${encodeURIComponent(msg)}`), style: 'success' }]];
+  if (wa.length >= 9) kb.push([tgUrl('🟢 أو على واتساب', `https://wa.me/${wa}?text=${encodeURIComponent(msg)}`)]);
+  return { text, kb, need };
+}
+// @bot in any chat: the products as cards with their picture and a 🛒 button that opens the bot on that product
+async function tgInline(env, q) {
+  const fs = await firestore(env), data = await tgData(fs), [bot, m] = await Promise.all([tgMe(env), tgBanners()]);
+  const cats = data.settings.categories || [], words = tgNorm(q.query || '').split(' ').filter(Boolean);
+  let list = data.products.filter(p => !tgOut(p));
+  if (words.length) { // every word, or else any of them (people type the name in Arabic and English)
+    const hay = p => { const cat = cats.find(x => x.id === p.cat); return tgNorm([p.name, p.keywords, p.desc, cat && cat.name, ...(p.plans || []).map(x => x.name)].join(' ')); };
+    const all = list.filter(p => words.every(w => hay(p).includes(w)));
+    list = all.length ? all : list.filter(p => words.some(w => w.length > 1 && hay(p).includes(w)));
+  }
+  const results = list.slice(0, 20).map(p => {
+    const ban = m[p.id] ? `${SITE}/bot/${p.id}.jpg?v=${m[p.id]}` : m.home ? `${SITE}/bot/home.jpg?v=${m.home}` : '';
+    const cat = cats.find(x => x.id === p.cat), plans = (p.plans || []).filter(x => +x.price > 0 && !x.out).map(x => tgClean(x.name)).slice(0, 3);
+    const text = `${tgIcon(data, p)} <b>${esc(tgClean(p.name))}</b> · ${esc(tgPrice(p))}\n${plans.length ? esc(plans.join(' · ')) + '\n' : ''}⚡ التفعيل خلال دقائق · دفع محلي بالشيكل`;
+    const thumb = tgLogo(p, 128) || ban;
+    return { type: 'article', id: String(p.id).slice(0, 64), title: tgClean(p.name), description: tgPrice(p) + (cat ? ' · ' + tgClean(cat.name) : ''), ...(thumb ? { thumbnail_url: thumb } : {}),
+      input_message_content: { message_text: text, parse_mode: 'HTML', link_preview_options: ban ? { url: ban, prefer_large_media: true, show_above_text: true } : { is_disabled: true } },
+      ...(bot ? { reply_markup: { inline_keyboard: [[{ text: '🛒 اشتري من البوت', url: `https://t.me/${bot}?start=p_${p.id}` }]] } } : {}) };
+  });
+  return tg(env, 'answerInlineQuery', { inline_query_id: q.id, results, cache_time: 300, ...(!results.length && bot ? { button: { text: '🔎 ما لقينا، افتح البوت', start_parameter: 'shop' } } : {}) });
+}
 function tgReset(c) { if (Object.keys(c.S).length) { c.S = {}; c.dirty = true; } }
 function tgClosed(c) { return c.data.settings.siteOrders === false; }
 
 async function tgHome(c, fresh) {
   const hi = c.from.first_name ? ` <b>${esc(tgClean(c.from.first_name).slice(0, 30))}</b>` : '';
   const text = `أهلين${hi} 👋\nكل اشتراكاتك الرقمية الرسمية بمكان واحد، بأسعار بالشيكل ودفع محلي.\n<blockquote>⚡ التفعيل خلال دقائق بعد تأكيد الدفع\n💬 دعم مباشر على تيليجرام\n💳 ${esc(tgPayList(c))}</blockquote>\nاختار من تحت 👇`;
-  const kb = [[{ ...tgBtn('🛍 تصفّح الاشتراكات', 'prods'), style: 'primary' }]];
+  const kb = [[{ ...tgBtn('🛍 تصفّح المنتجات', 'prods'), style: 'primary' }]];
   const two = [...(tgDeals(c).length ? [tgBtn('🔥 العروض', 'deals')] : []), ...(c.data.products.some(p => p.bundle) ? [tgBtn('🎁 باقات التوفير', 'bund')] : [])];
   if (two.length) kb.push(two);
-  kb.push([tgBtn('📦 طلباتي', 'orders'), tgBtn('⭐ آراء الزباين', 'revs')], [tgBtn('🔎 بحث', 'find'), tgBtn('❓ كيف بشتري', 'help')]);
+  kb.push([tgBtn('📦 طلباتي', 'orders'), tgBtn('📅 اشتراكاتي', 'subs')], [tgBtn('⭐ آراء الزباين', 'revs'), tgBtn('🔎 بحث', 'find')]);
   const ch = tgChan(c.data.settings);
-  kb.push([tgUrl('💬 الدعم', tgSup(c)), ...(ch && ch[0] === '@' ? [tgUrl('📣 قناتنا', 'https://t.me/' + ch.slice(1))] : [])]);
+  kb.push([tgBtn('💬 الدعم', 'sup'), tgBtn('❓ المساعدة', 'help')]);
+  if (ch && ch[0] === '@') kb.push([tgUrl('📣 قناتنا: العروض أول بأول', 'https://t.me/' + ch.slice(1))]);
   if (tgIsAdmin(c)) kb.push([tgBtn('⏳ الطلبات المعلّقة', 'apend'), tgBtn('🔥 عرض لوقت محدود', 'sl')], [tgBtn('📢 إعلان للمشتركين', 'post'), tgBtn('🎨 الأيقونات', 'seticon')]);
+  if (fresh && c.keys !== TG_KEYS_V) { // the keys under the chat, the first time (and after they change)
+    await tgSay(c, '👇 <b>الأزرار تحت بتضل موجودة:</b> المنتجات، العروض، طلباتي، اشتراكاتي، الدعم والمساعدة.', tgKeys());
+    c.keys = TG_KEYS_V; c.dirty = true;
+  }
   return tgView(c, { photo: await tgBan('home'), text, kb }, fresh);
 }
 // an emoji for each product: from its name, else from its section (the stand-in when there is no brand icon)
@@ -989,17 +1072,17 @@ async function tgGrid(c, fresh, only) {
   if (bund.length && !only) kb.push([{ ...tgBtn(`🎁 باقات التوفير (${bund.length})`, 'bund'), style: 'primary' }]);
   kb.push(only ? [tgBtn('« كل الأقسام', 'prods'), tgBtn('🏠 الرئيسية', 'home')] : [tgBtn('🔎 بحث', 'find'), tgBtn('🏠 الرئيسية', 'home')]);
   const shown = sel.flatMap(g => g.list), hot = shown.some(p => !tgOut(p) && (p.plans || []).some(tgDealOf)), out = shown.some(tgOut);
-  const title = only ? `${tgCatEmo(sel[0].cat.name)} <b>${esc(tgClean(sel[0].cat.name))}</b>` : '🛍 <b>الاشتراكات</b>';
-  const text = `${title}\nاختار الاشتراك اللي بدك إياه 👇` + (hot || out ? `\n<blockquote>${[hot ? '🔥 عليه عرض' : '', out ? '🔴 خلص هلأ' : ''].filter(Boolean).join('  ·  ')}</blockquote>` : '');
+  const title = only ? `${tgCatEmo(sel[0].cat.name)} <b>${esc(tgClean(sel[0].cat.name))}</b>` : '🛍 <b>المنتجات</b>';
+  const text = `${title}\nاختار المنتج اللي بدك إياه 👇` + (hot || out ? `\n<blockquote>${[hot ? '🔥 عليه عرض' : '', out ? '🔴 خلص هلأ' : ''].filter(Boolean).join('  ·  ')}</blockquote>` : '');
   return tgView(c, { photo: await tgBan('home'), text, kb }, fresh);
 }
 // 🔥 every plan that is cheaper than before
 async function tgDealsView(c) {
   const list = tgDeals(c).slice(0, 12);
-  if (!list.length) { c.alert = 'ما في عروض هلأ، تابع قناتنا عشان توصلك أول بأول 🔔'; return; }
+  if (!list.length) { const t = 'ما في عروض هلأ، تابع قناتنا عشان توصلك أول بأول 🔔'; if (c.msgId) { c.alert = t; return; } return tgSay(c, t, [[tgBtn('🛍 كل المنتجات', 'prods')]]); }
   const L = list.map(({ p, pl }) => `• ${esc(tgVName(p, pl))}: <s>${tgN(pl.compare)}</s> <b>${tgP(pl.price)}</b>` + (pl.deal && +pl.deal.until > Date.now() ? ` · لحد ${tgWhen(+pl.deal.until, true)}` : ''));
   const kb = list.map(({ p, pl, k }) => [{ text: `🔥 ${tgVName(p, pl).slice(0, 30)} · ${tgP(pl.price)}`, callback_data: `dv:${p.id}:${k}`, style: 'success' }]);
-  kb.push([tgBtn('🛍 كل الاشتراكات', 'prods'), tgBtn('🏠 الرئيسية', 'home')]);
+  kb.push([tgBtn('🛍 كل المنتجات', 'prods'), tgBtn('🏠 الرئيسية', 'home')]);
   let text = `🔥 <b>العروض</b>\nأسعار أقل لفترة محدودة، الحق حالك 👇\n<blockquote>${L.join('\n')}</blockquote>`;
   while (tgLen(text) > 1000 && L.length > 1) { L.pop(); text = `🔥 <b>العروض</b>\nأسعار أقل لفترة محدودة، الحق حالك 👇\n<blockquote>${L.join('\n')}</blockquote>`; }
   return tgView(c, { photo: await tgBan('home'), text, kb });
@@ -1012,13 +1095,13 @@ async function tgBundles(c) {
     const inc = (p.bundleOf || []).map(id => c.data.products.find(x => x.id === id)).filter(Boolean).map(x => esc(tgClean(x.name)));
     return `• <b>${esc(tgClean(p.name))}</b>${inc.length ? ': ' + inc.join(' + ') : ''} · ${esc(tgPrice(p))}`;
   });
-  const kb = [...tgPair(list.map(p => tgPBtnP(c.data, p, 'g:' + p.id))), [tgBtn('🛍 كل الاشتراكات', 'prods'), tgBtn('🏠 الرئيسية', 'home')]];
+  const kb = [...tgPair(list.map(p => tgPBtnP(c.data, p, 'g:' + p.id))), [tgBtn('🛍 كل المنتجات', 'prods'), tgBtn('🏠 الرئيسية', 'home')]];
   return tgView(c, { photo: await tgBan('home'), text: `🎁 <b>باقات التوفير</b>\nأكتر من اشتراك مع بعض، بسعر أقل وبطلب واحد 👇\n<blockquote>${L.join('\n')}</blockquote>`, kb });
 }
 // ⭐ what customers said: the average and the latest few with words
 async function tgRevsView(c) {
   const all = (await tgReviews(c)).filter(r => +r.rating > 0);
-  const kb = [[{ ...tgBtn('🛍 تصفّح الاشتراكات', 'prods'), style: 'primary' }], [tgBtn('🏠 الرئيسية', 'home')]];
+  const kb = [[{ ...tgBtn('🛍 تصفّح المنتجات', 'prods'), style: 'primary' }], [tgBtn('🏠 الرئيسية', 'home')]];
   if (!all.length) return tgView(c, { photo: await tgBan('home'), text: '⭐ <b>آراء الزباين</b>\nلسا ما في تقييمات منشورة. كون أول واحد بعد طلبك 🤍', kb });
   const avg = Math.round(all.reduce((a, r) => a + +r.rating, 0) / all.length * 10) / 10;
   const words = all.filter(r => String(r.text || '').trim()).sort((a, b) => (+b.createdAt || 0) - (+a.createdAt || 0));
@@ -1148,10 +1231,107 @@ function tgBuy(c, pid, i) {
   return tgProduct(c, p.id, true);
 }
 async function tgHelp(c, edit) {
-  const text = `❓ <b>كيف بتشتري؟</b>\n<blockquote>1️⃣ اكبس «تصفّح الاشتراكات» واختار اللي بدك\n2️⃣ اختار المدة واكبس «اشتري الآن»\n3️⃣ ادفع بـ${esc(tgPayList(c))}، وابعت سكرين التحويل هون\n4️⃣ بنفعّلك وبتوصلك التفاصيل هون بالبوت</blockquote>\n📦 بتتابع طلبك من «طلباتي» خطوة بخطوة.\n💬 لأي سؤال كلّمنا على @${tgSupUser(c.data)}`;
-  const kb = [[{ ...tgBtn('🛍 تصفّح الاشتراكات', 'prods'), style: 'primary' }], [tgUrl('💬 كلّمنا', tgSup(c)), tgBtn('🏠 الرئيسية', 'home')]];
+  const faq = (c.data.settings.faq || []).filter(f => f && String(f.q || '').trim() && String(f.a || '').trim()).slice(0, 10);
+  const text = `❓ <b>المساعدة</b>\n<blockquote>🛒 <b>كيف بتشتري؟</b>\n1️⃣ اكبس «المنتجات» واختار اللي بدك\n2️⃣ اختار المدة واكبس «اشتري الآن»\n3️⃣ ادفع بـ${esc(tgPayList(c))}، وابعت سكرين التحويل هون\n4️⃣ بعد ما يتأكد الدفع بنتواصل معك لمعلومات التفعيل، وبتوصلك التفاصيل هون</blockquote>` +
+    (faq.length ? '\nأو اختار سؤالك 👇' : '');
+  const qs = faq.map((f, i) => { const b = tgBtn('❔ ' + tgShort(tgClean(f.q), 34), 'fq:' + i); b._w = tgLen(b.text); return b; });
+  const kb = [...tgPair(qs), [tgBtn('💬 مركز الدعم', 'sup'), tgBtn('🏠 الرئيسية', 'home')]];
   if (tgIsAdmin(c)) kb.push([tgBtn('📢 إعلان للمشتركين', 'post')]);
   return tgView(c, { text, kb }, !edit);
+}
+// one question with its answer (the store's FAQ from the admin settings)
+function tgFaq(c, i) {
+  const f = (c.data.settings.faq || []).filter(f => f && String(f.q || '').trim() && String(f.a || '').trim())[+i];
+  if (!f) return tgHelp(c, true);
+  return tgView(c, { text: `❔ <b>${esc(tgClean(f.q))}</b>\n<blockquote>${esc(String(f.a).trim().slice(0, 3000))}</blockquote>`, kb: [[tgBtn('« باقي الأسئلة', 'help'), tgBtn('💬 الدعم', 'sup')]] });
+}
+// 📅 every subscription bought here that is still running, with how long it has left; ⚠️ and «جدّد» when it ends soon
+async function tgMySubs(c) {
+  const rows = await c.fs.query('orders', [['tgChat', 'EQUAL', c.chat]], 40), now = Date.now(), list = [];
+  for (const r of rows) {
+    const o = r.data;
+    if (o.status !== 'done') continue;
+    for (const it of o.items || []) {
+      const end = tgItemEnd(o, it, c.data.products);
+      if (end > now) list.push({ id: r.id, o, it, end, start: +it.startAt || +o.doneAt || +o.createdAt || now });
+    }
+  }
+  list.sort((a, b) => a.end - b.end);
+  if (!list.length) return tgView(c, { text: '📅 <b>اشتراكاتي</b>\nما عندك اشتراكات فعّالة من البوت هلأ.\nبعد ما تشتري، بتطلع هون مع قديش باقي عليها 🔔', kb: [[{ ...tgBtn('🛍 تصفّح المنتجات', 'prods'), style: 'primary' }], [tgBtn('🏠 الرئيسية', 'home')]] });
+  const blocks = list.slice(0, 8).map(x => {
+    const left = Math.max(1, Math.ceil((x.end - now) / 864e5)), frac = Math.max(0, Math.min(1, (x.end - now) / Math.max(1, x.end - x.start))), bars = Math.max(1, Math.round(frac * 5));
+    const p = c.data.products.find(y => y.id === x.it.productId);
+    return `<blockquote>${p ? tgIcon(c.data, p) : '📦'} <b>${esc(x.it.productName || '')}${x.it.planName ? ' · ' + esc(x.it.planName) : ''}</b>\n${'▰'.repeat(bars)}${'▱'.repeat(5 - bars)}  ${left <= 3 ? '⚠️ ' : ''}باقي <b>${tgDays(left)}</b> · لحد ${tgWhen(x.end)}</blockquote>`;
+  });
+  const kb = list.filter(x => x.end - now <= 7 * 864e5).slice(0, 3).map(x => {
+    const p = c.data.products.find(y => y.id === x.it.productId), pl = p && p.plans.find(y => y.id === x.it.planId);
+    return [{ text: `🔄 جدّد ${tgShort(tgClean(x.it.productName || ''), 22)}${pl && +pl.price > 0 ? ' · ' + tgP(pl.price) : ''}`, callback_data: 'rn:' + x.id, style: 'success' }];
+  });
+  kb.push([tgBtn('📦 كل طلباتي', 'orders'), tgBtn('🏠 الرئيسية', 'home')]);
+  return tgView(c, { text: '📅 <b>اشتراكاتي الفعّالة</b>' + blocks.join('') + '🔔 بنذكّرك قبل ما يخلص أي اشتراك بـ 3 أيام.', kb });
+}
+// ---------------------------------------------------------------- 💬 support inside the bot: tgHelpDesk/<id> holds the thread;
+// the customer writes here, admins get it in the bot and answer with ✍️, the answer comes back here
+const TG_HELP_T = { o: '📦 مشكلة بطلب', s: '🔐 مشكلة بالاشتراك', p: '💳 سؤال عن الدفع', q: '❓ سؤال تاني' };
+function tgSupport(c) {
+  tgReset(c);
+  return tgView(c, { text: '💬 <b>كيف بنقدر نساعدك؟</b>\nاختار نوع المشكلة، وبتوصلنا رسالتك مع تفاصيل طلبك 👇', kb: [
+    [tgBtn(TG_HELP_T.o, 'hs:o'), tgBtn(TG_HELP_T.s, 'hs:s')], [tgBtn(TG_HELP_T.p, 'hs:p'), tgBtn(TG_HELP_T.q, 'hs:q')],
+    [tgUrl('👤 كلّم الدعم مباشرة', tgSup(c))], [tgBtn('🏠 الرئيسية', 'home')]] });
+}
+async function tgHelpType(c, t) {
+  if (!TG_HELP_T[t]) return tgSupport(c);
+  if (t === 'o' || t === 's') {
+    const rows = (await c.fs.query('orders', [['tgChat', 'EQUAL', c.chat]], 20)).sort((a, b) => (+b.data.createdAt || 0) - (+a.data.createdAt || 0)).slice(0, 5);
+    if (rows.length) return tgView(c, { text: `${TG_HELP_T[t]}\n📦 <b>أي طلب؟</b>`, kb: [...rows.map(r => { const it = (r.data.items || [])[0] || {}; return [tgBtn(`${tgStatus(r.data).split(' ')[0]} ${r.data.orderNo || ''} · ${tgShort(tgClean(it.productName || ''), 22)}`, `ho:${t}:${r.id}`)]; }), [tgBtn('بدون طلب', `ho:${t}:-`)], [tgBtn('« رجوع', 'sup')]] });
+  }
+  return tgHelpAsk(c, t, '');
+}
+async function tgHelpAsk(c, t, oid) {
+  c.S = { help: { t, o: oid && oid !== '-' ? oid : '' } }; c.dirty = true;
+  return tgView(c, { text: `${TG_HELP_T[t] || '💬'}\n✍️ <b>اكتب مشكلتك برسالة وحدة</b> (وفيك تبعت صورة كمان) 👇`, kb: [[tgBtn('❌ إلغاء', 'hx')]] });
+}
+// the customer's message → the thread (new, or the one they answer) → the admins
+async function tgHelpGot(c, m) {
+  const h = c.S.help, text = String(m.text || m.caption || '').trim().slice(0, 1500), photo = !!(m.photo || (m.document && /^image\//.test(m.document.mime_type || '')));
+  if (!text && !photo) return tgSay(c, 'اكتب رسالتك كنص أو ابعت صورة 🙏', [[tgBtn('❌ إلغاء', 'hx')]]);
+  const now = Date.now(), msg = { by: 'c', t: text || '📷 صورة', at: now };
+  let id = h.tk, d;
+  if (id) {
+    const doc = await c.fs.get('tgHelpDesk/' + id);
+    if (!doc || doc.data.chat !== c.chat) { tgReset(c); return tgSay(c, 'هالمحادثة خلصت، ابدأ رسالة جديدة من «💬 الدعم».'); }
+    d = doc.data;
+    await c.fs.commit([c.fs.wUpdate('tgHelpDesk/' + id, { msgs: [...(d.msgs || []), msg].slice(-30), status: 'open', at: now }, ['msgs', 'status', 'at'])]);
+  } else {
+    let o = null;
+    if (h.o) { const doc = await c.fs.get('orders/' + h.o); if (doc && doc.data.tgChat === c.chat) o = doc.data; }
+    id = tgDocId();
+    d = { no: 'T-' + (1000 + Math.floor(Math.random() * 9000)), chat: c.chat, user: c.from.username || '', name: tgWho(c.from), type: h.t || 'q', oid: o ? h.o : '', orderNo: o ? o.orderNo || '' : '', product: o ? ((o.items || [])[0] || {}).productName || '' : '', msgs: [msg], status: 'open', at: now };
+    await c.fs.commit([c.fs.wUpdate('tgHelpDesk/' + id, d, null, { exists: false })]);
+  }
+  tgReset(c);
+  const head = h.tk ? '💬 <b>رد من الزبون</b>' : '🆘 <b>رسالة دعم جديدة</b>';
+  const L = [`${head} · <code>#${esc(d.no)}</code>`, `👤 ${esc(d.name)}${d.user ? ' · @' + esc(d.user) : ''}`, `🏷 ${TG_HELP_T[d.type] || ''}`];
+  if (d.orderNo) L.push(`📦 <code>${esc(d.orderNo)}</code> · ${esc(d.product)}`);
+  if (text) L.push(`<blockquote>${esc(text)}</blockquote>`);
+  const kb = [[{ ...tgBtn('✍️ رد', 'hr:' + id), style: 'primary' }, ...(d.user ? [tgUrl('💬 راسله', 'https://t.me/' + tgUserName(d.user))] : [])]];
+  for (const a of (await tgAdminChats(c.fs)).slice(0, 3)) {
+    if (BUDGET < 4) break;
+    await tg(c.env, 'sendMessage', { chat_id: a, text: L.join('\n'), parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
+    if (photo && m.message_id) await tg(c.env, 'copyMessage', { chat_id: a, from_chat_id: c.chat, message_id: m.message_id });
+  }
+  notifyAdmin(c.env, `💬 ${h.tk ? 'رد على تذكرة' : 'تذكرة دعم جديدة'} #${d.no} من البوت`, [`الزبون: ${d.name}${d.user ? ' · @' + d.user : ''}`, TG_HELP_T[d.type] || '', d.orderNo ? 'الطلب: ' + d.orderNo + ' · ' + d.product : '', 'الرسالة: ' + (text || 'صورة'), 'رد من البوت بزر ✍️ رد'].filter(Boolean), SITE + '/admin.html').catch(() => {});
+  return tgSay(c, `✅ <b>وصلتنا رسالتك</b> · تذكرة <code>#${esc(d.no)}</code>` + (d.orderNo ? `\n<blockquote>📦 ${esc(d.orderNo)} · ${esc(d.product)}\n${TG_HELP_T[d.type] || ''}</blockquote>` : '') + '\nبنرد عليك <b>هون بالبوت</b> بأسرع وقت 🤍', [[tgBtn('🏠 الرئيسية', 'home')]]);
+}
+// an admin answers a thread → the customer gets it here, with ✍️ to write back
+async function tgHelpReply(c, text) {
+  const id = c.S.hrep, doc = await c.fs.get('tgHelpDesk/' + id);
+  tgReset(c);
+  if (!doc) return tgSay(c, 'ما لقينا هالمحادثة.');
+  const d = doc.data, now = Date.now();
+  const sent = await tg(c.env, 'sendMessage', { chat_id: d.chat, text: `💬 <b>رد من الدعم</b> · تذكرة <code>#${esc(d.no)}</code>\n<blockquote>${esc(text.slice(0, 3500))}</blockquote>`, parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ ...tgBtn('✍️ رد', 'hc:' + id), style: 'primary' }, tgBtn('🏠 الرئيسية', 'home')]] } });
+  await c.fs.commit([c.fs.wUpdate('tgHelpDesk/' + id, { msgs: [...(d.msgs || []), { by: 'a', t: text.slice(0, 1500), at: now, who: c.from.username || '' }].slice(-30), status: 'answered', at: now }, ['msgs', 'status', 'at'])]);
+  return tgSay(c, sent ? `✅ وصل ردك لـ ${esc(d.name)} · <code>#${esc(d.no)}</code>` : '⚠️ ما قدرنا نوصل الرد (يمكن الزبون مسكّر البوت).');
 }
 
 // ---------------------------------------------------------------- admin in the bot (usernames in admin settings → بوت تيليجرام)
@@ -1378,7 +1558,8 @@ function tgSummary(c, x) {
   return `🧾 <b>ملخص طلبك</b>\n<blockquote>📦 <b>${esc(tgVName(x.p, x.pl))}</b>\n💰 السعر: <b>${tgN(x.pl.price)} ₪</b>` +
     (war ? `\n🛡 الضمان: ${esc(war)}` : '') +
     (acct === 'login' ? '\n📧 بيتفعّل على إيميلك الشخصي' : acct === 'email' ? '\n📧 بتوصلك دعوة على إيميلك' : acct === 'none' ? '\n👤 حساب جاهز من عندنا' : '') +
-    `\n⚡ ${x.pl.instant ? 'تسليم فوري بعد الدفع بـ USDT' : 'التفعيل خلال دقائق بعد تأكيد الدفع'}</blockquote>`;
+    `\n⚡ ${x.pl.instant ? 'تسليم فوري بعد الدفع بـ USDT' : 'التفعيل خلال دقائق بعد تأكيد الدفع'}</blockquote>` +
+    (tgNeeds([x.p], { items: [{ productId: x.p.id, planId: x.pl.id }] }).length ? '\n📩 معلومات التفعيل (زي الإيميل) بنطلبها منك <b>بعد ما يتأكد الدفع</b>.' : '');
 }
 function tgMEmo(m) { const n = String(m.name || ''); return isUsdt(m) ? '🪙' : /جوال|jawwal/i.test(n) ? '📱' : /بال ?باي|pal/i.test(n) ? '💳' : /بنك|bank|iban|آيبان/i.test(n) ? '🏦' : /شات|chat/i.test(n) ? '💬' : '💰'; }
 function tgPlan(c, pid, i) {
@@ -1398,7 +1579,7 @@ async function tgMethod(c, key) {
   const auto = isUsdt(m) && !!m.auto, acct = x.pl.acct || x.p.acct || '';
   const pre = c.S.pre || null, pa = (pre && pre.ans) || {};
   const asks = (x.p.ask || []).map((a, k) => 'a' + k).filter(k => !(pre && pa[k.slice(1)]));
-  const tail = [...asks, ...(acct === 'login' || acct === 'email') && !(pre && pre.email) ? ['email'] : [], ...(pre && pre.phone ? [] : ['phone'])];
+  const tail = []; // the email and the product's questions are asked after the payment is confirmed (by Hazem, in private), never here
   Object.assign(c.S, { method: m.key, q: auto ? [...tail, 'net'] : ['proof', ...tail], ans: { ...pa }, proofText: '', proofImg: '', email: (pre && pre.email) || '', phone: (pre && pre.phone) || '' });
   c.dirty = true;
   await tgShow(c, tgSummary(c, x) + `\n\nطريقة الدفع: <b>${esc(auto ? 'USDT (تأكيد تلقائي)' : m.name)}</b> ✓`, [], true);
@@ -1449,7 +1630,7 @@ async function tgAsk(c) {
 function tgNext(c) { c.S.q.shift(); c.dirty = true; return tgAsk(c); }
 
 async function tgOnButton(c, d) {
-  const nav = ['home', 'prods', 'cats', 'best', 'find', 'orders', 'help', 'post', 'apend', 'sl', 'deals', 'bund', 'revs'].includes(d) || /^(c|cat|p|g|b|o|ps|pp|v|dv|vb|rn|nt|av):/.test(d);
+  const nav = ['home', 'prods', 'cats', 'best', 'find', 'orders', 'help', 'post', 'apend', 'sl', 'deals', 'bund', 'revs', 'subs', 'sup'].includes(d) || /^(c|cat|p|g|b|o|ps|pp|v|dv|vb|rn|nt|av):/.test(d);
   if (nav && (c.S.q || []).length) tgReset(c);           // browsing again ends a half-done order
   if (d === 'home') return tgHome(c);
   if (d === 'prods' || d === 'cats' || d === 'best' || /^c:/.test(d)) return tgGrid(c);   // cats/best/c: are buttons from the first version
@@ -1457,6 +1638,9 @@ async function tgOnButton(c, d) {
   if (d === 'deals') return tgDealsView(c);
   if (d === 'bund') return tgBundles(c);
   if (d === 'revs') return tgRevsView(c);
+  if (d === 'subs') return tgMySubs(c);
+  if (d === 'sup') return tgSupport(c);
+  if (d === 'hx' || d === 'hrx') { tgReset(c); return tgShow(c, 'تمام، لغينا 👍', [[tgBtn('🏠 الرئيسية', 'home')]]); }
   if (d === 'find') return tgSay(c, '🔎 اكتب اسم الاشتراك اللي بتدوّر عليه، مثلاً: <b>كانفا</b> أو <b>ChatGPT</b> أو <b>شاهد</b>');
   if (d === 'orders') return tgOrders(c);
   if (d === 'help') return tgHelp(c, true);
@@ -1470,7 +1654,7 @@ async function tgOnButton(c, d) {
   if (d === 'seticon') return tgSetIconMenu(c);
   if (d === 'sidone') { tgReset(c); c.msgId = 0; return tgSay(c, '👍 تمام. لتكمّل بعدين: /seticon'); }
   if (d === 'out') { c.alert = 'هالمدة خلصت كميتها هلأ، وأول ما ترجع بنبعتلك إعلان هون 🔔'; return; }
-  if (d === 'cancel') { tgReset(c); return tgSay(c, 'تمام، لغينا الطلب 👍\nاضغط /start لترجع للرئيسية.', { remove_keyboard: true }); }
+  if (d === 'cancel') { tgReset(c); return tgSay(c, 'تمام، لغينا الطلب 👍\nالأزرار تحت بترجعك لأي مكان 👇', tgKeys()); }
   let k;
   if (/^(un)?mute(:h)?$/.test(d)) { c.alert = '👍'; return; }   // buttons on old announcements
   if ((k = d.match(/^g:(.+)$/))) return tgProduct(c, k[1]);   // the grid turns into the product's durations
@@ -1484,6 +1668,11 @@ async function tgOnButton(c, d) {
   if ((k = d.match(/^ax:(.+)$/))) return tgAdminAskReject(c, k[1]);
   if ((k = d.match(/^ad:(.+)$/))) return tgAdminAskDeliver(c, k[1]);
   if ((k = d.match(/^rn:(.+)$/))) return tgRenew(c, k[1]);
+  if ((k = d.match(/^fq:(\d+)$/))) return tgFaq(c, k[1]);
+  if ((k = d.match(/^hs:([ospq])$/))) return tgHelpType(c, k[1]);
+  if ((k = d.match(/^ho:([os]):(.+)$/))) return tgHelpAsk(c, k[1], k[2]);
+  if ((k = d.match(/^hc:(.+)$/))) { c.S = { help: { tk: k[1] } }; c.dirty = true; return tgSay(c, '✍️ اكتب ردّك برسالة وحدة 👇', [[tgBtn('❌ إلغاء', 'hx')]]); }
+  if ((k = d.match(/^hr:(.+)$/)) && tgIsAdmin(c)) { c.S = { hrep: k[1] }; c.dirty = true; return tgSay(c, '✍️ اكتب ردّك على الزبون برسالة وحدة 👇', [[tgBtn('❌ إلغاء', 'hrx')]]); }
   if ((k = d.match(/^rvt:(.+)$/))) { c.S = { rvw: k[1] }; c.dirty = true; return tgShow(c, '✍️ اكتب رأيك هون برسالة وحدة 👇', []); }
   if ((k = d.match(/^rv:(.+):([1-5])$/))) return tgRate(c, k[1], k[2]);
   if ((k = d.match(/^nt:(.+):(\d+)$/))) return tgNotifyMe(c, k[1], k[2]);
@@ -1517,6 +1706,19 @@ async function tgOnButton(c, d) {
 async function tgOnMessage(c, m) {
   const text = String(m.text || m.caption || '').trim();
   const cmd = text.match(/^\/(\w+)(?:@\w+)?(?:\s+(.+))?$/);
+  const key = !m.photo && TG_KEY_GO[text];
+  if (key) { // one of the keys under the chat: a new screen under it (whatever was half done stops)
+    if (Object.keys(c.S).length) tgReset(c);
+    c.msgId = 0;
+    if (key === 'prods') return tgGrid(c, true);
+    if (key === 'deals') return tgDealsView(c);
+    if (key === 'orders') return tgOrders(c);
+    if (key === 'subs') return tgMySubs(c);
+    if (key === 'sup') return tgSupport(c);
+    return tgHelp(c);
+  }
+  if (!cmd && c.S.help) return tgHelpGot(c, m);
+  if (!cmd && c.S.hrep && tgIsAdmin(c) && text) return tgHelpReply(c, text);
   if (!cmd && c.S.free === 'wait' && tgIsAdmin(c)) return tgFreeGot(c, m);
   if (!cmd && c.S.seticon && tgIsAdmin(c)) return tgSetIconGot(c, m);
   if (!cmd && c.S.dlv && tgIsAdmin(c)) return text ? tgAdminDeliver(c, text) : tgSay(c, 'ابعت تفاصيل التسليم كنص 🙏', [[tgBtn('❌ إلغاء', 'adx')]]);
@@ -1524,7 +1726,9 @@ async function tgOnMessage(c, m) {
   if (!cmd && c.S.rvw && text) return tgRateText(c, text);
   if (cmd) {
     const name = cmd[1].toLowerCase();
-    if (['start', 'products', 'shop', 'orders', 'help', 'post'].includes(name)) tgReset(c);
+    if (['start', 'products', 'shop', 'orders', 'help', 'post', 'support', 'subs'].includes(name)) tgReset(c);
+    if (name === 'support') { c.msgId = 0; return tgSupport(c); }
+    if (name === 'subs') { c.msgId = 0; return tgMySubs(c); }
     if (name === 'post') return tgPostMenu(c);
     if (name === 'pending') { tgReset(c); return tgAdminPending(c); }
     if (name === 'channel') { tgReset(c); return tgChanCheck(c); }
@@ -1572,7 +1776,7 @@ async function tgOnMessage(c, m) {
     else if (text === 'تخطّي' || text === 'تخطي') c.S.phone = '';
     else if (text.replace(/\D/g, '').length >= 9) c.S.phone = text.replace(/[^\d+]/g, '').slice(0, 20);
     else return tgSay(c, 'اضغط «📱 شارك رقمي» تحت، أو «تخطّي».');
-    await tgSay(c, 'تمام ✓', { remove_keyboard: true });
+    await tgSay(c, 'تمام ✓', tgKeys());
     return tgNext(c);
   }
   return tgAsk(c);
@@ -1694,6 +1898,8 @@ async function tgOrder(c, id, fresh) {
     text += `\n\n🪙 حوّل بالضبط <code>${o.pay.amt}</code> USDT على ${o.pay.net === 'tron' ? 'TRC20' : 'BEP20'}:\n<code>${esc(o.pay.addr || '')}</code>`;
     kb.push([tgCopy('📋 انسخ المبلغ', o.pay.amt), tgCopy('📋 انسخ العنوان', o.pay.addr || '')], [{ ...tgBtn('🔄 حوّلت، افحص الدفع', 'chk:' + id), style: 'success' }]);
   } else if (o.status === 'pending' || o.status === 'paid') kb.push([tgBtn('🔄 تحديث', 'o:' + id)]);
+  const nb = o.status === 'paid' && !o.email ? tgNeedBlock(c.data.settings, o) : null;
+  if (nb) { text += '\n\n' + nb.text; kb.unshift(...nb.kb); }
   kb.push([tgBtn('« طلباتي', 'orders'), tgUrl('💬 الدعم', tgSup(c))]);
   return tgView(c, { text, kb }, fresh);
 }
@@ -1709,11 +1915,17 @@ async function tgCheck(c, id) {
 
 // tell the customer about the order's new status (once per status; the delivery text once per change)
 async function tgNotifyStatus(fs, env, id, d, dlvSig) {
+  if (!TGC.products) await tgData(fs).catch(() => {});
   const no = `<code>${esc(d.orderNo || '')}</code>`, kb = [];
   let text = '';
   const sup = 'https://t.me/' + (tgUserName(TGC.settings && TGC.settings.tgSupport) || 'hazemstoresupport');
   let photo = '', rate = false;
-  if (d.status === 'paid') { text = `✅ <b>تأكد دفعك!</b>\n\n${tgTrack(d)}`; kb.push([tgBtn('🔄 تحديث', 'o:' + id), tgUrl('💬 الدعم', sup)]); }
+  if (d.status === 'paid') {
+    const nb = tgNeedBlock(TGC.settings, d);
+    text = `✅ <b>تأكد دفعك!</b>\n\n${tgTrack(d)}` + (nb ? '\n\n' + nb.text : '');
+    if (nb) kb.push(...nb.kb, [tgBtn('🔄 تحديث', 'o:' + id)]);
+    else kb.push([tgBtn('🔄 تحديث', 'o:' + id), tgUrl('💬 الدعم', sup)]);
+  }
   else if (d.status === 'done') {
     const it = (d.items || [])[0] || {}, L = [`🎉 <b>اشتراكك جاهز!</b>`, `<b>${esc(it.productName || '')}${it.planName ? ' · ' + esc(it.planName) : ''}</b> · ${no}`];
     let box = '';
@@ -1769,6 +1981,8 @@ function tgAdminCard(o, id, head) {
   L.push(`👤 ${esc(o.customer || '')}${o.tgUser ? ' · @' + esc(o.tgUser) : ''}${o.phone ? ' · <code>' + esc(o.phone) + '</code>' : ''}`);
   if (o.email) L.push(`📧 ${esc(o.email)}`);
   if (it.info) L.push(`📝 ${esc(String(it.info).slice(0, 300))}`);
+  const need = o.status === 'pending' || o.status === 'paid' ? tgNeeds(TGC.products, o) : [];
+  if (need.length && !o.email) L.push(`📩 اطلب منه بعد الدفع: ${esc(need.join('، '))}`);
   if (o.proofText) L.push(`🧾 ${esc(String(o.proofText).slice(0, 200))}`);
   if (+o.walletPart > 0) L.push(`👛 من رصيده: ${tgN(o.walletPart)} ₪`);
   L.push(`🌐 من ${TG_SRC[o.source] || esc(o.source || 'الموقع')} · الحالة: ${tgStatus(o)}`);
@@ -1785,6 +1999,7 @@ async function tgAdminNotify(fs, env, id, o, head) {
   if (!env.SHOP_BOT_TOKEN) return 0;
   const chats = (await tgAdminChats(fs)).slice(0, 3);
   if (!chats.length) return 0;
+  if (!TGC.products) await tgData(fs).catch(() => {});
   const card = tgAdminCard(o, id, head);
   const img = String(o.proofImage || ''), bytes = img.startsWith('data:image') ? tgB64(img) : null;
   let n = 0;
