@@ -31,7 +31,7 @@ const CHUNKS = 8; // getLogs calls per check (each covers SPAN blocks, SPAN shri
 const SITE = 'https://hazem-store.com';
 let BUDGET = 45; // outside calls left in this run (Cloudflare allows 50 on the free plan)
 function xf(url, init) { if (BUDGET <= 0) { const e = fail('busy, try again', 503); e.budget = true; throw e; } BUDGET--; return fetch(url, init); }
-const VERSION = 22;
+const VERSION = 23;
 const STORE = 'حازم ستور';
 
 export default {
@@ -730,14 +730,25 @@ async function tgSetup(env, url) {
 // ---------------------------------------------------------------- the bot's profile (v21): the ☰ Menu list, the text people see
 // before they press «ابدأ», and the kinds of updates we take (inline_query for sharing from any chat). Set again by the
 // first update after a new version (tgMeta/bot.v), so nobody has to open /tg/setup.
-const TG_BOT_V = 22;
+const TG_BOT_V = 23;
 const TG_UPDATES = ['message', 'callback_query', 'inline_query'];
 const TG_CMDS = [{ command: 'start', description: '🏠 البدء' }, { command: 'products', description: '🛍 المنتجات' }, { command: 'help', description: '❓ المساعدة' }];
 function tgAbout(data) {
-  const names = (data.products || []).filter(p => /^[A-Za-z]/.test(tgClean(p.name))).slice(0, 5).map(p => tgClean(p.name).split(' ')[0]);
-  const pays = (data.settings.payments || []).filter(m => m.active !== false && m.name).map(m => tgClean(m.name)).slice(0, 4).join(' · ');
-  return `🛍 اشتراكات رقمية رسمية بالشيكل${names.length ? ': ' + names.join(' و') + ' وغيرهم' : ''}\n⚡ التفعيل خلال دقائق بعد تأكيد الدفع\n💳 ${pays || 'دفع محلي'}\n💬 دعم مباشر على تيليجرام\n\nاكبس «ابدأ» وتصفّح المنتجات 👇`.slice(0, 500);
+  const all = (data.products || []).filter(p => !p.bundle && !tgOut(p));
+  const latin = all.map(p => tgClean(p.name).split(' ')[0]).filter(n => /^[A-Za-z]/.test(n)).filter((n, i, a) => a.indexOf(n) === i);
+  const one = latin.slice(0, 4), two = latin.slice(4, 8), rest = all.length - one.length - two.length;
+  const pm = (data.settings.payments || []).filter(m => m.active !== false && m.name).map(m => tgClean(m.name));
+  const ar = pm.filter(n => !/^[A-Za-z]/.test(n)), la = pm.filter(n => /^[A-Za-z]/.test(n)).slice(0, 1);
+  const pays = [...ar.slice(0, 4 - la.length), ...la].join(' · ');   // Latin (USDT) last, so the line stays right-to-left
+  const L = ['🛍 اشتراكات رقمية رسمية بالشيكل', ''];
+  if (one.length) L.push('🔹 ' + one.join(' · '));
+  if (two.length) L.push('🔹 ' + two.join(' · '));
+  if (one.length && rest > 0) L.push(`➕ و${rest === 1 ? 'خدمة' : tgSvc(rest)} كمان`);
+  L.push('', '⚡ التفعيل خلال دقائق بعد تأكيد الدفع', '💳 ' + (pays || 'دفع محلي'), '💬 دعم حقيقي على تيليجرام وواتساب', '', '👇 اكبس «ابدأ» وشوف الأسعار');
+  return L.join('\n').slice(0, 500);
 }
+// "خدمة" with its number, the Arabic way
+function tgSvc(n) { n = +n || 0; return n === 1 ? 'خدمة وحدة' : n === 2 ? 'خدمتين' : n <= 10 ? `${n} خدمات` : `${n} خدمة`; }
 async function tgProfile(env, origin, data) {
   const ok = await tg(env, 'setMyCommands', { commands: TG_CMDS });
   await tg(env, 'setMyDescription', { description: tgAbout(data) });
@@ -1055,14 +1066,19 @@ function tgPBtn(data, p, cb) {
   const id = !tgOut(p) && tgIco(data, p);
   return id ? { text: tgClean(p.name).slice(0, 26), callback_data: cb, icon_custom_emoji_id: id, _e: tgIcon(data, p) } : tgBtn(tgName(data, p), cb);
 }
+// a button line that reads right to left on every Telegram: Telegram Web in English draws buttons left to right, which
+// threw the ₪ to the wrong end. The line is a right-to-left isolate, the name keeps its own direction, and a
+// right-to-left mark before the price keeps "من 30 ₪" together after the name.
+const TG_RLI = '\u2067', TG_FSI = '\u2068', TG_PDI = '\u2069', TG_RLM = '\u200f';
+function tgLine(pre, name, tail) { name = String(name).replace(/\s+\)/g, ')').replace(/\(\s+/g, '('); return TG_RLI + (pre ? pre + ' ' : '') + TG_FSI + name + TG_PDI + (tail ? ' · ' + TG_RLM + tail : '') + TG_PDI; }
 // a product as a catalogue button: icon, name and its lowest price (🔥 when it has an offer, 🔴 when it ran out)
-function tgPBtnP(data, p, cb) {
+function tgPBtnP(data, p, cb, star) {
   const out = tgOut(p), hot = !out && (p.plans || []).some(tgDealOf);
-  const tail = out ? ' · خلص' : ' · ' + tgPrice(p).replace(' ₪', '₪');
   const id = !out && tgIco(data, p), name = tgShort(tgClean(p.name), 34);
-  const b = id ? { text: (hot ? '🔥 ' : '') + name + tail, callback_data: cb, icon_custom_emoji_id: id, _e: tgIcon(data, p) }
-    : tgBtn(`${out ? '🔴' : hot ? '🔥' : tgIcon(data, p)} ${name}${tail}`, cb);
-  b._w = tgLen(b.text);
+  const pre = out ? '🔴' : hot ? '🔥' : star ? '⭐' : id ? '' : tgIcon(data, p);
+  const b = { text: tgLine(pre, name, out ? 'خلص' : tgPrice(p)), callback_data: cb };
+  if (id) Object.assign(b, { icon_custom_emoji_id: id, _e: tgIcon(data, p) });
+  b._w = tgLen(name) + 9;
   return b;
 }
 // two short buttons share a row, a long one gets its own
@@ -1075,26 +1091,68 @@ function tgPair(btns) {
   for (const r of rows) for (const x of r) delete x._w;
   return rows;
 }
-// the catalogue: every section with its products under it (or one section: `only`)
-async function tgGrid(c, fresh, only) {
-  const ps = c.data.products.filter(p => !p.bundle), cats = c.data.settings.categories || [];
+// the catalogue, in three steps: the sections (with the whole store as a Mini App on top), then one section as a
+// short priced list or as cards to flip through, then the product
+function tgGroups(data) {
+  const ps = data.products.filter(p => !p.bundle), cats = data.settings.categories || [];
   const groups = cats.map(cat => ({ cat, list: ps.filter(p => p.cat === cat.id) })).filter(g => g.list.length);
   const rest = ps.filter(p => !cats.some(x => x.id === p.cat));
   if (rest.length) groups.push({ cat: { id: '_', name: 'منتجات تانية' }, list: rest });
-  const sel = only ? groups.filter(g => g.cat.id === only) : groups;
-  if (only && !sel.length) return tgGrid(c, fresh);
-  const kb = [];
-  for (const g of sel) {
-    if (!only) kb.push([tgBtn(`━  ${tgCatEmo(g.cat.name)} ${tgClean(g.cat.name)}  ━`, 'cat:' + g.cat.id)]);
-    kb.push(...tgPair(g.list.map(p => tgPBtnP(c.data, p, 'g:' + p.id))));
-  }
-  const bund = c.data.products.filter(p => p.bundle);
-  if (bund.length && !only) kb.push([{ ...tgBtn(`🎁 باقات التوفير (${bund.length})`, 'bund'), style: 'primary' }]);
-  kb.push(only ? [tgBtn('« كل الأقسام', 'prods'), tgBtn('🏠 الرئيسية', 'home')] : [tgBtn('🔎 بحث', 'find'), tgBtn('🏠 الرئيسية', 'home')]);
-  const shown = sel.flatMap(g => g.list), hot = shown.some(p => !tgOut(p) && (p.plans || []).some(tgDealOf)), out = shown.some(tgOut);
-  const title = only ? `${tgCatEmo(sel[0].cat.name)} <b>${esc(tgClean(sel[0].cat.name))}</b>` : '🛍 <b>المنتجات</b>';
-  const text = `${title}\nاختار المنتج اللي بدك إياه 👇` + (hot || out ? `\n<blockquote>${[hot ? '🔥 عليه عرض' : '', out ? '🔴 خلص هلأ' : ''].filter(Boolean).join('  ·  ')}</blockquote>` : '');
-  return tgView(c, { photo: await tgBan('home'), text, kb }, fresh);
+  for (const g of groups) g.list = tgSort(g.list);
+  return { ps, groups };
+}
+// in a section: what you can buy first, the store's picks (a badge) on top, then from the cheapest; the sold out last
+function tgSort(list) {
+  const rank = p => (tgOut(p) ? 2 : String(p.badge || '').trim() ? 0 : 1);
+  return list.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || (tgOut(a.p) ? 0 : tgLow(a.p) - tgLow(b.p)) || a.i - b.i).map(x => x.p);
+}
+function tgCatName(cat) { return tgClean(cat.name).replace(/^خدمات\s+/, ''); }
+async function tgGrid(c, fresh, only, page) {
+  const { ps, groups } = tgGroups(c.data);
+  if (only) { const g = groups.find(x => x.cat.id === only); if (g) return tgSection(c, g, fresh, +page || 0); }
+  const kb = [[{ ...tgApp('🛍 افتح المتجر الكامل'), style: 'primary' }]];
+  const secs = groups.map(g => { const b = tgBtn(`${tgCatEmo(g.cat.name)} ${tgCatName(g.cat)}`, 'cat:' + g.cat.id); b._w = tgLen(b.text) - 3; return b; });   // a section name fits half a row up to ~22 letters
+  kb.push(...tgPair(secs));
+  const deals = tgDeals(c).length, bund = c.data.products.filter(p => p.bundle).length;
+  const two = [...(deals ? [{ ...tgBtn('🔥 العروض', 'deals'), style: 'success' }] : []), ...(bund ? [tgBtn(`🎁 باقات التوفير (${bund})`, 'bund')] : [])];
+  if (two.length) kb.push(two);
+  kb.push([tgBtn('🔎 بحث', 'find'), tgBtn('🏠 الرئيسية', 'home')]);
+  const picks = ps.filter(p => !tgOut(p) && /طلب|مبيع|الأشهر|الأفضل|best/i.test(String(p.badge || ''))).slice(0, 3).map(p => esc(tgClean(p.name)));
+  const q = [picks.length ? `🔥 الأكثر طلباً: ${picks.join(' · ')}` : '', '⚡ تفعيل خلال دقائق · 💳 الدفع بالشيكل'].filter(Boolean);
+  const text = `🛍 <b>المتجر</b> · ${tgSvc(ps.length)}\nاختار القسم اللي بدك إياه 👇\n<blockquote>${q.join('\n')}</blockquote>`;
+  return tgView(c, { photo: await tgBan('shop', 'home'), text, kb }, fresh);
+}
+const TG_PAGE = 10;
+async function tgSection(c, g, fresh, page) {
+  const all = g.list, pages = Math.max(1, Math.ceil(all.length / TG_PAGE)), pg = Math.min(Math.max(0, page), pages - 1);
+  const list = all.slice(pg * TG_PAGE, pg * TG_PAGE + TG_PAGE), id = g.cat.id;
+  const star = p => !tgOut(p) && !!String(p.badge || '').trim();
+  const kb = list.map(p => [tgPBtnP(c.data, p, 'g:' + p.id, star(p))]);
+  for (const r of kb) for (const x of r) delete x._w;
+  if (pages > 1) kb.push([...(pg > 0 ? [tgBtn('السابق', `cat:${id}:${pg - 1}`)] : []), tgBtn(`${pg + 1} / ${pages}`, `cat:${id}:${pg}`), ...(pg < pages - 1 ? [tgBtn('التالي', `cat:${id}:${pg + 1}`)] : [])]);
+  if (all.length > 1) kb.push([tgBtn('🃏 تصفّحهم كروت', `cv:${id}:0`)]);
+  kb.push([tgBtn('« الأقسام', 'prods'), tgApp('🛍 المتجر الكامل')]);
+  const has = f => all.some(f);
+  const legend = [has(star) ? '⭐ الأكثر طلباً' : '', has(p => !tgOut(p) && (p.plans || []).some(tgDealOf)) ? '🔥 عليه عرض' : '', has(tgOut) ? '🔴 خلص هلأ' : ''].filter(Boolean);
+  const text = `${tgCatEmo(g.cat.name)} <b>${esc(tgClean(g.cat.name))}</b> · ${tgSvc(all.length)}\nاكبس على الخدمة وشوف باقاتها 👇` + (legend.length ? `\n<blockquote>${legend.join('  ·  ')}</blockquote>` : '');
+  return tgView(c, { photo: await tgBan('cat-' + id, 'shop', 'home'), text, kb }, fresh);
+}
+// one section as cards: the product's own picture, its price and what you get, السابق / التالي (words, no arrows:
+// Telegram in English lays the row out left to right, which would turn arrows the wrong way)
+async function tgCards(c, id, i) {
+  const { groups } = tgGroups(c.data), g = groups.find(x => x.cat.id === id);
+  if (!g) return tgGrid(c);
+  const n = g.list.length, k = ((+i || 0) % n + n) % n, p = g.list[k], out = tgOut(p);
+  const feats = (p.features || []).filter(Boolean).map(f => String(f).trim()).slice(0, 3);
+  const what = feats.length ? feats.map(f => '✓ ' + esc(tgShort(f, 70))).join('\n') : esc(tgShort(String(p.desc || '').trim(), 180));
+  const badge = String(p.badge || '').trim();
+  const text = `${tgCatEmo(g.cat.name)} ${esc(tgClean(g.cat.name))} · <b>${k + 1} من ${n}</b>\n` +
+    `${tgEmo(c.data, p)} <b>${esc(tgClean(p.name))}</b> · ${out ? '🔴 خلص هلأ' : esc(tgPrice(p))}${badge && !out ? ' · ⭐ ' + esc(badge.slice(0, 30)) : ''}` +
+    (what ? `\n<blockquote>${what}</blockquote>` : '');
+  const kb = [[{ ...tgBtn(out ? '🔔 شوف التفاصيل' : tgLine('✅', 'شوف الباقات', tgPrice(p)), 'g:' + p.id), style: out ? 'danger' : 'success' }]];
+  if (n > 1) kb.push([tgBtn('السابق', `cv:${id}:${k - 1}`), tgBtn(`${k + 1} / ${n}`, 'cat:' + id), tgBtn('التالي', `cv:${id}:${k + 1}`)]);
+  kb.push([tgBtn('« القائمة', 'cat:' + id), tgApp('🛍 المتجر الكامل')]);
+  return tgView(c, { photo: await tgBan(p.id, 'cat-' + id, 'home'), text, kb });
 }
 // 🔥 every plan that is cheaper than before
 async function tgDealsView(c) {
@@ -1150,13 +1208,17 @@ function tgLeft(data, p, pl) { return pl.instant ? +(data.stock || {})[p.id + '|
 function tgProductView(c, p, stars) {
   const emo = tgEmo(c.data, p), ico = tgIco(c.data, p), e = tgIcon(c.data, p);
   const plans = p.plans.map((pl, k) => ({ pl, k })).filter(x => +x.pl.price > 0);
-  const kb = plans.map(({ pl, k }) => {
-    const gone = !!p.soldOut || !!pl.out, n = tgLeft(c.data, p, pl), pn = tgClean(pl.name || '') || tgClean(p.name);
-    const label = gone ? `🔔 ${pn} · نفد، نبّهني` : `${tgDealOf(pl) ? '🔥 ' : ''}${pn} · ${tgP(pl.price)}${tgDealOf(pl) ? ' بدل ' + tgN(pl.compare) : ''}${n ? ' · 📦 ' + n : ''}`;
-    const b = { text: label, callback_data: gone ? `nt:${p.id}:${k}` : `v:${p.id}:${k}`, style: gone ? 'danger' : 'success' };
+  const live0 = plans.filter(x => !p.soldOut && !x.pl.out), low = live0.length > 1 ? Math.min(...live0.map(x => +x.pl.price)) : -1;
+  const gone0 = x => !!p.soldOut || !!x.pl.out;
+  const kb = [...plans].sort((a, b) => gone0(a) - gone0(b) || +a.pl.price - +b.pl.price || a.k - b.k).map(({ pl, k }) => {
+    const gone = !!p.soldOut || !!pl.out, n = tgLeft(c.data, p, pl), pn = tgClean(pl.name || '') || tgClean(p.name), deal = tgDealOf(pl);
+    const best = !gone && !deal && +pl.price === low;
+    const label = gone ? tgLine('🔔', pn, 'نفد، نبّهني') : tgLine(deal ? '🔥' : best ? '⭐' : '', pn, `${tgN(pl.price)} ₪${deal ? ' بدل ' + tgN(pl.compare) : ''}${n ? ' · 📦 ' + n : ''}`);
+    const b = { text: label, callback_data: gone ? `nt:${p.id}:${k}` : `v:${p.id}:${k}`, ...(gone ? { style: 'danger' } : deal || best || live0.length === 1 ? { style: 'success' } : {}) };
     return [ico && !gone ? { ...b, icon_custom_emoji_id: ico, _e: e } : b];
   });
-  kb.push([...(c.bot ? [tgUrl('📤 شاركه', 'https://t.me/share/url?url=' + encodeURIComponent(`https://t.me/${c.bot}?start=p_${p.id}`) + '&text=' + encodeURIComponent(tgClean(p.name) + ' — ' + tgPrice(p)))] : []), tgBtn('« رجوع', 'prods')]);
+  const back = (c.data.settings.categories || []).some(x => x.id === p.cat) ? 'cat:' + p.cat : 'prods';
+  kb.push([...(c.bot ? [tgUrl('📤 شاركه', 'https://t.me/share/url?url=' + encodeURIComponent(`https://t.me/${c.bot}?start=p_${p.id}`) + '&text=' + encodeURIComponent(tgClean(p.name) + ' — ' + tgPrice(p)))] : []), tgBtn('« رجوع', p.bundle ? 'bund' : back)]);
   const inc = p.bundle ? (p.bundleOf || []).map(id => c.data.products.find(x => x.id === id)).filter(Boolean) : [];
   const live = plans.map(x => x.pl);
   const accts = new Set(live.map(pl => pl.acct || p.acct || ''));
@@ -1656,11 +1718,12 @@ async function tgAsk(c) {
 function tgNext(c) { c.S.q.shift(); c.dirty = true; return tgAsk(c); }
 
 async function tgOnButton(c, d) {
-  const nav = ['home', 'prods', 'cats', 'best', 'find', 'orders', 'help', 'post', 'apend', 'sl', 'deals', 'bund', 'revs', 'subs', 'sup', 'ref', 'adm', 'admw', 'adms'].includes(d) || /^(c|cat|p|g|b|o|ps|pp|v|dv|vb|rn|nt|av):/.test(d);
+  const nav = ['home', 'prods', 'cats', 'best', 'find', 'orders', 'help', 'post', 'apend', 'sl', 'deals', 'bund', 'revs', 'subs', 'sup', 'ref', 'adm', 'admw', 'adms'].includes(d) || /^(c|cat|cv|p|g|b|o|ps|pp|v|dv|vb|rn|nt|av):/.test(d);
   if (nav && (c.S.q || []).length) tgReset(c);           // browsing again ends a half-done order
   if (d === 'home') return tgHome(c);
   if (d === 'prods' || d === 'cats' || d === 'best' || /^c:/.test(d)) return tgGrid(c);   // cats/best/c: are buttons from the first version
-  if (d.startsWith('cat:')) return tgGrid(c, false, d.slice(4));
+  if (d.startsWith('cat:')) { const [, id, pg] = d.split(':'); return tgGrid(c, false, id, pg); }
+  if (d.startsWith('cv:')) { const [, id, i] = d.split(':'); return tgCards(c, id, i); }
   if (d === 'deals') return tgDealsView(c);
   if (d === 'bund') return tgBundles(c);
   if (d === 'revs') return tgRevsView(c);

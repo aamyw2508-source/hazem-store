@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Pictures for the Telegram bot: one for the store (home), one when an order is delivered (done), and one
-per product, published under /bot/ on the site (hazem-store.com/bot/<id>.jpg).
+"""Pictures for the Telegram bot: one for the store (home), one when an order is delivered (done), one
+per product, and for «المنتجات»: the sections (shop) and one per section (cat-<id>), published under /bot/ on the
+site (hazem-store.com/bot/<id>.jpg).
 
   python3 .github/bot/banners.py <repo> --check   → prints render=1 if any picture is missing or out of date
   python3 .github/bot/banners.py <repo>           → draws what changed (needs Playwright + Chromium)
@@ -66,7 +67,17 @@ def colours(p):
     return f'hsl({h},55%,16%)', f'hsl({(h + 25) % 360},70%,46%)'
 
 # ---------------------------------------------------------------- the logo: the one Hazem uploaded, else the site's icon, else a letter
+LOGOS = {}
 def logo(p):
+    if p['id'] not in LOGOS: LOGOS[p['id']] = _logo(p)
+    return LOGOS[p['id']]
+
+def _logo(p):
+    loc = os.environ.get('BAN_LOGOS')   # tests: lg-<first part of the id>.png
+    if LOCAL and loc:
+        for k in (p['id'], p['id'].rsplit('-', 1)[0]):
+            f = os.path.join(loc, f'lg-{k}.png')
+            if os.path.exists(f): return 'data:image/png;base64,' + base64.b64encode(open(f, 'rb').read()).decode()
     img = str(p.get('img') or '')
     if img.startswith('data:image/'): return img
     d = re.sub(r'^https?://|[/?#].*$', '', str(p.get('domain') or '').strip().lower())
@@ -174,6 +185,85 @@ def done_html():
             f'<div class="store"><b>حازم ستور</b><img src="{STORE_LOGO}"></div>')
     return page(body), ('done',)
 
+# ---------------------------------------------------------------- «المنتجات»: the sections, then one section
+SHOP_STYLE = 2
+CAT = [  # (name, icon, accent)
+    (r'ذكاء', 'spark', '#7c4dff'), (r'تصميم|مونتاج', 'pen', '#00bfa5'), (r'تعليم|إنتاج|انتاج', 'book', '#ff9800'),
+    (r'انترنت|إنترنت', 'wifi', '#29b6f6'), (r'سوشال|تواصل', 'chat', '#e91e63'), (r'برمج', 'code', '#ff2d7a'),
+    (r'افلام|أفلام|مسلسل', 'film', '#14a37c'), (r'العاب|ألعاب', 'game', '#8bc34a'),
+]
+ICON.update({
+    'spark': '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+    'pen': '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+    'book': '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>',
+    'wifi': '<path d="M5 12.5a10 10 0 0 1 14 0"/><path d="M8.5 16a5 5 0 0 1 7 0"/><path d="M2 9a15 15 0 0 1 20 0"/><circle cx="12" cy="19.5" r="1"/>',
+    'chat': '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    'code': '<path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>',
+    'film': '<rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M17 3v18M2 8h5M2 16h5M17 8h5M17 16h5"/>',
+    'game': '<rect x="2" y="7" width="20" height="12" rx="4"/><path d="M7 11v4M5 13h4"/><circle cx="16" cy="12" r="1"/><circle cx="18" cy="14" r="1"/>',
+})
+def cat_look(name):
+    for rx, i, c in CAT:
+        if re.search(rx, name or ''): return i, c
+    return 'grid', '#5c7cfa'
+
+def svc(n): return 'خدمة وحدة' if n == 1 else 'خدمتين' if n == 2 else f'{n} خدمات' if n <= 10 else f'{n} خدمة'
+
+SHOP_CSS = """<style>
+.glass{background:rgba(255,255,255,.10);border:2px solid rgba(255,255,255,.22);border-radius:34px;padding:22px 24px;display:flex;flex-direction:column;gap:16px;align-items:flex-start}
+.glass h3{display:flex;align-items:center;gap:10px;font-size:28px;font-weight:700}
+.lgs{display:flex;gap:12px}.lg{width:76px;height:76px;border-radius:20px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px rgba(0,0,0,.3)}
+.lg img{width:54px;height:54px;object-fit:contain}.lg.big{width:200px;height:200px;border-radius:52px}.lg.big img{width:140px;height:140px}
+.lg.ic{background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.3);color:#fff;box-shadow:none}
+.mark{position:absolute;bottom:60px;right:96px;display:flex;align-items:center;gap:14px;opacity:.95}.mark img{width:54px;height:54px;border-radius:15px;background:#fff}.mark b{font-size:28px;font-weight:700}
+.kick{font-size:32px;font-weight:700;color:#ffcf33}
+.pillY{display:inline-block;margin-top:26px;background:#ffcf33;color:#1a1300;font-weight:800;font-size:30px;padding:10px 28px;border-radius:999px;box-shadow:0 10px 24px rgba(0,0,0,.3)}
+</style>"""
+MARK = f'<div class="mark"><img src="{STORE_LOGO}"><b>حازم ستور</b></div>'
+
+def groups(products, settings):
+    out = []
+    for c in settings.get('categories') or []:
+        lst = [p for p in products if p.get('cat') == c.get('id') and not p.get('bundle')]
+        if lst and re.match(r'^[A-Za-z0-9_-]{1,60}$', str(c.get('id') or '')): out.append((c, lst))
+    return out
+
+def logos_of(lst, n):
+    live = [p for p in lst if not p.get('soldOut')] + [p for p in lst if p.get('soldOut')]
+    return [l for l in (logo(p) for p in live) if l][:n]
+
+def shop_html(products, settings):
+    gs = groups(products, settings)
+    count = len([p for p in products if not p.get('bundle')])
+    cards = []
+    for c, lst in sorted(gs, key=lambda g: -len(logos_of(g[1], 3)))[:4]:
+        i, _ = cat_look(c.get('name'))
+        ls = logos_of(lst, 3)
+        tiles = ''.join(f'<span class="lg"><img src="{l}"></span>' for l in ls) or f'<span class="lg ic">{ico(i, 40)}</span>'
+        nm = re.sub(r'^خدمات\s+', '', str(c.get('name') or ''))
+        cards.append(f'<div class="glass"><h3>{ico(i, 30)}{html.escape(nm)}</h3><div class="lgs">{tiles}</div></div>')
+    body = (bg('#071233', '#1f55e8') + SHOP_CSS + '<div class="glow" style="width:520px;height:520px;top:-200px;right:-140px;background:rgba(56,194,247,.32)"></div>'
+            f'<div class="txt" style="top:120px;right:96px;left:auto;width:400px"><div class="name" style="font-size:118px">المتجر</div>'
+            f'<div class="sub">{html.escape(svc(count))} رقمية<br>بـ {len(gs)} أقسام</div><span class="pillY">كله بالشيكل ₪</span></div>'
+            f'<div style="position:absolute;top:50%;left:70px;width:700px;transform:translateY(-50%) rotate(-4deg);display:grid;grid-template-columns:1fr 1fr;gap:22px">{"".join(cards)}</div>' + MARK)
+    return page(body), (SHOP_STYLE, count, len(gs), cards)
+
+def cat_html(c, lst):
+    i, accent = cat_look(c.get('name'))
+    nm = str(c.get('name') or '')
+    ls = logos_of(lst, 4)
+    if ls:
+        pos = [(0, 0), (1, 0), (0, 1), (1, 1)] if len(ls) == 4 else [(0, 0), (1, 0), (0.5, 1)][:len(ls)] if len(ls) > 1 else [(0.5, 0.5)]
+        tiles = ''.join(f'<span class="lg big" style="position:absolute;left:{x * 232}px;top:{y * 232 + (34 if x == 1 and len(ls) == 4 else 0)}px"><img src="{l}"></span>' for (x, y), l in zip(pos, ls))
+    else:
+        tiles = f'<span class="lg big ic" style="position:absolute;left:116px;top:116px">{ico(i, 120)}</span>'
+    size = 104 if len(nm) <= 12 else 88 if len(nm) <= 18 else 72
+    body = (bg('#071233', accent) + SHOP_CSS + f'<div class="glow" style="width:480px;height:480px;top:-180px;right:-120px;background:{accent}55"></div>'
+            f'<div class="txt" style="top:100px;right:96px;left:auto;width:560px"><div class="kick" style="margin-bottom:10px">قسم</div><div class="name" style="font-size:{size}px;line-height:1.22">{html.escape(nm)}</div>'
+            f'<div class="sub" style="margin-top:26px">{html.escape(svc(len(lst)))}</div></div>'
+            f'<div style="position:absolute;top:70px;left:90px;width:432px;height:500px">{tiles}</div>' + MARK)
+    return page(body), (SHOP_STYLE, nm, accent, len(lst), [hashlib.md5(l.encode()).hexdigest() for l in ls])
+
 def h(x): return hashlib.sha1(json.dumps([STYLE, x], ensure_ascii=False, default=str).encode()).hexdigest()[:10]
 
 def main():
@@ -182,6 +272,9 @@ def main():
     jobs = {}
     hp, hk = home_html(products, settings); jobs['home'] = (hp, h(hk))
     dp, dk = done_html(); jobs['done'] = (dp, h(dk))
+    sp, sk = shop_html(products, settings); jobs['shop'] = (sp, h(sk))
+    for c, lst in groups(products, settings):
+        cp, ck = cat_html(c, lst); jobs['cat-' + c['id']] = (cp, h(ck))
     for p in products:
         if not re.match(r'^[A-Za-z0-9_-]{1,80}$', p['id']): continue
         pp, pk = product_html(p, settings); jobs[p['id']] = (pp, h(pk))
