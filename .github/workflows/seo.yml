@@ -1,6 +1,6 @@
 name: SEO pages refresh
-# Every 6 hours: pull products/prices/reviews from Firestore, rebuild the crawlable pages,
-# publish them, then ping IndexNow (Bing / ChatGPT search) with the pages that changed.
+# Every 6 hours: pull products/prices/reviews from Firestore, rebuild the crawlable pages and the Telegram bot's
+# pictures (bot/*.jpg), publish them, then ping IndexNow (Bing / ChatGPT search) with the pages that changed.
 on:
   schedule:
     - cron: '23 */6 * * *'
@@ -29,6 +29,20 @@ jobs:
         env:
           SEO_CHANGED: ${{ runner.temp }}/seo-changed.txt
         run: python3 .github/seo/build.py .
+      - name: Bot pictures (what changed)
+        id: ban
+        run: python3 .github/bot/banners.py . --check >> "$GITHUB_OUTPUT"
+      - name: Set up Python for drawing
+        if: steps.ban.outputs.render == '1'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bot pictures (draw)
+        if: steps.ban.outputs.render == '1'
+        run: |
+          python -m pip install --quiet playwright==1.49.1
+          python -m playwright install --with-deps chromium
+          python .github/bot/banners.py .
       - name: Publish
         id: pub
         run: |
