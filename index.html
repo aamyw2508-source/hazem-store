@@ -1838,7 +1838,7 @@ body.has-cbar .foot{padding-bottom:96px}
 .deal-bar{display:flex;align-items:center;gap:8px;margin:10px 0 0;padding:10px 12px;border-radius:12px;background:var(--warn-bg);color:var(--warn);font-size:14px}
 .pl-dealf{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:12px;background:var(--warn-bg)}
 /* v21: activation info is asked after the payment — a calm note, not a warning */
-.acctbox.later{border-color:color-mix(in srgb,var(--brand) 28%,var(--line))}
+.acctbox.later{padding:0;border:0;background:none}
 .acctbox.later .acct-note{background:var(--brand-soft);color:var(--fg)}
 .acctbox.later .acct-note .i{color:var(--brand)}
 .acctbox.later h3 .i{color:var(--brand)}
@@ -2987,7 +2987,7 @@ function productSheetHTML(){
 function plNoteHTML(p,pl){var a=planAcct(p,pl),c=[];
   if(pl.war==='yes')c.push('<span class="pn yes">'+svg('shield',15)+'<span><b>ضمان طول مدة الاشتراك</b>: أي مشكلة بنصلّحها أو بنبدّلها مجاناً. <a href="guarantee.html">الشروط</a></span></span>');
   else if(pl.war==='no'){var alt=p.plans.find(function(x){return x.war==='yes'});c.push('<span class="pn">'+svg('alert',15)+'<span><b>بدون ضمان</b>، عشان هيك أرخص.'+(alt?' بدك ضمان؟ اختار «'+esc(alt.name)+'».':'')+'</span></span>')}
-  if(a)c.push('<span class="pn acct">'+svg(a==='login'?'lock':'user',15)+'<span>'+(a==='login'?'بتتفعّل على <b>حسابك الشخصي</b>. إيميل الحساب وكلمة السر بنطلبهم منك على واتساب بعد ما يتأكد الدفع.':'بتوصلك <b>دعوة على إيميلك</b>. الإيميل بنطلبه منك على واتساب بعد ما يتأكد الدفع.')+'</span></span>');
+  if(a)c.push('<span class="pn acct">'+svg(a==='login'?'lock':'user',15)+'<span>'+(a==='login'?'بتتفعّل على <b>حسابك الشخصي</b>.':'بتوصلك <b>دعوة على إيميلك</b>.')+' بقية التفاصيل بنكمّلها معك على واتساب أو تيليجرام بعد الدفع.'+'</span></span>');
   return c.length?'<div class="pl-note">'+c.join('')+'</div>':''}
 function trustHTML(){return '<div class="trust">'+[['bolt','تفعيل خلال دقائق'],['verified','اشتراكات رسمية'],['chat','دعم على واتساب']].map(function(x){return '<span>'+svg(x[0],15)+x[1]+'</span>'}).join('')+'</div>'}
 function coManual(){if(!S.co||isWalletPay())return false;var m=curMethod();return !!m&&!isServerPay(m)}
@@ -3195,14 +3195,12 @@ function acctNeed(){var t='';coLines().forEach(function(x){var a=planAcct(x.p,x.
 function laterNeed(p,pl){var a=planAcct(p,pl),L=[];if(a==='login')L.push('إيميل الحساب وكلمة السر');else if(a==='email')L.push('الإيميل');(p.ask||[]).forEach(function(q){if(q&&q.l)L.push(String(q.l).slice(0,40))});return L}
 function laterList(){var L=[];coLines().forEach(function(x){laterNeed(x.p,x.plan).forEach(function(t){if(L.indexOf(t)<0)L.push(t)})});return L}
 function orderLater(o){var L=[];(o.items||[]).forEach(function(i){var p=product(i.productId);if(p)laterNeed(p,planOf(p,i.planId)).forEach(function(t){if(L.indexOf(t)<0)L.push(t)})});return L}
-function acctHTML(){var t=acctNeed(),need=laterList();if(!need.length)return '';var names=coLines().filter(function(x){return laterNeed(x.p,x.plan).length}).map(function(x){return x.p.name+(x.p.plans.length>1?' ('+x.plan.name+')':'')}).filter(function(v,i,a){return a.indexOf(v)===i});
-  return '<div class="ostep acctbox later" id="co-acct"><h3>'+svg('chat',18)+'معلومات التفعيل بعد الدفع</h3><p class="acct-note">'+svg('lock',16)+'<span>'+
-    '<b>'+esc(names.join('، '))+'</b> '+(t==='login'?'بيتفعّل على حسابك الشخصي.':t==='email'?'بيوصلك كدعوة على إيميلك.':'بنحتاج منك كم معلومة.')+' <b>ما بنطلب منك أي إشي هلأ</b>: بعد ما يتأكد الدفع بنتواصل معك على واتساب وبناخد منك '+esc(need.join('، '))+'.</span></p>'+
-    (t==='login'?'<ul class="acct-tips"><li>كلمة السر بتبعتها بس لرقمنا الرسمي على واتساب، وما بتنحفظ على الموقع.</li><li>خليك قريب من جوالك وقت التفعيل، ممكن نحتاج رمز التحقق اللي بيوصلك.</li><li>بعد ما نفعّلك غيّر كلمة السر.</li></ul>':'')+'</div>'}
+function acctHTML(){if(!laterList().length)return '';
+  return '<div class="ostep acctbox later" id="co-acct"><p class="acct-note">'+svg('chat',16)+'<span><b>بقية التفاصيل بعد الدفع:</b> أول ما يتأكد دفعك بنكمّل معك تفاصيل التفعيل على واتساب أو تيليجرام.</span></p></div>'}
 function acctErrors(){return [];var t=acctNeed(),o=S.co,e=[];if(!t)return e;var em=String(o.email||'').trim();
   if(!em)e.push(t==='login'?'اكتب إيميل حسابك.':'اكتب الإيميل اللي بدك تفعّل عليه.');else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em))e.push('الإيميل مش مكتوب صح.');
   if(t==='login'&&!String(o.pass||''))e.push('اكتب كلمة سر حسابك.');return e}
-function acctText(o){var need=laterList();return need.length?['معلومات التفعيل ('+need.join('، ')+'): بعطيكم إياها بعد ما يتأكد الدفع.']:[]}
+function acctText(o){return laterList().length?['بقية تفاصيل التفعيل بكمّلها معكم بعد تأكيد الدفع.']:[]}
 /* ================= USDT on BEP20 + TRC20: exact amount + QR. With the payment server the order confirms itself ================= */
 var USDT_BSC='0x55d398326f99059ff775485246999027b3197955',TR_TOPIC='0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 var USDT_ADDR='0x289B2eae953DBaa04ba59EED4694B6b2919cFEf5',USDT_TRON='TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',TRON_ADDR='THodKuiPeTJj6qq1QfEeGM8eVfuak1JLti';
@@ -3416,12 +3414,12 @@ function codeOut(c){if(!c.value)return '<div class="codebox"><span class="hint">
   return '<div class="codebox"><small>'+esc(c.name||'بيانات التفعيل')+'</small><pre dir="ltr">'+esc(c.value)+'</pre><button class="copy" data-act="copy" data-text="'+esc(c.value)+'">'+svg('copy',15)+'<span>نسخ</span></button></div>'}
 function paySuccess(s,r){var P=s.P,wa=payWa(),n=NETS[r.net||P.net]||NETS.bsc,amt=r.amt||P.amt;payStop();payClear();PAY=null;
   var tx=r.tx?'<a class="fine" href="'+n.scan+esc(r.tx)+'" target="_blank" rel="noopener">شوف المعاملة على الشبكة</a>':'',h,title;
-  if(!wa)wa='مرحباً '+S.settings.storeName+'، دفعت '+(P.kind==='topup'?'شحن رصيد':'طلبي رقم '+P.no)+' ('+amt+' USDT '+n.short+').'+(P.later?'':P.acct==='login'?'\nإيميل الحساب: \nكلمة السر: ':P.acct==='email'?'\nالإيميل: ':'');
-  if(P.later&&P.later.length)wa=wa.replace(/\nمعلومات التفعيل \([^\n]*/,'')+'\n\nمعلومات التفعيل:\n'+P.later.map(function(t){return t==='إيميل الحساب وكلمة السر'?'إيميل الحساب: \nكلمة السر: ':t+': '}).join('\n');
+  if(!wa)wa='مرحباً '+S.settings.storeName+'، دفعت '+(P.kind==='topup'?'شحن رصيد':'طلبي رقم '+P.no)+' ('+amt+' USDT '+n.short+').'+(P.later||P.acct?'\nبدي أكمّل تفاصيل التفعيل.':'');
+  if(P.later&&P.later.length)wa=wa.replace(/\nبقية تفاصيل التفعيل[^\n]*/,'')+'\n\nبدي أكمّل تفاصيل التفعيل.';
   if(P.kind==='topup'){title='انشحن رصيدك';h='<div class="done pay-ok"><div class="done-ic">'+svg('check',32)+'</div><h3>انضاف '+money(P.ils)+' لرصيدك</h3><p>وصلت دفعتك <bdi dir="ltr">'+amt+' USDT</bdi> وتأكدت لحالها.</p>'+tx+'<button class="btn primary block lg" data-act="account" data-tab="topups" data-close>'+svg('wallet',18)+' عرض رصيدي</button></div>'}
   else if(r.status==='done'){title='تم التسليم';h='<div class="done pay-ok"><div class="done-ic">'+svg('check',32)+'</div><h3>تم التسليم</h3><span class="pill done">'+svg('bolt',13)+' تسليم فوري</span><p>وصلت دفعتك وتأكدت لحالها. هاي بيانات التفعيل:</p><div class="pay-codes">'+(r.codes||[]).map(codeOut).join('')+'</div><p class="fine">احفظها عندك. '+(S.user?'وبتلاقيها كمان بحسابك تحت "طلباتي".':'رقم طلبك <b dir="ltr">'+esc(P.no)+'</b>، إذا احتجت إشي راسلنا فيه.')+'</p>'+tx+'<a class="btn wa block" href="'+esc(waLink(wa))+'" target="_blank" rel="noopener">'+svg('chat')+' تواصل معنا على واتساب</a></div>'}
   else{title='تم الدفع';h='<div class="done pay-ok"><div class="done-ic">'+svg('check',32)+'</div><h3>تم الدفع</h3><span class="pill paid">'+svg('clock',13)+' طلبك قيد التسليم</span><p>وصلت دفعتك <bdi dir="ltr">'+amt+' USDT</bdi> وتأكدت لحالها. رقم طلبك <b dir="ltr">'+esc(P.no)+'</b>، ورح نفعّلك ونبعتلك التفاصيل على واتساب بأقرب وقت.</p>'+
-    (P.acct==='login'||(P.later&&P.later.length)?'<div class="pay-last"><b>'+svg(P.acct==='login'?'lock':'chat',16)+' آخر خطوة</b><p>ابعتلنا '+esc(P.later&&P.later.length?P.later.join('، '):'بيانات حسابك')+' على واتساب عشان نفعّلك'+(P.acct==='login'?'. كلمة السر ما بتنحفظ على الموقع.':'.')+'</p><a class="btn wa block lg" href="'+esc(waLink(wa))+'" target="_blank" rel="noopener">'+svg('chat')+' ابعت معلومات التفعيل</a></div>'
+    (P.acct==='login'||(P.later&&P.later.length)?'<div class="pay-last"><b>'+svg(P.acct==='login'?'lock':'chat',16)+' آخر خطوة</b><p>كلّمنا على واتساب عشان نكمّل بقية تفاصيل التفعيل، أو استنى رسالتنا.</p><a class="btn wa block lg" href="'+esc(waLink(wa))+'" target="_blank" rel="noopener">'+svg('chat')+' كمّل التفاصيل على واتساب</a></div>'
      :'<a class="btn wa block" href="'+esc(waLink(wa))+'" target="_blank" rel="noopener">'+svg('chat')+' ابعت تفاصيل طلبك على واتساب</a>')+tx+'</div>'}
   if(s.sheet&&!s.sheet.closed)s.sheet.set(h,title);else openSheet({title:title,body:h});
   toast(P.kind==='topup'?'انشحن رصيدك':r.status==='done'?'تم تسليم طلبك':'وصلت دفعتك، طلبك قيد التسليم')}
@@ -3590,7 +3588,7 @@ function checkoutHTML(){
   h+='<div class="ostep" id="co-pay">'+payDetailsHTML(m,coPayable(),'co')+'</div>';
   h+='<div class="ostep" id="co-proof">'+proofHTML(m,S.co,'co')+'</div>';
   h+='<div class="ostep" id="co-data"><h3><span class="sn">٤</span>بياناتك</h3><label class="field"><span>الاسم</span><input class="inp" id="co-name" autocomplete="name" value="'+esc(o.name)+'" placeholder="الاسم الكامل"></label>'+phoneFieldHTML('co-phone',o.phone,'رقم واتساب <em>(ضروري، عليه بنتواصل معك بعد الدفع)</em>')+'</div>';
-  h+=trustHTML()+'<p class="fine">رقم الطلب <span dir="ltr">'+esc(o.no)+'</span> · بعد ما نتأكد من الحوالة بنتواصل معك على واتساب'+(laterList().length?' لمعلومات التفعيل':'')+' وبنفعّلك الاشتراك. بإرسال الطلب بتوافق على <a href="terms.html">شروط الاستخدام</a> و<a href="guarantee.html">سياسة الضمان</a>.</p><p class="err" id="co-err" hidden></p>';
+  h+=trustHTML()+'<p class="fine">رقم الطلب <span dir="ltr">'+esc(o.no)+'</span> · بعد ما نتأكد من الحوالة بنتواصل معك على واتساب'+(laterList().length?' لبقية التفاصيل':'')+' وبنفعّلك الاشتراك. بإرسال الطلب بتوافق على <a href="terms.html">شروط الاستخدام</a> و<a href="guarantee.html">سياسة الضمان</a>.</p><p class="err" id="co-err" hidden></p>';
   var st=coState();h+='<div class="co-bar"><span class="cb-prog"><i id="cb-prog" style="width:'+Math.round(st.n/3*100)+'%"></i></span><div class="cb-row"><span class="cb-t"><small id="cb-hint"'+(st.next?'':' class="ok"')+'>'+coBarHint(st)+'</small>'+money(coPayable())+'</span><a class="btn wa lg" id="co-send" href="#" target="_blank" rel="noopener" data-act="sendOrder">'+svg('chat')+' أرسل الطلب</a></div></div>';
   return h;
 }
@@ -3702,7 +3700,7 @@ function acctTabHTML(){
 function myOrderHTML(o){
   var h='<div class="mrow"><div class="mrow-h"><b><bdi>'+esc(oTitle(o))+'</bdi></b><span class="pill '+stPill(o)+'">'+(waitPay(o)?'بانتظار الدفع':(CSTATUS[o.status]||o.status))+'</span></div><div class="mrow-m"><span dir="ltr">'+esc(o.orderNo||'')+'</span> · '+money(oRev(o))+' · '+esc(o.source==='wallet'?'من الرصيد':(o.payment||'')+(oWalletPart(o)?' + '+fmt(oWalletPart(o))+' '+cur()+' من الرصيد':''))+' · '+esc(dayLabel(o.createdAt))+'</div>';
   h+=(o.status==='done'?subLeftHTML(o):'')||trkHTML(o);(o.stockIds||[]).forEach(function(sid){h+=codeHTML(sid)});h+=dlvBoxHTML(o);
-  var olt=o.status==='paid'&&!o.email?orderLater(o):[];if(olt.length)h+='<div class="pay-last"><b>'+svg('chat',16)+' الخطوة الجاية</b><p>تأكد دفعك ✅ ابعتلنا '+esc(olt.join('، '))+' على واتساب عشان نفعّلك، أو استنى رسالتنا.</p><a class="btn wa block" href="'+esc(waLink('مرحبا، طلبي '+(o.orderNo||'')+' تأكد دفعه. هاي معلومات التفعيل:'))+'" target="_blank" rel="noopener">'+svg('chat')+' ابعت معلومات التفعيل</a></div>';
+  var olt=o.status==='paid'&&!o.email?orderLater(o):[];if(olt.length)h+='<div class="pay-last"><b>'+svg('chat',16)+' الخطوة الجاية</b><p>تأكد دفعك ✅ كلّمنا على واتساب عشان نكمّل بقية تفاصيل التفعيل، أو استنى رسالتنا.</p><a class="btn wa block" href="'+esc(waLink('مرحبا، طلبي '+(o.orderNo||'')+' تأكد دفعه، بدي أكمّل تفاصيل التفعيل.'))+'" target="_blank" rel="noopener">'+svg('chat')+' كمّل التفاصيل على واتساب</a></div>';
   if(waitPay(o)||unpaidO(o))h+='<div class="acts">'+(waitPay(o)?payResumeBtn('order',o):'')+(unpaidO(o)?custCancelBtn('order',o):'')+'</div>';
   if(o.status==='paid')h+='<p class="hint">'+(o.source==='wallet'?'انخصم المبلغ من رصيدك':'وصلت دفعتك وتأكدت')+'، ورح نسلّمك الاشتراك على واتساب بأقرب وقت.</p>';
   if(o.status==='done'&&canReview()){var rv=S.myReviews.find(function(r){return r.id===o.id});h+=rv?'<div class="rv-mine">'+revStars(rv.rating)+'<span>'+(rv.status==='approved'?'تجربتك منشورة بالمتجر':'تجربتك وصلتنا، بتنشر بعد المراجعة')+'</span></div>':'<button class="btn sm rv-btn" data-act="writeReview" data-id="'+esc(o.id)+'">'+svg('star',15)+' قيّم تجربتك</button>'}

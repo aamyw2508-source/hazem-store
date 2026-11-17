@@ -950,11 +950,10 @@ function tgNeeds(products, o) {
 function tgNeedBlock(settings, o) {
   const need = tgNeeds(TGC.products, o);
   if (!need.length) return null;
-  const it = (o.items || [])[0] || {}, msg = `مرحبا، طلبي ${o.orderNo || ''} (${tgClean(it.productName || '')}) تأكد دفعه. هاي معلومات التفعيل:`;
+  const it = (o.items || [])[0] || {}, msg = `مرحبا، طلبي ${o.orderNo || ''} (${tgClean(it.productName || '')}) تأكد دفعه، بدي أكمّل تفاصيل التفعيل.`;
   const sup = tgUserName(settings && settings.tgSupport) || 'hazemstoresupport', wa = String((settings && settings.whatsapp) || '').replace(/\D/g, '');
-  const text = `📩 <b>الخطوة الجاية:</b> بنتواصل معك هون بالخاص عشان ناخد ${esc(need.join('، '))}، أو ابعتها إنت مباشرة من الأزرار تحت 👇` +
-    (need.some(x => /كلمة السر/.test(x)) ? `\n🔒 كلمة السر بتبعتها بس لحسابنا الرسمي، وما حدا منا بيطلبها من حساب تاني.` : '');
-  const kb = [[{ ...tgUrl('📩 ابعت المعلومات على تيليجرام', `https://t.me/${sup}?text=${encodeURIComponent(msg)}`), style: 'success' }]];
+  const text = `📩 <b>الخطوة الجاية:</b> بنتواصل معك بالخاص عشان نكمّل بقية تفاصيل التفعيل، أو كلّمنا إنت مباشرة من الأزرار تحت 👇`;
+  const kb = [[{ ...tgUrl('📩 كمّل التفاصيل على تيليجرام', `https://t.me/${sup}?text=${encodeURIComponent(msg)}`), style: 'success' }]];
   if (wa.length >= 9) kb.push([tgUrl('🟢 أو على واتساب', `https://wa.me/${wa}?text=${encodeURIComponent(msg)}`)]);
   return { text, kb, need };
 }
@@ -1232,7 +1231,7 @@ function tgBuy(c, pid, i) {
 }
 async function tgHelp(c, edit) {
   const faq = (c.data.settings.faq || []).filter(f => f && String(f.q || '').trim() && String(f.a || '').trim()).slice(0, 10);
-  const text = `❓ <b>المساعدة</b>\n<blockquote>🛒 <b>كيف بتشتري؟</b>\n1️⃣ اكبس «المنتجات» واختار اللي بدك\n2️⃣ اختار المدة واكبس «اشتري الآن»\n3️⃣ ادفع بـ${esc(tgPayList(c))}، وابعت سكرين التحويل هون\n4️⃣ بعد ما يتأكد الدفع بنتواصل معك لمعلومات التفعيل، وبتوصلك التفاصيل هون</blockquote>` +
+  const text = `❓ <b>المساعدة</b>\n<blockquote>🛒 <b>كيف بتشتري؟</b>\n1️⃣ اكبس «المنتجات» واختار اللي بدك\n2️⃣ اختار المدة واكبس «اشتري الآن»\n3️⃣ ادفع بـ${esc(tgPayList(c))}، وابعت سكرين التحويل هون\n4️⃣ بعد الدفع بنكمّل معك بقية التفاصيل على واتساب أو تيليجرام، وبيوصلك اشتراكك هون</blockquote>` +
     (faq.length ? '\nأو اختار سؤالك 👇' : '');
   const qs = faq.map((f, i) => { const b = tgBtn('❔ ' + tgShort(tgClean(f.q), 34), 'fq:' + i); b._w = tgLen(b.text); return b; });
   const kb = [...tgPair(qs), [tgBtn('💬 مركز الدعم', 'sup'), tgBtn('🏠 الرئيسية', 'home')]];
@@ -1559,7 +1558,7 @@ function tgSummary(c, x) {
     (war ? `\n🛡 الضمان: ${esc(war)}` : '') +
     (acct === 'login' ? '\n📧 بيتفعّل على إيميلك الشخصي' : acct === 'email' ? '\n📧 بتوصلك دعوة على إيميلك' : acct === 'none' ? '\n👤 حساب جاهز من عندنا' : '') +
     `\n⚡ ${x.pl.instant ? 'تسليم فوري بعد الدفع بـ USDT' : 'التفعيل خلال دقائق بعد تأكيد الدفع'}</blockquote>` +
-    (tgNeeds([x.p], { items: [{ productId: x.p.id, planId: x.pl.id }] }).length ? '\n📩 معلومات التفعيل (زي الإيميل) بنطلبها منك <b>بعد ما يتأكد الدفع</b>.' : '');
+    (tgNeeds([x.p], { items: [{ productId: x.p.id, planId: x.pl.id }] }).length ? '\n📩 بقية التفاصيل بنكمّلها معك على واتساب أو تيليجرام <b>بعد الدفع</b>.' : '');
 }
 function tgMEmo(m) { const n = String(m.name || ''); return isUsdt(m) ? '🪙' : /جوال|jawwal/i.test(n) ? '📱' : /بال ?باي|pal/i.test(n) ? '💳' : /بنك|bank|iban|آيبان/i.test(n) ? '🏦' : /شات|chat/i.test(n) ? '💬' : '💰'; }
 function tgPlan(c, pid, i) {
