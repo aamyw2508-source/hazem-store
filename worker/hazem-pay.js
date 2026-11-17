@@ -2344,7 +2344,7 @@ async function tgDeal(c, price) {
 }
 function tgDealLines(d) {
   if (!d.ref && !d.credit) return '';
-  return (d.ref ? `\n🎁 خصم الدعوة: <b>−${tgN(d.ref)} ₪</b>` : '') + (d.credit ? `\n💰 من رصيد الدعوات: <b>−${tgN(d.credit)} ₪</b>` : '') + `\n🧾 <b>المجموع: ${tgN(d.total)} ₪</b>`;
+  return (d.ref ? `\n🎁 خصم الدعوة: <b>${tgN(d.ref)} ₪</b>` : '') + (d.credit ? `\n💰 بينخصم من رصيد دعواتك: <b>${tgN(d.credit)} ₪</b>` : '') + `\n🧾 <b>المجموع: ${tgN(d.total)} ₪</b>`;
 }
 function tgDealFields(d, u) { return { ...(d.ref ? { refBy: +u.refBy, refOff: d.ref } : {}), ...(d.credit ? { creditUsed: d.credit } : {}) }; }
 function tgDealWrites(c, d) {
