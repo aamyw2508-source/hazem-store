@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>حازم ستور · المتجر</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* the store inside Telegram (Mini App): Telegram's own colours when it gives them, a dark look otherwise */
+:root{--bg:#0e1621;--card:#182533;--card2:#1f2f40;--line:#26384c;--text:#f2f5f8;--hint:#8ea3b8;--link:#5eb5f7;--btn:#2f7fe0;--btn-t:#fff;--price:#7cc8ff;--ok:#4fd28a;--warn:#ffd25a;
+  --fd:Alexandria,"IBM Plex Sans Arabic",system-ui,sans-serif;--fb:"IBM Plex Sans Arabic",system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:400 15px/1.6 var(--fb);-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit}
+[hidden]{display:none!important}
+.wrap{max-width:560px;margin:0 auto;padding:14px 14px 96px}
+.hi{color:var(--hint);font-size:13px}
+h1{margin:0;font:800 22px/1.4 var(--fd)}
+.search{position:relative;display:block;margin:12px 0 10px}
+.search svg{position:absolute;top:13px;right:14px;color:var(--hint)}
+.search input{width:100%;height:46px;border:0;border-radius:14px;background:var(--card);color:var(--text);font:500 15px var(--fb);padding:0 44px 0 14px;outline:none}
+.search input::placeholder{color:var(--hint)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;margin:0 -14px;padding-inline:14px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;height:36px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line);background:transparent;color:var(--hint);font:600 13px var(--fb);white-space:nowrap;cursor:pointer}
+.chip[aria-pressed=true]{border-color:var(--link);background:color-mix(in srgb,var(--link) 16%,transparent);color:var(--text)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+.card{position:relative;display:flex;flex-direction:column;gap:8px;padding:12px;border:0;border-radius:16px;background:var(--card);text-align:right;cursor:pointer;min-height:176px}
+.card:active{transform:scale(.98)}
+.logo{width:46px;height:46px;border-radius:13px;background:#fff;object-fit:cover;flex:none;display:flex;align-items:center;justify-content:center;font-size:24px;overflow:hidden}
+.logo img{width:100%;height:100%;object-fit:cover}
+.card b{display:block;font:700 14.5px/1.35 var(--fd);unicode-bidi:plaintext}
+.card small{display:block;color:var(--hint);font-size:11.5px}
+.card .pr{margin-top:auto;display:flex;align-items:baseline;gap:4px;border-top:1px solid var(--line);padding-top:8px}
+.card .pr span{color:var(--hint);font-size:11.5px}
+.price{font:800 18px/1 var(--fd);color:var(--price);white-space:nowrap}
+.price small{font-size:13px;display:inline!important;color:inherit!important}
+.badge{position:absolute;top:10px;left:10px;font:700 10.5px/1 var(--fb);color:#0b1a2e;background:var(--warn);padding:4px 7px;border-radius:999px}
+.badge.out{background:var(--line);color:var(--hint)}
+.empty{text-align:center;color:var(--hint);padding:40px 10px}
+/* product */
+.ban{width:100%;aspect-ratio:2/1;object-fit:cover;border-radius:16px;display:block;background:var(--card)}
+.ph{display:flex;align-items:center;gap:12px;padding:10px 0}
+.ph h1{flex:1}
+.lbl{font:700 14px var(--fb);color:var(--hint);margin:14px 0 8px}
+.plans{display:flex;flex-direction:column;gap:8px}
+.plan{display:flex;align-items:center;gap:11px;width:100%;padding:12px;border-radius:14px;border:1.5px solid var(--line);background:var(--card);text-align:right;cursor:pointer}
+.plan .r{width:20px;height:20px;border-radius:50%;border:2px solid #3a5068;flex:none}
+.plan[aria-checked=true]{border:2px solid var(--link);background:color-mix(in srgb,var(--link) 10%,var(--card))}
+.plan[aria-checked=true] .r{border:6px solid var(--link)}
+.plan[disabled]{opacity:.5;cursor:default}
+.plan .t{flex:1;min-width:0}
+.plan .t b{display:block;font:700 14px/1.4 var(--fd)}
+.plan .t small{display:block;color:var(--hint);font-size:11.5px;line-height:1.5}
+.plan .price{color:var(--text)}
+.plan[aria-checked=true] .price{color:var(--price)}
+.plan s{color:var(--hint);font:500 12px var(--fb);margin-left:4px}
+.tag{font:700 10.5px/1 var(--fb);color:#0b2a17;background:var(--ok);padding:3px 7px;border-radius:999px;margin-inline-start:6px;vertical-align:middle}
+.desc{color:color-mix(in srgb,var(--text) 82%,var(--hint));font-size:14px;margin:6px 0 0}
+.feats{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
+.feats li{display:flex;gap:8px;font-size:13.5px;color:color-mix(in srgb,var(--text) 85%,var(--hint))}
+.feats li::before{content:"✓";color:var(--ok);font-weight:700}
+.note{display:flex;gap:8px;margin-top:12px;padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--link) 10%,transparent);font:500 12.5px/1.6 var(--fb);color:color-mix(in srgb,var(--text) 85%,var(--link))}
+/* when there is no Telegram main button (opened in a browser): our own */
+.bar{position:fixed;left:0;right:0;bottom:0;padding:10px 14px calc(14px + env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--line)}
+.bar a,.bar button{display:flex;align-items:center;justify-content:center;width:100%;height:50px;border:0;border-radius:12px;background:var(--btn);color:var(--btn-t);font:700 16px var(--fb);text-decoration:none;max-width:560px;margin:0 auto}
+.done{text-align:center;padding:60px 20px}
+.done b{display:block;font:800 20px var(--fd);margin:10px 0 6px}
+.done span{color:var(--hint)}
+.err{color:#ff8a8a;text-align:center;padding:30px 10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main id="store">
+    <div class="hi" id="hi">أهلين 👋</div>
+    <h1>شو بدك اليوم؟</h1>
+    <label class="search"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="دوّر على اشتراك…" aria-label="بحث" autocomplete="off"></label>
+    <div class="chips" id="chips" role="group" aria-label="الأقسام"></div>
+    <div class="grid" id="grid"><div class="empty">جاري التحميل…</div></div>
+  </main>
+  <main id="prod" hidden></main>
+  <main id="ok" hidden class="done"><div style="font-size:44px">✅</div><b>بعتنالك الطلب بالمحادثة</b><span>كمّل الدفع هناك، وأول ما يتأكد بنفعّلك 🤍</span></main>
+</div>
+<div class="bar" id="bar" hidden><a id="barA" href="#"></a></div>
+<script>
+(function(){
+  var API = 'https://hazem-pay.aamyw2508.workers.dev', BOT = 'Hazem_storebot';
+  var tg = window.Telegram && window.Telegram.WebApp, inTg = !!(tg && tg.initData);
+  var D = document, $ = function (s) { return D.querySelector(s); };
+  var data = null, cat = 'all', cur = null, pick = -1, busy = false;
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function n(v) { return String(Math.round((+v || 0) * 100) / 100); }
+  function theme() {
+    if (!tg || !tg.themeParams) return;
+    var t = tg.themeParams, r = D.documentElement.style, map = { bg_color: '--bg', secondary_bg_color: '--card', text_color: '--text', hint_color: '--hint', link_color: '--link', button_color: '--btn', button_text_color: '--btn-t' };
+    for (var k in map) if (t[k]) r.setProperty(map[k], t[k]);
+    if (t.secondary_bg_color && t.secondary_bg_color.toLowerCase() === String(t.bg_color || '').toLowerCase()) r.setProperty('--card', 'color-mix(in srgb,' + t.text_color + ' 7%,' + t.bg_color + ')');
+    r.setProperty('--line', 'color-mix(in srgb,' + (t.text_color || '#fff') + ' 12%,transparent)');
+  }
+  if (tg) { try { tg.ready(); tg.expand(); theme(); tg.onEvent && tg.onEvent('themeChanged', theme); } catch (e) {} }
+  var u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+  if (u && u.first_name) $('#hi').textContent = 'أهلين ' + u.first_name + ' 👋';
+  function low(p) { var ok = p.plans.filter(function (x) { return !x.out; }), l = (ok.length ? ok : p.plans).map(function (x) { return x.price; }); return Math.min.apply(null, l); }
+  function many(p) { var s = {}; p.plans.forEach(function (x) { if (!x.out) s[x.price] = 1; }); return Object.keys(s).length > 1; }
+  function logo(p) { return '<span class="logo">' + (p.logo ? '<img src="' + esc(p.logo) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.textContent=\'' + esc(p.emo || '📦') + '\'">' : esc(p.emo || '📦')) + '</span>'; }
+  function norm(t) { return String(t || '').toLowerCase().replace(/[ً-ْـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي'); }
+  function chips() {
+    var used = {}; data.products.forEach(function (p) { used[p.cat] = 1; });
+    var l = [{ id: 'all', name: 'الكل' }].concat(data.cats.filter(function (c) { return used[c.id]; }));
+    $('#chips').innerHTML = l.map(function (c) { return '<button class="chip" type="button" data-cat="' + esc(c.id) + '" aria-pressed="' + (cat === c.id) + '">' + esc(c.name) + '</button>'; }).join('');
+  }
+  function grid() {
+    var q = norm($('#q').value).trim().split(/\s+/).filter(Boolean);
+    var l = data.products.filter(function (p) { if (cat !== 'all' && p.cat !== cat) return false; if (!q.length) return true; var h = norm(p.name + ' ' + p.desc + ' ' + p.plans.map(function (x) { return x.name; }).join(' ')); return q.every(function (w) { return h.indexOf(w) > -1; }); });
+    if (!l.length) { $('#grid').innerHTML = '<div class="empty" style="grid-column:1/-1">ما لقينا اشتراك زي هيك 🔎<br>جرّب اسم تاني، أو اسألنا بالمحادثة.</div>'; return; }
+    $('#grid').innerHTML = l.map(function (p) {
+      var cn = (data.cats.find(function (c) { return c.id === p.cat; }) || {}).name || '';
+      var b = p.out ? '<span class="badge out">نفد</span>' : p.badge ? '<span class="badge">' + esc(p.badge) + '</span>' : '';
+      return '<button class="card" type="button" data-p="' + esc(p.id) + '">' + b + logo(p) + '<span><b>' + esc(p.name) + '</b><small>' + esc(cn) + '</small></span><span class="pr">' + (many(p) ? '<span>من</span>' : '') + '<span class="price">' + n(low(p)) + ' <small>₪</small></span></span></button>';
+    }).join('');
+  }
+  function show(id) { ['store', 'prod', 'ok'].forEach(function (x) { $('#' + x).hidden = x !== id; }); window.scrollTo(0, 0); }
+  function mainBtn() {
+    var pl = cur && cur.plans[pick], text = pl ? 'اطلب الآن · ' + n(pl.price) + ' ₪' : 'اختار الباقة';
+    if (inTg && tg.MainButton) {
+      if (!cur) { tg.MainButton.hide(); return; }
+      tg.MainButton.setParams({ text: text, is_active: !!pl, is_visible: true });
+      return;
+    }
+    $('#bar').hidden = !cur;
+    if (cur) { var a = $('#barA'); a.textContent = text; a.href = 'https://t.me/' + BOT + '?start=' + (pl ? 'v_' + cur.id + '_' + pl.k : 'p_' + cur.id); }
+  }
+  function open(id) {
+    cur = data.products.find(function (p) { return p.id === id; }); if (!cur) return;
+    var free = cur.plans.findIndex(function (x) { return !x.out; }); pick = free;
+    var cheap = Math.min.apply(null, cur.plans.filter(function (x) { return !x.out; }).map(function (x) { return x.price; }).concat([Infinity]));
+    var h = (cur.banner ? '<img class="ban" src="' + esc(cur.banner) + '" alt="' + esc(cur.name) + '">' : '') +
+      '<div class="ph">' + (cur.banner ? '' : logo(cur)) + '<h1>' + esc(cur.name) + '</h1></div>' +
+      (cur.desc ? '<p class="desc">' + esc(cur.desc) + '</p>' : '') +
+      '<div class="lbl">اختار الباقة</div><div class="plans" role="radiogroup" aria-label="الباقة">' +
+      cur.plans.map(function (pl, i) {
+        var many2 = cur.plans.filter(function (x) { return !x.out; }).length > 1;
+        return '<button class="plan" type="button" role="radio" data-i="' + i + '" aria-checked="' + (i === pick) + '"' + (pl.out ? ' disabled' : '') + '><span class="r" aria-hidden="true"></span><span class="t"><b>' + esc(pl.name) + (pl.out ? '<span class="tag" style="background:var(--line);color:var(--hint)">نفدت</span>' : many2 && pl.price === cheap ? '<span class="tag">الأوفر</span>' : '') + '</b>' + (pl.meta ? '<small>' + esc(pl.meta) + '</small>' : '') + '</span>' + (pl.compare ? '<s>' + n(pl.compare) + '</s>' : '') + '<span class="price">' + n(pl.price) + ' <small>₪</small></span></button>';
+      }).join('') + '</div>' +
+      (cur.feats && cur.feats.length ? '<div class="lbl">شو بتاخد</div><ul class="feats">' + cur.feats.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>' : '') +
+      (cur.later ? '<div class="note">📩 بقية التفاصيل بنكمّلها معك على واتساب أو تيليجرام بعد الدفع.</div>' : '');
+    $('#prod').innerHTML = h; show('prod'); mainBtn();
+    if (inTg && tg.BackButton) tg.BackButton.show();
+  }
+  function back() { cur = null; pick = -1; show('store'); mainBtn(); if (inTg && tg.BackButton) tg.BackButton.hide(); }
+  function order() {
+    if (!cur || pick < 0 || busy) return;
+    var pl = cur.plans[pick]; if (!pl || pl.out) return;
+    if (!inTg) { location.href = 'https://t.me/' + BOT + '?start=v_' + cur.id + '_' + pl.k; return; }
+    busy = true; try { tg.MainButton.showProgress(); } catch (e) {}
+    fetch(API + '/tg/app/order', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ initData: tg.initData, pid: cur.id, k: pl.k }) })
+      .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+      .then(function (x) {
+        busy = false; try { tg.MainButton.hideProgress(); } catch (e) {}
+        if (x.s === 200 && x.j.ok) { try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) {} cur = null; mainBtn(); if (tg.BackButton) tg.BackButton.hide(); show('ok'); setTimeout(function () { try { tg.close(); } catch (e) {} }, 900); return; }
+        var m = (x.j && (x.j.alert || x.j.error)) || 'صار خطأ، جرّب كمان مرة';
+        if (x.s === 401) m = 'افتح المتجر من زر «🛍 افتح المتجر» بالبوت';
+        try { tg.showAlert(m); } catch (e) { alert(m); }
+      }).catch(function () { busy = false; try { tg.MainButton.hideProgress(); tg.showAlert('ما في اتصال، جرّب كمان مرة'); } catch (e) {} });
+  }
+  D.addEventListener('click', function (e) {
+    var c = e.target.closest('[data-cat]'); if (c) { cat = c.dataset.cat; chips(); grid(); try { tg.HapticFeedback.selectionChanged(); } catch (x) {} return; }
+    var p = e.target.closest('[data-p]'); if (p) { open(p.dataset.p); return; }
+    var pl = e.target.closest('.plan[data-i]'); if (pl && !pl.disabled) { pick = +pl.dataset.i; D.querySelectorAll('.plan').forEach(function (b) { b.setAttribute('aria-checked', b === pl); }); mainBtn(); try { tg.HapticFeedback.selectionChanged(); } catch (x) {} }
+  });
+  $('#q').addEventListener('input', grid);
+  $('#barA').addEventListener('click', function (e) { if (!cur) e.preventDefault(); });
+  if (inTg) { tg.MainButton.onClick(order); if (tg.BackButton) tg.BackButton.onClick(back); }
+  fetch(API + '/tg/app/data').then(function (r) { return r.json(); }).then(function (j) {
+    data = j; chips(); grid();
+    var want = (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || new URLSearchParams(location.search).get('p');
+    if (want && /^p_/.test(want)) want = want.slice(2);
+    if (want && data.products.some(function (p) { return p.id === want; })) open(want);
+  }).catch(function () { $('#grid').innerHTML = '<div class="err" style="grid-column:1/-1">ما قدرنا نحمّل المنتجات. سكّر وافتح كمان مرة.</div>'; });
+})();
+</script>
+</body>
+</html>

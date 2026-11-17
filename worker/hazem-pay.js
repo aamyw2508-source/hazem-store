@@ -31,7 +31,7 @@ const CHUNKS = 8; // getLogs calls per check (each covers SPAN blocks, SPAN shri
 const SITE = 'https://hazem-store.com';
 let BUDGET = 45; // outside calls left in this run (Cloudflare allows 50 on the free plan)
 function xf(url, init) { if (BUDGET <= 0) { const e = fail('busy, try again', 503); e.budget = true; throw e; } BUDGET--; return fetch(url, init); }
-const VERSION = 21;
+const VERSION = 22;
 const STORE = 'حازم ستور';
 
 export default {
@@ -52,6 +52,7 @@ export default {
     if (url.pathname === '/tg/hook') return tgHook(req, env);
     try {
       if (req.method === 'GET' && url.pathname === '/tg/setup') return json(await tgSetup(env, url), 200, cors);
+      if (req.method === 'GET' && url.pathname === '/tg/app/data') return new Response(JSON.stringify(await tgAppData(env)), { status: 200, headers: { ...cors, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=60' } });
       if (req.method === 'GET' && url.searchParams.has('cron')) return json(await cronNow(env), 200, cors);
       if (req.method === 'GET' && url.searchParams.has('rpc')) return json(await rpcProbe(env), 200, cors);
       if (req.method === 'GET') return json(await health(env), 200, cors);
@@ -63,6 +64,8 @@ export default {
       if (url.pathname === '/pay/check') return json(await check(fs, env, body, ctx), 200, cors);
       if (url.pathname === '/notify/test') return json(await notifyTest(fs, env), 200, cors);
       if (url.pathname === '/notify/delivered') return json(await notifyDelivered(fs, env, body), 200, cors);
+      if (url.pathname === '/tg/app/order') return json(await tgAppOrder(env, body), 200, cors);
+      if (url.pathname === '/tg/link') return json(await tgLinkMake(fs, env, body), 200, cors);
       return json({ error: 'not found' }, 404, cors);
     } catch (e) {
       return json({ error: e && e.message ? e.message : String(e) }, e && e.status ? e.status : 500, cors);
@@ -112,7 +115,7 @@ async function start(fs, env, b) {
     const ac = kind === 'order' && d.source === 'site';
     const exp = ac ? Math.max((+d.createdAt || now) + ORDER_MIN * 60e3, now + 5 * 60e3) : now + PAY_MIN * 60e3;
     // part paid from the customer's balance (taken when the order was made) is not asked again
-    const ils = kind === 'topup' ? +d.amount : Math.round((await orderTotal(fs, d) - (+d.walletPart > 0 ? +d.walletPart : 0)) * 100) / 100;
+    const ils = kind === 'topup' ? +d.amount : Math.round(((d.source === 'telegram' && +d.total > 0 ? +d.total : await orderTotal(fs, d)) - (+d.walletPart > 0 ? +d.walletPart : 0)) * 100) / 100;
     if (!(ils > 0)) throw fail('bad amount');
     const rate = +m.rate > 0 ? +m.rate : 3.1;
     const base = Math.ceil((ils / rate) * 100 - 1e-9) / 100;
@@ -258,7 +261,9 @@ async function cron(env) {
   // 1b. orders from the Telegram bot: tell the customer there when Hazem confirms, delivers or cancels
   if (env.SHOP_BOT_TOKEN) {
     const tw = s.tg || {};
-    for (const id of Object.keys(tw).slice(0, 6)) {
+    const ids = Object.keys(tw), k0 = ids.length > 6 ? (+s.tgK || 0) % ids.length : 0; // more than 6 waiting: take turns
+    if (ids.length > 6) { fields.tgK = k0 + 6; mask.push('tgK'); }
+    for (const id of [...ids.slice(k0), ...ids.slice(0, k0)].slice(0, 6)) {
       if (BUDGET < 18) break;
       try { if (await tgFollow(fs, env, id, tw[id]) === 'drop') mask.push('tg.' + fp(id)); }
       catch (e) { errs.push('tg ' + id + ': ' + (e && e.message)); }
@@ -725,7 +730,7 @@ async function tgSetup(env, url) {
 // ---------------------------------------------------------------- the bot's profile (v21): the ☰ Menu list, the text people see
 // before they press «ابدأ», and the kinds of updates we take (inline_query for sharing from any chat). Set again by the
 // first update after a new version (tgMeta/bot.v), so nobody has to open /tg/setup.
-const TG_BOT_V = 21;
+const TG_BOT_V = 22;
 const TG_UPDATES = ['message', 'callback_query', 'inline_query'];
 const TG_CMDS = [{ command: 'start', description: '🏠 البدء' }, { command: 'products', description: '🛍 المنتجات' }, { command: 'help', description: '❓ المساعدة' }];
 function tgAbout(data) {
@@ -815,9 +820,8 @@ async function tgUpdate(env, u) {
   const cb = u.callback_query, m = u.message;
   const chatObj = cb ? cb.message && cb.message.chat : m && m.chat;
   if (!chatObj || chatObj.type !== 'private') return;
-  const fs = await firestore(env), data = await tgData(fs);
-  const sd = await fs.get('tgBot/' + chatObj.id);
-  const c = { env, fs, data, chat: chatObj.id, from: (cb ? cb.from : m.from) || {}, S: (sd && sd.data) || {}, msgId: cb && cb.message ? cb.message.message_id : 0, dirty: false, alert: '', keys: (sd && +sd.data.keys) || 0 };
+  const c = await tgCtx(env, chatObj.id, (cb ? cb.from : m.from) || {}, cb && cb.message ? cb.message.message_id : 0);
+  const { fs, data } = c;
   c.isPhoto = !!(cb && cb.message && (cb.message.photo || cb.message.caption != null));
   if (cb) {
     await tgOnButton(c, String(cb.data || ''));
@@ -834,12 +838,19 @@ async function tgUpdate(env, u) {
     await fs.commit([fs.wUpdate('tgMeta/icons', { prem: !!c.from.is_premium }, ['prem'])]);
     TGC.at = 0;
   }
-  const fresh = !sd || !sd.data.reg;
-  if (c.dirty || fresh) {
-    const w = [fs.wUpdate('tgBot/' + c.chat, { ...c.S, at: Date.now(), reg: 1, keys: c.keys })];
-    if (fresh) w.push(fs.wUpdate('tgUsers/' + c.chat, { name: tgWho(c.from), user: c.from.username || '', at: Date.now(), off: false }, ['name', 'user', 'at', 'off']));
-    await fs.commit(w);
-  }
+  await tgSave(c);
+}
+async function tgCtx(env, chat, from, msgId) {
+  const fs = await firestore(env), data = await tgData(fs), sd = await fs.get('tgBot/' + chat);
+  return { env, fs, data, chat, from: from || {}, S: (sd && sd.data) || {}, msgId: msgId || 0, dirty: false, alert: '', keys: (sd && +sd.data.keys) || 0, fresh: !sd || !sd.data.reg };
+}
+// the chat's half-done state (tgBot) and, the first time, its place on the announcements list (tgUsers)
+async function tgSave(c) {
+  if (!c.dirty && !c.fresh) return;
+  const w = [c.fs.wUpdate('tgBot/' + c.chat, { ...c.S, at: Date.now(), reg: 1, keys: c.keys })];
+  if (c.fresh) { const f = { name: tgWho(c.from), user: c.from.username || '', at: Date.now(), off: false, ...(c.newRef ? { refBy: c.newRef } : {}) }; w.push(c.fs.wUpdate('tgUsers/' + c.chat, f, Object.keys(f))); }
+  await c.fs.commit(w);
+  c.fresh = false; c.dirty = false;
 }
 function tgMarkup(kb) {
   if (!kb) return {};
@@ -983,15 +994,25 @@ function tgClosed(c) { return c.data.settings.siteOrders === false; }
 
 async function tgHome(c, fresh) {
   const hi = c.from.first_name ? ` <b>${esc(tgClean(c.from.first_name).slice(0, 30))}</b>` : '';
-  const text = `أهلين${hi} 👋\nكل اشتراكاتك الرقمية الرسمية بمكان واحد، بأسعار بالشيكل ودفع محلي.\n<blockquote>⚡ التفعيل خلال دقائق بعد تأكيد الدفع\n💬 دعم مباشر على تيليجرام\n💳 ${esc(tgPayList(c))}</blockquote>\nاختار من تحت 👇`;
-  const kb = [[{ ...tgBtn('🛍 تصفّح المنتجات', 'prods'), style: 'primary' }]];
+  const me = await tgMine(c), w = await tgWallet(c);
+  let text = `أهلين${hi} 👋\n`;
+  if (me.soon) text += `<blockquote>📅 <b>${esc(tgClean(me.soon.it.productName || ''))}</b>${me.soon.it.planName ? ' · ' + esc(me.soon.it.planName) : ''} بيخلص ${me.soon.days <= 0 ? '<b>اليوم</b>' : 'بعد <b>' + tgDays(me.soon.days) + '</b>'} (${tgWhen(me.soon.end)})</blockquote>`;
+  if (me.act) { const it = (me.act.data.items || [])[0] || {}; text += `<blockquote>${tgStatus(me.act.data).split(' ')[0]} طلبك <code>${esc(me.act.data.orderNo || '')}</code> · ${esc(tgClean(it.productName || ''))}\n${esc(tgStatus(me.act.data).split(' ').slice(1).join(' '))}</blockquote>`; }
+  if (w) text += `💰 رصيدك بالموقع: <b>${tgN(+w.balance || 0)} ₪</b>\n`;
+  if (!me.soon && !me.act) text += `كل اشتراكاتك الرقمية الرسمية بمكان واحد، بأسعار بالشيكل ودفع محلي.\n<blockquote>⚡ التفعيل خلال دقائق بعد تأكيد الدفع\n💬 دعم مباشر على تيليجرام\n💳 ${esc(tgPayList(c))}</blockquote>\n`;
+  text += me.soon || me.act ? 'شو بدك اليوم؟ 👇' : 'اختار من تحت 👇';
+  const kb = [];
+  if (me.soon && me.soon.pl) kb.push([{ ...tgBtn(`🔄 جدّد ${tgShort(tgClean(me.soon.it.productName || ''), 20)} · ${tgP(me.soon.pl.price)}`, 'rn:' + me.soon.id), style: 'success' }]);
+  if (me.act) kb.push([tgBtn(`📦 تابع طلبك ${me.act.data.orderNo || ''}`, 'o:' + me.act.id)]);
+  if (me.last && (!me.soon || me.last.id !== me.soon.id)) kb.push([tgBtn('🔁 اطلب نفس طلبك الأخير', 'rn:' + me.last.id)]);
+  kb.push([{ ...tgApp('🛍 افتح المتجر'), style: 'primary' }]);
   const two = [...(tgDeals(c).length ? [tgBtn('🔥 العروض', 'deals')] : []), ...(c.data.products.some(p => p.bundle) ? [tgBtn('🎁 باقات التوفير', 'bund')] : [])];
   if (two.length) kb.push(two);
-  kb.push([tgBtn('📦 طلباتي', 'orders'), tgBtn('📅 اشتراكاتي', 'subs')], [tgBtn('⭐ آراء الزباين', 'revs'), tgBtn('🔎 بحث', 'find')]);
+  kb.push([tgBtn('📦 طلباتي', 'orders'), tgBtn('📅 اشتراكاتي', 'subs')], [tgRefAmt(c.data) > 0 ? tgBtn('🎁 ادعُ صاحبك', 'ref') : tgBtn('🔎 بحث', 'find'), tgBtn('⭐ آراء الزباين', 'revs')]);
   const ch = tgChan(c.data.settings);
   kb.push([tgBtn('💬 الدعم', 'sup'), tgBtn('❓ المساعدة', 'help')]);
   if (ch && ch[0] === '@') kb.push([tgUrl('📣 قناتنا: العروض أول بأول', 'https://t.me/' + ch.slice(1))]);
-  if (tgIsAdmin(c)) kb.push([tgBtn('⏳ الطلبات المعلّقة', 'apend'), tgBtn('🔥 عرض لوقت محدود', 'sl')], [tgBtn('📢 إعلان للمشتركين', 'post'), tgBtn('🎨 الأيقونات', 'seticon')]);
+  if (tgIsAdmin(c)) kb.push([{ ...tgBtn('📊 لوحة حازم', 'adm'), style: 'primary' }], [tgBtn('⏳ الطلبات المعلّقة', 'apend'), tgBtn('🔥 عرض لوقت محدود', 'sl')], [tgBtn('📢 إعلان للمشتركين', 'post'), tgBtn('🎨 الأيقونات', 'seticon')]);
   if (fresh && c.keys !== TG_KEYS_V) { // the keys under the chat, the first time (and after they change)
     await tgSay(c, '👇 <b>الأزرار تحت بتضل موجودة:</b> المنتجات، العروض، طلباتي، اشتراكاتي، الدعم والمساعدة.', tgKeys());
     c.keys = TG_KEYS_V; c.dirty = true;
@@ -1561,16 +1582,20 @@ function tgSummary(c, x) {
     (tgNeeds([x.p], { items: [{ productId: x.p.id, planId: x.pl.id }] }).length ? '\n📩 بقية التفاصيل بنكمّلها معك على واتساب أو تيليجرام <b>بعد الدفع</b>.' : '');
 }
 function tgMEmo(m) { const n = String(m.name || ''); return isUsdt(m) ? '🪙' : /جوال|jawwal/i.test(n) ? '📱' : /بال ?باي|pal/i.test(n) ? '💳' : /بنك|bank|iban|آيبان/i.test(n) ? '🏦' : /شات|chat/i.test(n) ? '💬' : '💰'; }
-function tgPlan(c, pid, i) {
+async function tgPlan(c, pid, i) {
   if (tgClosed(c)) { c.alert = 'الطلبات موقفة مؤقتاً، كلّمنا على الدعم'; return; }
   const p = c.data.products.find(x => x.id === pid), pl = p && p.plans[+i];
   if (!p || !pl || !(+pl.price > 0)) { c.alert = 'هالمدة مش متوفرة هلأ'; return tgProduct(c, pid); }
   if (p.soldOut || pl.out) { c.alert = 'هالمدة خلصت كميتها هلأ'; return; }
   c.S = { pid: p.id, plan: pl.id }; c.dirty = true;
+  const deal = await tgDeal(c, pl.price), w = await tgWallet(c), bal = w ? +w.balance || 0 : -1;
   const ms = tgMethods(c), auto = ms.filter(m => isUsdt(m) && m.auto), hand = ms.filter(m => !(isUsdt(m) && m.auto));
-  const kb = [...tgRows(hand.map(m => tgBtn(`${tgMEmo(m)} ${tgClean(m.name).slice(0, 22)}`, 'm:' + m.key)), 2),
-    ...auto.map(m => [{ ...tgBtn('🪙 USDT · بيتأكد لحاله', 'm:' + m.key), style: 'primary' }]), [tgBtn('« رجوع', `vb:${p.id}:${+i}`)]];
-  return tgShow(c, tgSummary(c, { p, pl }) + '\n💳 <b>اختار طريقة الدفع</b> 👇', kb, true);
+  const kb = [];
+  if (bal >= deal.total) kb.push([{ ...tgBtn(`💰 ادفع من رصيدي · بيضل ${tgN(bal - deal.total)} ₪`, 'wp'), style: 'success' }]);
+  kb.push(...tgRows(hand.map(m => tgBtn(`${tgMEmo(m)} ${tgClean(m.name).slice(0, 22)}`, 'm:' + m.key)), 2),
+    ...auto.map(m => [{ ...tgBtn('🪙 USDT · بيتأكد لحاله', 'm:' + m.key), style: 'primary' }]), [tgBtn('« رجوع', `vb:${p.id}:${+i}`)]);
+  const low = bal >= 0 && bal < deal.total ? `\n💰 رصيدك بالموقع <b>${tgN(bal)} ₪</b>، ما بيكفي لهالطلب.` : '';
+  return tgShow(c, tgSummary(c, { p, pl }) + tgDealLines(deal) + low + '\n💳 <b>اختار طريقة الدفع</b> 👇', kb, true);
 }
 async function tgMethod(c, key) {
   const x = tgPick(c), m = tgMethods(c).find(y => y.key === key);
@@ -1581,7 +1606,9 @@ async function tgMethod(c, key) {
   const tail = []; // the email and the product's questions are asked after the payment is confirmed (by Hazem, in private), never here
   Object.assign(c.S, { method: m.key, q: auto ? [...tail, 'net'] : ['proof', ...tail], ans: { ...pa }, proofText: '', proofImg: '', email: (pre && pre.email) || '', phone: (pre && pre.phone) || '' });
   c.dirty = true;
-  await tgShow(c, tgSummary(c, x) + `\n\nطريقة الدفع: <b>${esc(auto ? 'USDT (تأكيد تلقائي)' : m.name)}</b> ✓`, [], true);
+  const deal = await tgDeal(c, x.pl.price);
+  c.S.total = deal.total;
+  await tgShow(c, tgSummary(c, x) + tgDealLines(deal) + `\n\nطريقة الدفع: <b>${esc(auto ? 'USDT (تأكيد تلقائي)' : m.name)}</b> ✓`, [], true);
   return tgAsk(c);
 }
 async function tgAsk(c) {
@@ -1590,7 +1617,7 @@ async function tgAsk(c) {
   const cancel = [tgBtn('❌ إلغاء الطلب', 'cancel')];
   if (step === 'proof') {
     const m = tgMethods(c).find(y => y.key === c.S.method) || {};
-    const box = [`حوّل <b>${tgN(x.pl.price)} ₪</b> على:`];
+    const box = [`حوّل <b>${tgN(+c.S.total > 0 ? c.S.total : x.pl.price)} ₪</b> على:`];
     if (m.number) box.push(`${esc(m.label || 'الرقم')}: <code>${esc(m.number)}</code>`);
     if (m.holder) box.push(`الاسم: <b>${esc(m.holder)}</b>`);
     if (m.note) box.push(esc(m.note));
@@ -1629,7 +1656,7 @@ async function tgAsk(c) {
 function tgNext(c) { c.S.q.shift(); c.dirty = true; return tgAsk(c); }
 
 async function tgOnButton(c, d) {
-  const nav = ['home', 'prods', 'cats', 'best', 'find', 'orders', 'help', 'post', 'apend', 'sl', 'deals', 'bund', 'revs', 'subs', 'sup'].includes(d) || /^(c|cat|p|g|b|o|ps|pp|v|dv|vb|rn|nt|av):/.test(d);
+  const nav = ['home', 'prods', 'cats', 'best', 'find', 'orders', 'help', 'post', 'apend', 'sl', 'deals', 'bund', 'revs', 'subs', 'sup', 'ref', 'adm', 'admw', 'adms'].includes(d) || /^(c|cat|p|g|b|o|ps|pp|v|dv|vb|rn|nt|av):/.test(d);
   if (nav && (c.S.q || []).length) tgReset(c);           // browsing again ends a half-done order
   if (d === 'home') return tgHome(c);
   if (d === 'prods' || d === 'cats' || d === 'best' || /^c:/.test(d)) return tgGrid(c);   // cats/best/c: are buttons from the first version
@@ -1667,6 +1694,16 @@ async function tgOnButton(c, d) {
   if ((k = d.match(/^ax:(.+)$/))) return tgAdminAskReject(c, k[1]);
   if ((k = d.match(/^ad:(.+)$/))) return tgAdminAskDeliver(c, k[1]);
   if ((k = d.match(/^rn:(.+)$/))) return tgRenew(c, k[1]);
+  if (d === 'ref') return tgRefView(c);
+  if (d === 'wp') return tgWalletPay(c);
+  if (d === 'adm') return tgAdminPanel(c);
+  if (d === 'admw') return tgAdminPanel(c, 'month');
+  if (d === 'adms') return tgAdminSoon(c);
+  if (d === 'nk') { const x = tgPick(c), k2 = x ? x.p.plans.indexOf(x.pl) : -1; c.msgId = 0; return x && k2 >= 0 ? tgPlan(c, x.p.id, k2) : tgGrid(c, true); }
+  if (d === 'nl') { return tgShow(c, 'تمام 👍 طلبك محفوظ، كمّله وقت ما بدك من «🛍 المنتجات».', []); }
+  if (d === 'nn') { await c.fs.commit([tgUSet(c, { noNudge: 1 })]); return tgShow(c, '🔕 تمام، ما رح نبعتلك تذكير زي هيك.', []); }
+  if ((k = d.match(/^qr:(.+)$/))) return tgUsdtQr(c, k[1]);
+  if ((k = d.match(/^ai:(.+)$/))) return tgAdminAskInfo(c, k[1]);
   if ((k = d.match(/^fq:(\d+)$/))) return tgFaq(c, k[1]);
   if ((k = d.match(/^hs:([ospq])$/))) return tgHelpType(c, k[1]);
   if ((k = d.match(/^ho:([os]):(.+)$/))) return tgHelpAsk(c, k[1], k[2]);
@@ -1730,6 +1767,10 @@ async function tgOnMessage(c, m) {
     if (name === 'subs') { c.msgId = 0; return tgMySubs(c); }
     if (name === 'post') return tgPostMenu(c);
     if (name === 'pending') { tgReset(c); return tgAdminPending(c); }
+    if (name === 'admin' || name === 'dash') { tgReset(c); c.msgId = 0; return tgAdminPanel(c); }
+    if (name === 'invite' || name === 'ref') { tgReset(c); c.msgId = 0; return tgRefView(c); }
+    if (name === 'start' && cmd[2] && /^l_[A-Za-z0-9]{8,40}$/.test(cmd[2])) return tgLinkUse(c, cmd[2].slice(2));
+    if (name === 'start' && cmd[2] && /^r_[a-z0-9]{1,14}$/.test(cmd[2])) await tgRefStart(c, cmd[2].slice(2));
     if (name === 'channel') { tgReset(c); return tgChanCheck(c); }
     if (name === 'sale') { tgReset(c); c.msgId = 0; return tgSaleMenu(c); }
     if (name === 'seticon' || name === 'seticons') { tgReset(c); return tgSetIconMenu(c); }
@@ -1819,13 +1860,16 @@ async function tgFinish(c) {
   const info = (x.p.ask || []).map((a, k) => { const v = String((c.S.ans || {})[k] || '').trim(); return v ? a.l + ': ' + v : ''; }).filter(Boolean).join(' | ').slice(0, 600);
   const item = { productId: x.p.id, productName: tgClean(x.p.name).slice(0, 100), planId: x.pl.id, planName: tgClean(x.pl.name || '').slice(0, 60), price: +x.pl.price, qty: 1 };
   if (info) item.info = info;
-  const user = c.from.username || '';
-  const order = { orderNo: no, items: [item], total: +x.pl.price, customer: tgWho(c.from), phone: c.S.phone || '', email: c.S.email || '', payment: String(m.name).slice(0, 60),
+  const user = c.from.username || '', deal = await tgDeal(c, x.pl.price), u = await tgU(c);
+  const order = { orderNo: no, items: [item], total: deal.total, customer: tgWho(c.from), phone: c.S.phone || '', email: c.S.email || '', payment: String(m.name).slice(0, 60),
     proofText: auto ? '' : String(c.S.proofText || ''), proofImage: auto ? '' : String(c.S.proofImg || ''), status: 'pending', source: 'telegram', tgChat: c.chat, tgUser: user };
   if (c.S.renew) order.renewOf = String(c.S.renew);
+  if (u.uid) order.uid = u.uid;
+  Object.assign(order, tgDealFields(deal, u));
   await fs.commit([
     fs.wUpdate('orders/' + id, order, null, { exists: false }, [{ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' }]),
     fs.wUpdate('payState/main', { tg: { [id]: Date.now() + 10 * 864e5 } }, ['tg.' + fp(id)]),
+    ...tgDealWrites(c, deal),
   ]);
   const img = c.S.proofImg || '', net = c.S.net || (validAddr('bsc', m.number) ? 'bsc' : 'tron');
   c.S = {}; c.dirty = true;
@@ -1834,9 +1878,10 @@ async function tgFinish(c) {
     try { p = await start(fs, env, { kind: 'order', id, net }); }
     catch (e) { return tgSay(c, `انسجل طلبك <code>${no}</code>، بس ما قدرنا نجهّز دفع USDT هلأ 🙏\nكلّمنا على الدعم وبنكمّل معك.`, [[tgUrl('💬 كلّمنا', tgSup(c))]]); }
     if (p.status !== 'pending' || !p.amt) return tgOrder(c, id, true);
-    const nw = p.net === 'tron' ? 'TRC20' : 'BEP20';
-    return tgSay(c, `🪙 <b>الدفع بـ USDT</b> · طلب <code>${no}</code>\n<blockquote>حوّل <b>بالضبط</b>: <code>${p.amt}</code> USDT\nالشبكة: <b>${p.net === 'tron' ? 'TRC20 (Tron)' : 'BEP20 (BNB Smart Chain)'}</b>\nالعنوان:\n<code>${esc(p.addr)}</code></blockquote>\n⏱ خلال ${PAY_MIN} دقيقة، وأول ما يوصل بيتأكد لحاله وبنبعتلك هون ✓\n⚠️ المبلغ لازم يوصل <b>بالضبط</b> لآخر رقم، وعلى ${nw} بس.\n⚠️ إذا بتحوّل من منصة زي بينانس، الرسوم بتنخصم من المبلغ، فتأكد إنه اللي بيوصل هو <code>${p.amt}</code>.`,
-      [[tgCopy('📋 انسخ المبلغ', p.amt), tgCopy('📋 انسخ العنوان', p.addr)], [{ ...tgBtn('🔄 حوّلت، افحص الدفع', 'chk:' + id), style: 'success' }], [tgBtn('📦 طلباتي', 'orders')]]);
+    const po = { orderNo: no, pay: { net: p.net, amt: p.amt, addr: p.addr, exp: p.exp || Date.now() + PAY_MIN * 60e3 } }, now = Date.now();
+    const r = await tgSay(c, tgUsdtText(po, now), tgUsdtKb(po, id, now));
+    if (r && r.message_id) await fs.commit([fs.wUpdate('orders/' + id, { tgPayMsg: r.message_id, tgPayM: tgUsdtMins(po, now) }, ['tgPayMsg', 'tgPayM'], { exists: true })]).catch(() => {});
+    return r;
   }
   const d = { ...order };
   await notifyAdmin(env, '🤖 طلب جديد من بوت تيليجرام ' + no, [...itemLines(d), 'المجموع: ' + money(d.total), 'الدفع: ' + d.payment, d.proofText ? 'الإثبات: ' + d.proofText : img ? 'الإثبات: سكرين (مبعوت تحت)' : '', 'الزبون: ' + d.customer + (user ? ' · @' + user : '') + (d.phone ? ' · ' + d.phone : ''), d.email ? 'الإيميل: ' + d.email : '', info ? 'تفاصيل: ' + info : '', 'الحالة: بانتظار تأكيدك للحوالة'].filter(Boolean), SITE + '/admin.html').catch(e => console.error('notify', e && e.message));
@@ -1851,7 +1896,10 @@ async function tgFinish(c) {
       await xf('https://api.telegram.org/bot' + env.TG_TOKEN + '/sendPhoto', { method: 'POST', body: fd });
     } catch (e) { console.error('proof photo', e && e.message); }
   }
-  return tgSay(c, `📥 <b>وصلنا طلبك، شكراً!</b>\n\n${tgTrack({ ...d, createdAt: Date.now() })}`, [[tgBtn('🔄 تحديث', 'o:' + id), tgUrl('💬 الدعم', tgSup(c))], [tgBtn('📦 طلباتي', 'orders'), tgBtn('🏠 الرئيسية', 'home')]]);
+  const q = await tgQueue(fs, id, Date.now()).catch(() => null);
+  const r = await tgSay(c, tgQueueText({ ...d, createdAt: Date.now() }, q), tgQueueKb(c.data, id));
+  if (r && r.message_id && q) await fs.commit([fs.wUpdate('orders/' + id, { tgQMsg: r.message_id, tgQPos: q.pos }, ['tgQMsg', 'tgQPos'], { exists: true })]).catch(() => {});
+  return r;
 }
 
 function tgStatus(o) {
@@ -1907,7 +1955,12 @@ async function tgCheck(c, id) {
   if (!doc || doc.data.tgChat !== c.chat) { c.alert = 'ما لقينا هالطلب'; return; }
   let r;
   try { r = await check(c.fs, c.env, { kind: 'order', id }, null); } catch (e) { c.alert = 'ما قدرنا نفحص هلأ، جرّب بعد دقيقة'; return; }
-  if (r.status === 'pending') { c.alert = r.expired ? 'انتهى وقت هالدفعة. إذا حوّلت كلّمنا على الدعم برقم الطلب.' : 'لسا ما وصلت الدفعة. بعد ما تحوّل استنى دقيقة وجرّب، أو خلّيها علينا وبنبلّغك هون أول ما توصل.'; return; }
+  if (r.status === 'pending') {
+    c.alert = r.expired ? 'انتهى وقت هالدفعة. إذا حوّلت كلّمنا على الدعم برقم الطلب.' : 'لسا ما وصلت الدفعة. بعد ما تحوّل استنى دقيقة وجرّب، أو خلّيها علينا وبنبلّغك هون أول ما توصل.';
+    const o = doc.data, now = Date.now();
+    if (o.pay && o.pay.amt && c.msgId && c.msgId === +o.tgPayMsg) await tgCall(c.env, 'editMessageText', { chat_id: c.chat, message_id: c.msgId, text: tgUsdtText(o, now), parse_mode: 'HTML', disable_web_page_preview: true }, tgUsdtKb(o, id, now));
+    return;
+  }
   const now = await c.fs.get('orders/' + id);
   if (now) await tgNotifyStatus(c.fs, c.env, id, now.data);
 }
@@ -1915,6 +1968,8 @@ async function tgCheck(c, id) {
 // tell the customer about the order's new status (once per status; the delivery text once per change)
 async function tgNotifyStatus(fs, env, id, d, dlvSig) {
   if (!TGC.products) await tgData(fs).catch(() => {});
+  await tgCardsFollow(fs, env, id, d).catch(e => console.error('cards', e && e.message));
+  await tgRefSettle(fs, env, id, d).catch(e => console.error('ref', e && e.message));
   const no = `<code>${esc(d.orderNo || '')}</code>`, kb = [];
   let text = '';
   const sup = 'https://t.me/' + (tgUserName(TGC.settings && TGC.settings.tgSupport) || 'hazemstoresupport');
@@ -1959,6 +2014,7 @@ async function tgFollow(fs, env, id, exp) {
   const d = doc.data, st = d.status;
   if (st === 'done' && !d.delivery && !(d.stockIds && d.stockIds.length) && Date.now() - (+d.doneAt || 0) < 3 * 60e3) return 'keep'; // the delivery text may still be on its way
   if (st !== d.tgSent && (st === 'paid' || st === 'done' || st === 'cancelled')) await tgNotifyStatus(fs, env, id, d);
+  else if (st === 'pending') await tgLive(fs, env, id, d).catch(e => console.error('live', e && e.message));
   if (st === 'done' || st === 'cancelled' || Date.now() > (+exp || 0)) return 'drop';
   return 'keep';
 }
@@ -1989,6 +2045,7 @@ function tgAdminCard(o, id, head) {
   if (o.status === 'pending') kb.push([{ ...tgBtn('✅ تأكيد الدفع', 'ap:' + id), style: 'success' }, { ...tgBtn('❌ رفض', 'ax:' + id), style: 'danger' }]);
   if (o.status === 'pending' || o.status === 'paid') kb.push([tgBtn('📝 سلّم وابعت التفاصيل', 'ad:' + id)]);
   if (o.status === 'paid') kb.push([{ ...tgBtn('❌ رفض', 'ax:' + id), style: 'danger' }]);
+  if (o.status === 'paid' && o.tgChat && tgNeeds(TGC.products, o).length) kb.push([tgBtn('📩 ذكّره يبعت التفاصيل', 'ai:' + id)]);
   const contact = o.tgUser ? 'https://t.me/' + tgUserName(o.tgUser) : '';
   kb.push([tgBtn('🔄 حدّث', 'av:' + id), ...(contact ? [tgUrl('💬 راسل الزبون', contact)] : [])]);
   return { text: L.join('\n'), kb };
@@ -2039,7 +2096,7 @@ async function tgAdminSet(c, id, status) {
   if (status === 'paid' && o.status !== 'pending') { c.alert = 'هالطلب صار: ' + tgStatus(o); return tgAdminView(c, id); }
   if (status === 'cancelled' && (o.status === 'done' || o.status === 'cancelled')) { c.alert = 'هالطلب صار: ' + tgStatus(o); return tgAdminView(c, id); }
   if (status === 'cancelled' && tgWalletOnly(o, 'cancel')) { c.alert = 'هالطلب مدفوع من رصيد الزبون: ألغيه من لوحة الأدمن عشان يرجعله المبلغ'; return; }
-  try { await c.fs.commit([c.fs.wUpdate('orders/' + id, { status }, ['status'], { updateTime: doc.updateTime })]); }
+  try { await c.fs.commit([c.fs.wUpdate('orders/' + id, { status }, ['status'], { updateTime: doc.updateTime }, status === 'paid' ? [{ fieldPath: 'paidAt', setToServerValue: 'REQUEST_TIME' }] : undefined)]); }
   catch (e) { c.alert = 'تغيّر الطلب هلأ، جرّب كمان مرة'; return tgAdminView(c, id); }
   const d = { ...o, status };
   if (d.tgChat) await tgNotifyStatus(c.fs, c.env, id, d).catch(() => {});
@@ -2081,6 +2138,401 @@ async function tgAdminPending(c) {
   if (!all.length) return tgSay(c, '👌 ما في طلبات معلّقة هلأ.');
   c.msgId = 0;
   return tgSay(c, `⏳ <b>الطلبات المعلّقة</b> (${all.length})`, all.map(r => [tgBtn(`${r.data.orderNo || ''} · ${tgClean((r.data.items || [{}])[0].productName || '')} · ${tgN(r.data.total)} ₪${r.data.status === 'paid' ? ' · مدفوع' : ''}`, 'av:' + r.id)]));
+}
+
+
+// ================================================================ v22: the bot's next step
+// 1 the store inside Telegram (Mini App) · 2 a home that knows you · 3 the USDT card that counts down and turns
+// «وصل» by itself · 4 your place in line · 5 one nudge for an order left at the payment · 6 invite a friend ·
+// 7 pay from the site balance (after linking the site account once) · 8 Hazem's panel
+const TG_APP = SITE + '/app/';
+function tgApp(text) { return { text, web_app: { url: TG_APP } }; }
+
+// ---- per-customer things that must survive the chat's state (tgUsers/<chat>, written with masks only)
+async function tgU(c) {
+  if (c._u === undefined) { const d = await c.fs.get('tgUsers/' + c.chat).catch(() => null); c._u = d ? d.data : null; }
+  return c._u || {};
+}
+function tgUSet(c, f, transforms) { if (c._u) Object.assign(c._u, f); return c.fs.wUpdate('tgUsers/' + c.chat, f, Object.keys(f), null, transforms); }
+
+// ---- 2: what this customer has going on: an order in progress, a subscription ending within a week, the last one
+async function tgMine(c) {
+  const rows = await c.fs.query('orders', [['tgChat', 'EQUAL', c.chat]], 25).catch(() => []), now = Date.now();
+  rows.sort((a, b) => (+b.data.createdAt || 0) - (+a.data.createdAt || 0));
+  const act = rows.find(r => (r.data.status === 'pending' || r.data.status === 'paid') && now - (+r.data.createdAt || 0) < 5 * 864e5);
+  let soon = null;
+  for (const r of rows) {
+    if (r.data.status !== 'done') continue;
+    const it = (r.data.items || [])[0]; if (!it) continue;
+    const end = tgItemEnd(r.data, it, c.data.products);
+    if (!end || end < now - 864e5 || end - now > 7 * 864e5) continue;
+    if (rows.some(x => x !== r && x.data.renewOf === r.id && x.data.status !== 'cancelled')) continue; // already renewed
+    if (!soon || end < soon.end) {
+      const p = c.data.products.find(x => x.id === it.productId), pl = p && p.plans.find(x => x.id === it.planId);
+      soon = { id: r.id, it, end, days: Math.max(0, Math.ceil((end - now) / 864e5)), pl: p && pl && !p.soldOut && !pl.out ? pl : null };
+    }
+  }
+  const lastR = rows.find(r => r.data.status === 'done'), it0 = lastR && (lastR.data.items || [])[0];
+  const lp = it0 && c.data.products.find(x => x.id === it0.productId);
+  const last = lp && lp.plans.some(x => x.id === it0.planId) ? { id: lastR.id } : null;
+  return { act, soon, last };
+}
+
+// ---- 1: the Mini App reads the catalogue here and sends the chosen plan back to the chat
+async function tgAppData(env) {
+  const fs = await firestore(env), data = await tgData(fs), m = await tgBanners();
+  const cats = (data.settings.categories || []).map(x => ({ id: x.id, name: tgClean(x.name) }));
+  const acctT = a => a === 'login' ? 'على إيميلك الشخصي' : a === 'email' ? 'دعوة على إيميلك' : a === 'none' ? 'حساب جاهز من عندنا' : '';
+  const products = data.products.map(p => ({
+    id: p.id, name: tgClean(p.name), cat: p.cat || '', badge: tgClean(p.badge || ''), desc: String(p.desc || '').slice(0, 400),
+    feats: (p.features || []).filter(Boolean).slice(0, 5).map(String), logo: tgLogo(p, 128) || '',
+    banner: m[p.id] ? `${SITE}/bot/${p.id}.jpg?v=${m[p.id]}` : '', out: !!p.soldOut, bundle: !!p.bundle, emo: tgIcon(data, p),
+    later: tgNeeds([p], { items: [{ productId: p.id, planId: (p.plans[0] || {}).id }] }).length > 0,
+    plans: p.plans.map((pl, k) => ({ k, name: tgClean(pl.name), price: +pl.price, compare: +pl.compare > +pl.price ? +pl.compare : 0, out: !!(pl.out || p.soldOut), meta: [acctT(pl.acct || p.acct || ''), String(pl.tgWar || '').trim()].filter(Boolean).join(' · '), instant: !!pl.instant })).filter(x => x.price > 0),
+  }));
+  return { v: VERSION, store: tgClean(data.settings.storeName) || STORE, cats, products, home: m.home ? `${SITE}/bot/home.jpg?v=${m.home}` : '', pay: tgMethods({ data }).map(x => tgClean(x.name)).slice(0, 6) };
+}
+// Telegram signs what it hands the Mini App (initData) with the bot's token: check it before trusting the user in it
+async function tgAppVerify(env, initData) {
+  const p = new URLSearchParams(String(initData || '')), hash = p.get('hash');
+  if (!hash || !env.SHOP_BOT_TOKEN) return null;
+  p.delete('hash');
+  const dcs = [...p.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => k + '=' + v).join('\n');
+  const enc = new TextEncoder();
+  const k1 = await crypto.subtle.importKey('raw', enc.encode('WebAppData'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const secret = await crypto.subtle.sign('HMAC', k1, enc.encode(env.SHOP_BOT_TOKEN));
+  const k2 = await crypto.subtle.importKey('raw', secret, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = [...new Uint8Array(await crypto.subtle.sign('HMAC', k2, enc.encode(dcs)))].map(b => b.toString(16).padStart(2, '0')).join('');
+  if (sig !== hash) return null;
+  if (Date.now() / 1000 - (+p.get('auth_date') || 0) > 86400) return null;
+  try { const u = JSON.parse(p.get('user') || 'null'); return u && u.id ? u : null; } catch (e) { return null; }
+}
+async function tgAppOrder(env, body) {
+  const user = await tgAppVerify(env, body.initData);
+  if (!user) throw fail('not from Telegram', 401);
+  const c = await tgCtx(env, user.id, user, 0);
+  await tgPlan(c, String(body.pid || ''), Math.max(0, +body.k || 0));
+  await tgSave(c);
+  return { ok: !c.alert, alert: c.alert || '' };
+}
+
+// ---- 3: the USDT card: time left (the cron edits it every 2 minutes), then «وصل» by itself
+function tgMinTxt(n) { return n >= 60 && n % 60 === 0 ? (n === 60 ? 'ساعة' : n === 120 ? 'ساعتين' : n / 60 + ' ساعات') : n === 1 ? 'دقيقة' : n === 2 ? 'دقيقتين' : n <= 10 ? n + ' دقائق' : n + ' دقيقة'; }
+function tgUsdtMins(o, now) { return Math.max(0, Math.ceil(((+(o.pay || {}).exp || 0) - now) / 60e3)); }
+function tgUsdtText(o, now) {
+  const p = o.pay || {}, mins = tgUsdtMins(o, now), frac = Math.max(0, Math.min(1, mins / PAY_MIN)), bars = Math.max(mins > 0 ? 1 : 0, Math.round(frac * 10));
+  const nw = p.net === 'tron' ? 'TRC20' : 'BEP20';
+  return `🪙 <b>الدفع بـ USDT</b> · طلب <code>${esc(o.orderNo || '')}</code>\n<blockquote>حوّل <b>بالضبط</b>: <code>${p.amt}</code> USDT\nالشبكة: <b>${p.net === 'tron' ? 'TRC20 (Tron)' : 'BEP20 (BNB Smart Chain)'}</b>\nالعنوان:\n<code>${esc(p.addr || '')}</code></blockquote>\n` +
+    (mins > 0 ? `⏳ <b>باقي ${tgMinTxt(mins)}</b> · بنتأكد لحالنا أول ما يوصل\n${'▰'.repeat(bars)}${'▱'.repeat(10 - bars)}\n`
+      : `⌛ <b>خلص الوقت</b>. إذا حوّلت اكبس «حوّلت، افحص الدفع» أو كلّمنا برقم الطلب.\n`) +
+    `⚠️ المبلغ لازم يوصل <b>بالضبط</b> لآخر رقم، وعلى ${nw} بس.\n⚠️ من منصة زي بينانس الرسوم بتنخصم، فتأكد إنه اللي بيوصل هو <code>${p.amt}</code>.`;
+}
+function tgUsdtKb(o, id, now) {
+  const p = o.pay || {};
+  return [[tgCopy('📋 انسخ المبلغ', String(p.amt)), tgCopy('📋 انسخ العنوان', p.addr || '')], [tgBtn('🔳 QR للعنوان', 'qr:' + id)],
+    [{ ...tgBtn('🔄 حوّلت، افحص الدفع', 'chk:' + id), style: 'success' }], [tgBtn('📦 طلباتي', 'orders')]];
+}
+async function tgUsdtQr(c, id) {
+  const doc = await c.fs.get('orders/' + id);
+  if (!doc || doc.data.tgChat !== c.chat || !doc.data.pay || !doc.data.pay.addr) { c.alert = 'ما لقينا هالدفعة'; return; }
+  const p = doc.data.pay, url = 'https://api.qrserver.com/v1/create-qr-code/?size=480x480&margin=16&data=' + encodeURIComponent(p.addr);
+  const r = await tg(c.env, 'sendPhoto', { chat_id: c.chat, photo: url, caption: `🔳 امسح العنوان من تطبيق محفظتك\nالمبلغ بالضبط: <code>${p.amt}</code> USDT · ${p.net === 'tron' ? 'TRC20' : 'BEP20'}`, parse_mode: 'HTML' });
+  if (!r) c.alert = 'ما قدرنا نجهّز الـQR هلأ، انسخ العنوان بالزر';
+}
+
+// ---- 4: your place in line for a transfer someone has to look at (pending, with a receipt), and roughly how long
+let TGETA = { at: 0, m: 0 };
+async function tgQueue(fs, id, mine) {
+  const rows = await fs.query('orders', [['status', 'EQUAL', 'pending']], 80);
+  const proof = rows.filter(r => String(r.data.proofText || '').trim() || r.data.proofImage);
+  const me = rows.find(r => r.id === id), t = me ? +me.data.createdAt || mine : mine;
+  const pos = proof.filter(r => r.id !== id && (+r.data.createdAt || 0) < t).length + 1;
+  if (Date.now() - TGETA.at > 15 * 60e3) {
+    TGETA = { at: Date.now(), m: 0 };
+    try {
+      const recent = await fs.query('orders', [['createdAt', 'GREATER_THAN', new Date(Date.now() - 14 * 864e5)]], 150);
+      const waits = recent.map(r => r.data).filter(o => (String(o.proofText || '').trim() || o.proofImage) && !/usdt/i.test(o.payment || ''))
+        .map(o => Math.min(+o.paidAt || Infinity, +o.doneAt || Infinity) - (+o.createdAt || 0)).filter(x => x > 0 && x < 12 * 3600e3).sort((a, b) => a - b);
+      if (waits.length >= 5) TGETA.m = Math.max(5, Math.min(180, Math.round(waits[Math.floor(waits.length / 2)] / 60e3 / 5) * 5));
+    } catch (e) {}
+  }
+  return { pos, eta: TGETA.m };
+}
+const TG_ORD = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر'];
+function tgQueueText(o, q) {
+  const it = (o.items || [])[0] || {};
+  const L = [`📥 <b>وصلنا طلبك، شكراً!</b> · <code>${esc(o.orderNo || '')}</code>`, `<i>${esc(it.productName || '')}${it.planName ? ' · ' + esc(it.planName) : ''} · ${tgN(o.total)} ₪</i>`];
+  if (q) {
+    const place = q.pos === 1 ? '📍 <b>إنت الأول بالدور</b>' : `📍 <b>طلبك ${q.pos <= 10 ? TG_ORD[q.pos - 1] : 'رقم ' + q.pos} بالدور</b>`;
+    L.push(`<blockquote>${place}\n⏱ ${q.eta ? `بنأكده عادة خلال <b>حوالي ${tgMinTxt(q.eta >= 60 ? Math.round(q.eta / 60) * 60 : q.eta)}</b>` : 'بنأكده بأسرع وقت'}</blockquote>`);
+  }
+  L.push('✅ استلمنا', '⏳ <b>تأكيد الدفع</b> ← إنت هون', '▫️ التفعيل', '▫️ التسليم', '', '<i>هالرسالة بتتحدّث لحالها، مش لازم تسأل 🙂</i>');
+  return L.join('\n');
+}
+function tgQueueKb(data, id) { return [[tgBtn('🔄 تحديث', 'o:' + id), tgUrl('💬 الدعم', 'https://t.me/' + tgSupUser(data))], [tgBtn('📦 طلباتي', 'orders'), tgBtn('🏠 الرئيسية', 'home')]]; }
+// cron, for a bot order still waiting: count the USDT card down, move the place in line
+async function tgLive(fs, env, id, d) {
+  const now = Date.now(), f = {}, mask = [];
+  if (d.pay && d.pay.amt && +d.tgPayMsg) {
+    const mins = tgUsdtMins(d, now);
+    if (mins !== +d.tgPayM && BUDGET > 8) {
+      await tgCall(env, 'editMessageText', { chat_id: d.tgChat, message_id: +d.tgPayMsg, text: tgUsdtText(d, now), parse_mode: 'HTML', disable_web_page_preview: true }, tgUsdtKb(d, id, now));
+      f.tgPayM = mins; mask.push('tgPayM');
+    }
+  } else if (+d.tgQMsg && BUDGET > 10) {
+    const q = await tgQueue(fs, id, +d.createdAt || now);
+    if (q.pos !== +d.tgQPos) {
+      if (!TGC.products) await tgData(fs).catch(() => {});
+      await tgCall(env, 'editMessageText', { chat_id: d.tgChat, message_id: +d.tgQMsg, text: tgQueueText(d, q), parse_mode: 'HTML', disable_web_page_preview: true }, tgQueueKb(TGC, id));
+      if (q.pos === 1 && +d.tgQPos > 1) await tg(env, 'sendMessage', { chat_id: d.tgChat, text: '⏫ <b>صرت الأول بالدور!</b> بنأكد دفعتك هلأ.', parse_mode: 'HTML', reply_to_message_id: +d.tgQMsg, allow_sending_without_reply: true });
+      f.tgQPos = q.pos; mask.push('tgQPos');
+    }
+  }
+  if (mask.length) await fs.commit([fs.wUpdate('orders/' + id, f, mask, { exists: true })]);
+}
+// the status moved on: the USDT card says «وصل», the queue card becomes the order's track
+async function tgCardsFollow(fs, env, id, d) {
+  if (!d.tgChat) return;
+  if (+d.tgPayMsg && d.pay && (d.status === 'paid' || d.status === 'done') && !d.tgPayDone) {
+    const tx = d.pay.tx ? [[tgUrl('🔗 شوف التحويل', txLink(d.pay.net, d.pay.tx))]] : [];
+    await tgCall(env, 'editMessageText', { chat_id: d.tgChat, message_id: +d.tgPayMsg, text: `✅ <b>وصل تحويلك!</b> <code>${d.pay.amt}</code> USDT · طلب <code>${esc(d.orderNo || '')}</code>\nتأكد الدفع لحاله، والتفاصيل تحت 👇`, parse_mode: 'HTML', disable_web_page_preview: true }, tx);
+    await fs.commit([fs.wUpdate('orders/' + id, { tgPayDone: 1 }, ['tgPayDone'], { exists: true })]);
+  } else if (+d.tgPayMsg && d.pay && d.status === 'cancelled' && !d.tgPayDone) {
+    await tgCall(env, 'editMessageText', { chat_id: d.tgChat, message_id: +d.tgPayMsg, text: `❌ <b>انلغت هالدفعة</b> · طلب <code>${esc(d.orderNo || '')}</code>\nإذا حوّلت كلّمنا برقم الطلب.`, parse_mode: 'HTML' }, []);
+    await fs.commit([fs.wUpdate('orders/' + id, { tgPayDone: 1 }, ['tgPayDone'], { exists: true })]);
+  }
+  if (+d.tgQMsg && d.status !== 'pending' && d.tgQDone !== d.status) {
+    await tgCall(env, 'editMessageText', { chat_id: d.tgChat, message_id: +d.tgQMsg, text: tgTrack(d), parse_mode: 'HTML', disable_web_page_preview: true }, [[tgBtn('🔄 تحديث', 'o:' + id), tgBtn('📦 طلباتي', 'orders')]]);
+    await fs.commit([fs.wUpdate('orders/' + id, { tgQDone: d.status }, ['tgQDone'], { exists: true })]);
+  }
+}
+
+// ---- 5: an order left at the payment for an hour gets one gentle message (once a week at most, never after «لا تبعتلي»)
+async function tgNudges(fs, env, C, now) {
+  if (now - (+C.nud || 0) < 10 * 60e3 || BUDGET < 14) return;
+  C.nud = now;
+  const rows = await fs.query('tgBot', [['at', 'GREATER_THAN', now - 85 * 60e3]], 40);
+  let sent = 0;
+  for (const r of rows) {
+    if (sent >= 4 || BUDGET < 8) break;
+    const S = r.data, age = now - (+S.at || 0);
+    if (age < 60 * 60e3 || !S.pid || !S.plan || (S.q && S.q.length && S.q[0] !== 'proof')) continue;
+    const u = await fs.get('tgUsers/' + r.id).catch(() => null), ud = (u && u.data) || {};
+    if (ud.noNudge || ud.off || now - (+ud.nud || 0) < 7 * 864e5) continue;
+    if (!TGC.products) await tgData(fs);
+    const p = TGC.products.find(x => x.id === S.pid), pl = p && p.plans.find(x => x.id === S.plan);
+    if (!p || !pl || p.soldOut || pl.out) continue;
+    const text = `👋 لسا بدك <b>${esc(tgVName(p, pl))}</b>؟\nطلبك محفوظ، بتكمّله من مكان ما وقفت 👇\n<blockquote>💰 ${tgN(pl.price)} ₪ · ⚡ التفعيل خلال دقائق بعد الدفع${pl.tgWar ? '\n🛡 ' + esc(String(pl.tgWar).trim()) : ''}</blockquote>`;
+    const kb = [[{ ...tgBtn('✅ كمّل طلبي', 'nk'), style: 'success' }], [tgBtn('💬 عندي سؤال', 'sup'), tgBtn('🕓 مش هلأ', 'nl')], [tgBtn('🔕 لا تبعتلي تذكير زي هيك', 'nn')]];
+    await tg(env, 'sendMessage', { chat_id: +r.id, text, parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
+    await fs.commit([fs.wUpdate('tgUsers/' + r.id, { nud: now }, ['nud'])]);
+    sent++;
+  }
+}
+
+// ---- 6: invite a friend: the friend gets a discount on the first order, the inviter gets credit when the friend buys
+const REF_DEF = 1;
+function tgRefAmt(data) { const v = ((data && data.settings) || {}).refOff; return v === undefined || v === null || v === '' || isNaN(+v) ? REF_DEF : Math.max(0, Math.min(50, +v)); }
+function tgRefCode(chat) { return Math.abs(+chat).toString(36); }
+async function tgDeal(c, price) {
+  const u = await tgU(c), R = tgRefAmt(c.data), out = { price: +price, ref: 0, credit: 0 };
+  if (u.refBy && !u.refUsed && R > 0) out.ref = Math.min(R, Math.max(0, out.price - 1));
+  const cr = Math.max(0, +u.credit || 0);
+  if (cr > 0) out.credit = Math.round(Math.min(cr, Math.max(0, out.price - out.ref - 1)) * 100) / 100;
+  out.total = Math.round((out.price - out.ref - out.credit) * 100) / 100;
+  return out;
+}
+function tgDealLines(d) {
+  if (!d.ref && !d.credit) return '';
+  return (d.ref ? `\n🎁 خصم الدعوة: <b>−${tgN(d.ref)} ₪</b>` : '') + (d.credit ? `\n💰 من رصيد الدعوات: <b>−${tgN(d.credit)} ₪</b>` : '') + `\n🧾 <b>المجموع: ${tgN(d.total)} ₪</b>`;
+}
+function tgDealFields(d, u) { return { ...(d.ref ? { refBy: +u.refBy, refOff: d.ref } : {}), ...(d.credit ? { creditUsed: d.credit } : {}) }; }
+function tgDealWrites(c, d) {
+  const f = {}, tr = [];
+  if (d.ref) f.refUsed = 1;
+  if (d.credit) tr.push({ fieldPath: 'credit', increment: { doubleValue: -d.credit } });
+  if (!d.ref && !d.credit) return [];
+  if (c._u && d.credit) c._u.credit = (+c._u.credit || 0) - d.credit;
+  return [tgUSet(c, f, tr)];
+}
+async function tgRefStart(c, code) {
+  const by = parseInt(code, 36);
+  if (!c.fresh || !by || by === +c.chat || tgRefAmt(c.data) <= 0) return;
+  const d = await c.fs.get('tgUsers/' + by).catch(() => null);
+  if (!d) return;
+  c.newRef = by;
+  const R = tgRefAmt(c.data);
+  await tgSay(c, `أهلين 👋 صاحبك <b>${esc(tgClean(d.data.name || 'صاحبك').split(' ')[0])}</b> عزمك على <b>${esc(tgClean(c.data.settings.storeName) || STORE)}</b>\n🎁 معك <b>${tgN(R)} ₪ خصم</b> على أول طلب، بينخصموا لحالهم.`);
+}
+async function tgRefView(c) {
+  const R = tgRefAmt(c.data);
+  if (R <= 0) { c.alert = 'برنامج الدعوة موقف هلأ'; return; }
+  const bot = await tgMe(c.env), u = await tgU(c), link = `https://t.me/${bot || 'Hazem_storebot'}?start=r_${tgRefCode(c.chat)}`;
+  let n = 0; try { n = await c.fs.count('tgUsers', [['refBy', 'EQUAL', +c.chat]]); } catch (e) {}
+  const text = `🎁 <b>ادعُ صاحبك واكسب</b>\n<blockquote>👤 صاحبك بياخد <b>${tgN(R)} ₪ خصم</b> على أول طلب\n💰 وإنت بتاخد <b>${tgN(R)} ₪ رصيد</b> لما يشتري</blockquote>\n🔗 رابطك:\n<code>${esc(link)}</code>\n<blockquote>📊 دعيت <b>${n}</b> · اشتروا <b>${+u.refN || 0}</b>\n💰 رصيدك من الدعوات: <b>${tgN(+u.credit || 0)} ₪</b></blockquote>\n<i>الرصيد بينخصم لحاله من طلبك الجاي.</i>`;
+  const share = 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent(`🎁 خصم ${tgN(R)} ₪ على أول طلب من ${tgClean(c.data.settings.storeName) || STORE}: اشتراكات رسمية بالشيكل`);
+  return tgView(c, { text, kb: [[{ ...tgUrl('📤 شارك رابطك مع صاحب', share), style: 'primary' }], [tgCopy('📋 انسخ الرابط', link)], [tgBtn('🛍 تسوّق', 'prods'), tgBtn('🏠 الرئيسية', 'home')]] });
+}
+// the friend's order was delivered → the inviter gets the credit; a cancelled order gives back what it used
+async function tgRefSettle(fs, env, id, d) {
+  const w = [];
+  if (d.status === 'done' && +d.refBy && +d.refOff > 0 && !d.refPaid) {
+    w.push(fs.wUpdate('tgUsers/' + d.refBy, {}, [], null, [{ fieldPath: 'credit', increment: { doubleValue: +d.refOff } }, { fieldPath: 'refN', increment: { integerValue: '1' } }]));
+    w.push(fs.wUpdate('orders/' + id, { refPaid: 1 }, ['refPaid'], { exists: true }));
+    await fs.commit(w);
+    await tg(env, 'sendMessage', { chat_id: d.refBy, text: `🎉 <b>صاحبك اشترى!</b> انضافلك <b>${tgN(d.refOff)} ₪</b> رصيد، وبينخصموا لحالهم من طلبك الجاي 🤍`, parse_mode: 'HTML', reply_markup: { inline_keyboard: [[tgBtn('🎁 دعواتي', 'ref'), tgBtn('🛍 تسوّق', 'prods')]] } });
+    return;
+  }
+  if (d.status === 'cancelled' && !d.creditBack && (+d.creditUsed > 0 || +d.refOff > 0) && d.tgChat) {
+    const f = {}, tr = [];
+    if (+d.creditUsed > 0) tr.push({ fieldPath: 'credit', increment: { doubleValue: +d.creditUsed } });
+    if (+d.refOff > 0) f.refUsed = 0;
+    await fs.commit([fs.wUpdate('tgUsers/' + d.tgChat, f, Object.keys(f), null, tr), fs.wUpdate('orders/' + id, { creditBack: 1 }, ['creditBack'], { exists: true })]);
+  }
+}
+
+// ---- 7: one account with the site: link once (from the site's account page), then pay from the balance here
+const FB_WEB_KEY = 'AIzaSyCJ5xs23CeYlxQWuvFxVW_mtuIrvuN5VYY'; // the site's public web key (config.js), only to check a sign-in
+async function tgLinkMake(fs, env, body) {
+  const tok = String(body.idToken || '');
+  if (!tok || tok.length > 5000) throw fail('bad token');
+  const r = await xf('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + (env.FB_WEB_KEY || FB_WEB_KEY), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idToken: tok }) });
+  const j = r.ok ? await r.json().catch(() => null) : null, uid = j && j.users && j.users[0] && j.users[0].localId;
+  if (!uid) throw fail('not signed in', 401);
+  const a = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789', code = [...crypto.getRandomValues(new Uint8Array(20))].map(b => a[b % a.length]).join('');
+  await fs.commit([fs.wUpdate('tgLinks/' + code, { uid, exp: Date.now() + 15 * 60e3 }, null, { exists: false })]);
+  return { url: `https://t.me/${(await tgMe(env)) || 'Hazem_storebot'}?start=l_${code}` };
+}
+async function tgLinkUse(c, code) {
+  const d = await c.fs.get('tgLinks/' + code);
+  if (!d || +d.data.exp < Date.now() || d.data.used) return tgSay(c, '⚠️ رابط الربط انتهى. افتح حسابك على الموقع واكبس «اربط تيليجرام» كمان مرة.', [[tgUrl('🌐 حسابي على الموقع', SITE)], [tgBtn('🏠 الرئيسية', 'home')]]);
+  const uid = d.data.uid, wd = await c.fs.get('wallets/' + uid), w = (wd && wd.data) || {};
+  const writes = [c.fs.wUpdate('tgLinks/' + code, { used: c.chat }, ['used'], { updateTime: d.updateTime }), tgUSet(c, { uid })];
+  if (wd) writes.push(c.fs.wUpdate('wallets/' + uid, { tgChat: c.chat, tgUser: c.from.username || '' }, ['tgChat', 'tgUser'], { exists: true }));
+  try { await c.fs.commit(writes); } catch (e) { return tgSay(c, '⚠️ هالرابط انستعمل. افتح حسابك على الموقع واعمل ربط جديد.'); }
+  c._w = undefined;
+  return tgSay(c, `✅ <b>انربط حسابك بالموقع</b>\n<blockquote>👤 ${esc(tgClean(w.name || '') || 'حسابك')}\n💰 رصيدك: <b>${tgN(+w.balance || 0)} ₪</b>\n📦 طلباتك من البوت بتطلع كمان بحسابك على الموقع</blockquote>\nوقت الدفع بيطلعلك زر «💰 ادفع من رصيدي» 👌`, [[{ ...tgApp('🛍 افتح المتجر'), style: 'primary' }], [tgBtn('🏠 الرئيسية', 'home')]]);
+}
+async function tgWallet(c) {
+  if (c._w !== undefined) return c._w;
+  const u = await tgU(c);
+  c._w = null;
+  if (u.uid) { const d = await c.fs.get('wallets/' + u.uid).catch(() => null); if (d) c._w = { ...d.data, uid: u.uid, _t: d.updateTime }; }
+  return c._w;
+}
+async function tgWalletPay(c) {
+  const x = tgPick(c);
+  if (!x) { c.alert = 'ابدأ الطلب من جديد'; return tgHome(c); }
+  if (tgClosed(c)) { c.alert = 'الطلبات موقفة مؤقتاً، كلّمنا على الدعم'; return; }
+  const u = await tgU(c);
+  if (!u.uid) { c.alert = 'اربط حسابك بالموقع أول'; return; }
+  const deal = await tgDeal(c, x.pl.price), wd = await c.fs.get('wallets/' + u.uid), bal = wd ? +wd.data.balance || 0 : 0;
+  if (!wd || bal < deal.total) { c.alert = `رصيدك ${tgN(bal)} ₪ ما بيكفي لهالطلب`; return; }
+  const { fs, env } = c, id = tgDocId(), no = tgOrderNo(), user = c.from.username || '';
+  const item = { productId: x.p.id, productName: tgClean(x.p.name).slice(0, 100), planId: x.pl.id, planName: tgClean(x.pl.name || '').slice(0, 60), price: +x.pl.price, qty: 1 };
+  const order = { orderNo: no, uid: u.uid, items: [item], total: deal.total, customer: tgClean(wd.data.name || '') || tgWho(c.from), phone: String(wd.data.phone || ''), email: '', payment: 'رصيد', walletPart: deal.total,
+    status: 'paid', source: 'telegram', tgChat: c.chat, tgUser: user, tgSent: 'paid', ...tgDealFields(deal, u) };
+  if (c.S.renew) order.renewOf = String(c.S.renew);
+  try {
+    await fs.commit([
+      fs.wUpdate('wallets/' + u.uid, { balance: Math.round((bal - deal.total) * 100) / 100, lastOrder: id }, ['balance', 'lastOrder'], { updateTime: wd.updateTime }),
+      fs.wUpdate('orders/' + id, order, null, { exists: false }, [{ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' }, { fieldPath: 'paidAt', setToServerValue: 'REQUEST_TIME' }]),
+      fs.wUpdate('payState/main', { tg: { [id]: Date.now() + 10 * 864e5 } }, ['tg.' + fp(id)]),
+      ...tgDealWrites(c, deal),
+    ]);
+  } catch (e) { if (e.status === 400 || e.status === 409) { c.alert = 'رصيدك تغيّر هلأ، جرّب كمان مرة'; return; } throw e; }
+  c.S = {}; c.dirty = true;
+  await notifyAdmin(env, '💰 طلب من البوت مدفوع من الرصيد ' + no, [...itemLines(order), 'المجموع: ' + money(order.total), 'الزبون: ' + order.customer + (user ? ' · @' + user : ''), 'الحالة: مدفوع، بانتظار التفعيل'], SITE + '/admin.html').catch(() => {});
+  await tgAdminNotify(fs, env, id, order, '💰 <b>طلب مدفوع من الرصيد</b>').catch(() => 0);
+  const nb = tgNeedBlock(c.data.settings, order), now = Date.now();
+  const kb = [...(nb ? nb.kb : []), [tgBtn('🔄 تحديث', 'o:' + id), tgBtn('📦 طلباتي', 'orders')]];
+  c.msgId = 0;
+  return tgSay(c, `✅ <b>انخصم ${tgN(deal.total)} ₪ من رصيدك</b> · طلب <code>${no}</code>\n💰 رصيدك هلأ: <b>${tgN(bal - deal.total)} ₪</b>\n\n${tgTrack({ ...order, createdAt: now, paidAt: now })}` + (nb ? '\n\n' + nb.text : ''), kb);
+}
+
+// ---- 8: Hazem's panel: today against yesterday, the week, what needs a look, and quick actions
+async function tgAdminPanel(c, span) {
+  if (!tgIsAdmin(c)) return;
+  const now = Date.now(), l = tgLocal(now), days = span === 'month' ? 30 : 7, from = l.day0 - (days - 1) * 864e5;
+  const rows = await c.fs.query('orders', [['createdAt', 'GREATER_THAN', new Date(from - 1)]], 600);
+  const live = rows.map(r => r.data).filter(o => o.status !== 'cancelled');
+  const dayOf = t => Math.floor((t - from) / 864e5), per = Array(days).fill(0);
+  for (const o of live) { const k = dayOf(+o.createdAt || 0); if (k >= 0 && k < days) per[k] += +o.total || 0; }
+  const today = rows.map(r => r.data).filter(o => (+o.createdAt || 0) >= l.day0), yest = per[days - 2] || 0, tSum = per[days - 1];
+  const cnt = st => today.filter(o => o.status === st).length;
+  let subs = 0; try { subs = await c.fs.count('tgUsers', [['at', 'GREATER_THAN', l.day0 - 1]]); } catch (e) {}
+  const diff = yest > 0 ? Math.round((tSum - yest) / yest * 100) : null;
+  const L = [`📊 <b>لوحة حازم</b> · ${tgWhen(now)}`,
+    `<blockquote>💵 مبيعات اليوم: <b>${tgN(tSum)} ₪</b>${diff === null ? '' : ` (${diff >= 0 ? '↑' : '↓'} ${Math.abs(diff)}% عن أمس)`}\n📦 طلبات اليوم: <b>${today.length}</b> · ✅ ${cnt('done')} · ⏳ ${cnt('pending') + cnt('paid')} · ❌ ${cnt('cancelled')}\n👥 مشتركين جدد بالبوت: <b>${subs}</b></blockquote>`];
+  if (span === 'month') {
+    const total = per.reduce((a, b) => a + b, 0), n = live.length;
+    L.push(`<b>آخر 30 يوم</b>\n💵 <b>${tgN(total)} ₪</b> من <b>${n}</b> طلب · بالمعدل ${tgN(Math.round(total / 30))} ₪ باليوم`);
+  } else {
+    const max = Math.max(1, ...per), lines = [];
+    for (let k = 0; k < days; k++) {
+      const t = from + k * 864e5 + 12 * 3600e3, wd = TG_WD[tgLocal(t).wd] || '';
+      lines.push(`${'▇'.repeat(Math.max(per[k] > 0 ? 1 : 0, Math.round(per[k] / max * 10))) || '▫️'} ${tgN(per[k])} ₪ · ${wd}`);
+    }
+    L.push('<b>هالأسبوع</b>', lines.join('\n'));
+  }
+  // what needs a look: money that came with no order, plans running out of codes, subscriptions ending tomorrow
+  const att = [];
+  try {
+    const st = await c.fs.get('payState/main'), seen = (st && Array.isArray(st.data.seen)) ? st.data.seen : [];
+    for (const t of seen.filter(t => t.k && !t.u && now - (+t.at || 0) < 2 * 864e5).slice(-3)) att.push(`• تحويل USDT ‎${r3(t.a)} بدون طلب`);
+  } catch (e) {}
+  try {
+    const inst = c.data.products.filter(p => p.plans.some(pl => pl.instant));
+    await tgCounts(c, inst);
+    for (const p of inst) for (const pl of p.plans) if (pl.instant && !pl.out && !p.soldOut) { const n = tgLeft(c.data, p, pl); if (n <= 2) att.push(`• ${esc(tgVName(p, pl))} ضايل منه ${n} بالمخزون`); }
+  } catch (e) {}
+  const soon = await tgEnding(c, now).catch(() => []);
+  if (soon.length) att.push(`• ${soon.length} ${soon.length === 1 ? 'زبون اشتراكه بيخلص' : 'زباين اشتراكاتهم بتخلص'} خلال يومين`);
+  if (att.length) L.push(`<blockquote>⚠️ <b>بدها انتباه</b>\n${att.slice(0, 6).join('\n')}</blockquote>`);
+  const pend = (await c.fs.query('orders', [['status', 'EQUAL', 'pending']], 40).catch(() => [])).length + (await c.fs.query('orders', [['status', 'EQUAL', 'paid']], 40).catch(() => [])).length;
+  const kb = [[{ ...tgBtn(`⏳ الطلبات المعلّقة (${pend})`, 'apend'), style: 'primary' }], [tgBtn('📢 إعلان للمشتركين', 'post'), tgBtn('🔥 عرض لوقت محدود', 'sl')],
+    [tgBtn(`🔔 بيخلصوا قريب (${soon.length})`, 'adms'), span === 'month' ? tgBtn('📈 هالأسبوع', 'adm') : tgBtn('📈 آخر 30 يوم', 'admw')], [tgBtn('🔄 تحديث', span === 'month' ? 'admw' : 'adm'), tgBtn('🏠 الرئيسية', 'home')]];
+  return tgView(c, { text: L.join('\n'), kb });
+}
+// subscriptions (site and bot) ending within two days that nobody reminded yet
+async function tgEnding(c, now) {
+  const rows = await c.fs.query('orders', [['status', 'EQUAL', 'done']], 600), out = [];
+  for (const r of rows) {
+    const o = r.data;
+    (o.items || []).forEach((it, ix) => {
+      const end = tgItemEnd(o, it, c.data.products), rem = o.remind && o.remind[ix];
+      if (!end || end < now - 864e5 || end - now > 2 * 864e5 || (rem && +rem.end === end) || +o.tgRenew === end) return;
+      if (rows.some(x => x.data.renewOf === r.id)) return;
+      out.push({ id: r.id, o, it, end });
+    });
+  }
+  return out.sort((a, b) => a.end - b.end);
+}
+async function tgAdminSoon(c) {
+  if (!tgIsAdmin(c)) return;
+  const now = Date.now(), list = (await tgEnding(c, now)).slice(0, 12);
+  if (!list.length) return tgView(c, { text: '🔔 ما في اشتراكات بتخلص خلال يومين 👌', kb: [[tgBtn('« اللوحة', 'adm')]] });
+  const st = tgClean(c.data.settings.storeName) || STORE;
+  const kb = list.map(x => {
+    const nm = tgClean(x.o.customer || 'زبون').split(' ')[0], when = Math.max(0, Math.ceil((x.end - now) / 864e5));
+    const msg = `مرحباً ${nm}، حابب أذكّرك إنه اشتراكك ${tgClean(x.it.productName || '')}${x.it.planName ? ' (' + tgClean(x.it.planName) + ')' : ''} ${when <= 0 ? 'بيخلص اليوم' : when === 1 ? 'بيخلص بكرة' : 'بيخلص بعد يومين'}. إذا حابب تجدّده بلّغني 🤍\n${st}`;
+    const ph = String(x.o.phone || '').replace(/\D/g, '');
+    const url = x.o.tgChat && x.o.tgUser ? 'https://t.me/' + tgUserName(x.o.tgUser) : ph.length >= 9 ? `https://wa.me/${ph.replace(/^0/, '970')}?text=${encodeURIComponent(msg)}` : '';
+    const label = `${when <= 0 ? '🔴' : '🟠'} ${tgShort(tgClean(x.o.customer || 'زبون'), 14)} · ${tgShort(tgClean(x.it.productName || ''), 14)}`;
+    return [url ? tgUrl(label, url) : tgBtn(label + ' · بدون رقم', 'av:' + x.id)];
+  });
+  kb.push([tgBtn('« اللوحة', 'adm')]);
+  return tgView(c, { text: `🔔 <b>بيخلصوا خلال يومين</b> (${list.length})\nاكبس على الزبون وبتنفتح المحادثة ورسالة التذكير جاهزة 👇\n<i>زباين البوت بيوصلهم تذكير تلقائي قبل 3 أيام.</i>`, kb });
+}
+// the customer paid but the details (email etc.) did not come yet: send them the two ways again
+async function tgAdminAskInfo(c, id) {
+  if (!tgIsAdmin(c)) return;
+  const doc = await c.fs.get('orders/' + id), o = doc && doc.data;
+  if (!o || !o.tgChat) { c.alert = 'هالطلب مش من البوت'; return; }
+  const nb = tgNeedBlock(c.data.settings, o);
+  if (!nb) { c.alert = 'هالطلب ما بده تفاصيل'; return; }
+  const ok = await tg(c.env, 'sendMessage', { chat_id: o.tgChat, text: `📩 <b>بخصوص طلبك</b> <code>${esc(o.orderNo || '')}</code>\n${nb.text}`, parse_mode: 'HTML', reply_markup: { inline_keyboard: nb.kb } });
+  c.alert = ok ? '✅ وصله التذكير' : 'ما وصلته الرسالة (يمكن مسكّر البوت)';
 }
 
 // ---------------------------------------------------------------- times in Gaza
@@ -2436,6 +2888,7 @@ async function tgCastRun(fs, env, s, now) {
   }
   try { await tgDaily(fs, env, C, now); } catch (e) { C.err = 'daily: ' + String(e && e.message).slice(0, 180); }
   try { await tgRenewals(fs, env, C, now); } catch (e) { C.err = 'renew: ' + String(e && e.message).slice(0, 180); }
+  try { await tgNudges(fs, env, C, now); } catch (e) { C.err = 'nudge: ' + String(e && e.message).slice(0, 180); }
   try { await tgJobRun(fs, env); } catch (e) { C.err = String(e && e.message).slice(0, 200); }
   return JSON.stringify(C);
 }

@@ -1915,6 +1915,13 @@ body.has-cbar .foot{padding-bottom:96px}
 .sup-faq details[hidden]{display:none}
 .sup-direct{display:grid;gap:10px;text-align:center;color:var(--muted);font-size:13px;font-weight:600;padding-top:4px}
 .sup-direct .btn{min-height:48px}
+/* v22: link the account to the Telegram bot */
+.tglink{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.tglink.on{border-color:color-mix(in srgb,var(--good) 35%,var(--line))}
+.tglink-i{width:40px;height:40px;border-radius:12px;background:#e8f4fd;color:#229ed9;display:flex;align-items:center;justify-content:center;flex:none}
+.tglink-t{flex:1;min-width:0;display:grid;gap:2px}
+.tglink-t b{font-size:14px}
+.tglink-t small{color:var(--muted);font-size:12.5px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -3760,6 +3767,14 @@ function accountBody(){
   h+='<div class="chips">'+[['orders','طلباتي',S.myOrders.length],['topups','عمليات الشحن',S.myTopups.length],['profile','بياناتي',null]].map(function(t){return '<button class="fchip" data-act="atab" data-id="'+t[0]+'" aria-pressed="'+(S.atab===t[0])+'">'+t[1]+(t[2]!=null?'<span class="n">'+t[2]+'</span>':'')+'</button>'}).join('')+'</div>';
   return h+'<div id="acct-tab" class="stack">'+acctTabHTML()+'</div>';
 }
+/* the shop bot on Telegram: link it to this account once, then pay from the balance in the bot too */
+var TG_API_DEF='https://hazem-pay.aamyw2508.workers.dev';
+function tgApi(){var m=(S.settings.payments||[]).find(isUsdtM);return payApi(m)||TG_API_DEF}
+function tgLinkHTML(w){var on=!!w.tgChat;
+  return '<div class="tglink'+(on?' on':'')+'"><span class="tglink-i">'+svg('send',20)+'</span><span class="tglink-t"><b>'+(on?'مربوط ببوت تيليجرام':'اربط حسابك ببوت تيليجرام')+'</b><small>'+(on?(w.tgUser?'<bdi dir="ltr">@'+esc(w.tgUser)+'</bdi> · ':'')+'بتدفع من رصيدك بالبوت، وطلباتك من البوت بتطلع هون':'وبتدفع من رصيدك بالبوت بكبسة، بدون سكرين')+'</small></span>'+(on?'<span class="pill done">'+svg('check',12)+' مربوط</span>':'<button class="btn sm primary" data-act="tgLink">ربط</button>')+'</div>'}
+function tgLink(el){if(!S.user||!firebase.auth().currentUser){openAccount();return}el.disabled=true;var w=window.open('about:blank','_blank');
+  firebase.auth().currentUser.getIdToken().then(function(tok){return fetch(tgApi()+'/tg/link',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({idToken:tok})})}).then(function(r){return r.json().then(function(j){if(!r.ok||!j.url)throw new Error(j.error||'link');return j.url})})
+   .then(function(url){el.disabled=false;if(w&&!w.closed)w.location.href=url;else location.href=url;toast('بفتحلك البوت، اكبس «ابدأ» عشان ينربط')},function(e){el.disabled=false;if(w&&!w.closed)w.close();toast('ما قدرنا نجهّز الربط هلأ، جرّب كمان مرة');console.warn(e)})}
 function acctTabHTML(){
   if(S.atab==='topups'){
     var tl=S.myTopups.slice().sort(function(a,b){return b.createdAt-a.createdAt});
@@ -3768,7 +3783,7 @@ function acctTabHTML(){
   }
   if(S.atab==='profile'){
     var w=S.wallet||{};
-    return '<label class="field"><span>الاسم</span><input class="inp" id="pr-name" value="'+esc(w.name||'')+'" autocomplete="name"></label>'+phoneFieldHTML('pr-phone',w.phone||'','رقم واتساب')+'<label class="field"><span>الإيميل</span><input class="inp ltr" value="'+esc(S.user.email||'')+'" readonly></label><button class="btn primary block" data-act="saveProfile">'+svg('check',18)+' حفظ</button><button class="btn danger block" data-act="custLogout">'+svg('logout',18)+' تسجيل الخروج</button>';
+    return tgLinkHTML(w)+'<label class="field"><span>الاسم</span><input class="inp" id="pr-name" value="'+esc(w.name||'')+'" autocomplete="name"></label>'+phoneFieldHTML('pr-phone',w.phone||'','رقم واتساب')+'<label class="field"><span>الإيميل</span><input class="inp ltr" value="'+esc(S.user.email||'')+'" readonly></label><button class="btn primary block" data-act="saveProfile">'+svg('check',18)+' حفظ</button><button class="btn danger block" data-act="custLogout">'+svg('logout',18)+' تسجيل الخروج</button>';
   }
   var ol=S.myOrders.slice().sort(function(a,b){return b.createdAt-a.createdAt});
   if(!ol.length)return '<div class="empty">'+svg('bag',26)+'<b>ما في طلبات لسا</b><span>طلباتك والأكواد اللي استلمتها بتظهر هون.</span><button class="btn primary" data-act="cartBrowse">تصفّح الاشتراكات</button></div>';
@@ -4464,7 +4479,7 @@ function settingsHTML(){
    '<section class="card"><div class="card-h"><h2>الأسئلة الشائعة</h2><button class="btn sm" data-act="faqAdd">'+svg('plus',16)+' سؤال</button></div><div class="list-plain" id="st-faq">'+(st.faq||[]).map(faqRowHTML).join('')+'</div></section>'+
    ((st.reviews||[]).length?'<section class="card"><div class="card-h"><h2>آراء قديمة</h2><button class="btn sm" data-act="revTab">التجارب الجديدة</button></div><p class="hint">تجارب الزبائن صارت بتبويب الزبائن ← التجارب، مع نجوم وسكرينات. هدول الآراء القديمة بتضل ظاهرة لحد ما تحذفها.</p><div class="list-plain" id="st-rev">'+(st.reviews||[]).map(revRowHTML).join('')+'</div></section>':'')+
    '<section class="card"><h2>الطلبات</h2><label class="check"><input type="checkbox" id="st-orders"'+(st.siteOrders!==false?' checked':'')+'> سجّل طلبات الزبائن من الموقع بلوحة الطلبات</label></section>'+
-   '<section class="card"><h2>بوت تيليجرام</h2><p class="hint">الزبون بيكلّمك من البوت على يوزر الدعم. يوزرات الأدمن بيقدروا يبعتوا إعلان لكل المشتركين بأمر /post، ويجهّزوا الأيقونات بأمر /icons.</p><label class="field"><span>يوزر الدعم</span><input class="inp ltr" id="st-tgsup" placeholder="hazemstoresupport" value="'+esc(st.tgSupport||'hazemstoresupport')+'"></label><label class="field"><span>يوزرات الأدمن</span><input class="inp ltr" id="st-tgadm" placeholder="hazemstoresupport" value="'+esc(st.tgAdmins||'hazemstoresupport')+'"></label><label class="check"><input type="checkbox" id="st-tgcast"'+(st.tgCast!==false?' checked':'')+'> ابعت إعلان تلقائي لكل مشتركين البوت لما تضيف منتج جديد أو كمية جديدة أو يرجع منتج متوفر أو ينزل سعر</label><label class="field"><span>قناة تيليجرام <em>(اختياري: البوت لازم يكون أدمن فيها)</em></span><input class="inp ltr" id="st-tgchan" placeholder="@HazemStore" value="'+esc(st.tgChannel||'')+'"></label><label class="check"><input type="checkbox" id="st-tgchanauto"'+(st.tgChanAuto!==false?' checked':'')+'> انشر الإعلانات التلقائية والعروض بالقناة كمان</label></section>'+
+   '<section class="card"><h2>بوت تيليجرام</h2><p class="hint">الزبون بيكلّمك من البوت على يوزر الدعم. يوزرات الأدمن بيقدروا يبعتوا إعلان لكل المشتركين بأمر /post، ويجهّزوا الأيقونات بأمر /icons.</p><label class="field"><span>يوزر الدعم</span><input class="inp ltr" id="st-tgsup" placeholder="hazemstoresupport" value="'+esc(st.tgSupport||'hazemstoresupport')+'"></label><label class="field"><span>يوزرات الأدمن</span><input class="inp ltr" id="st-tgadm" placeholder="hazemstoresupport" value="'+esc(st.tgAdmins||'hazemstoresupport')+'"></label><label class="check"><input type="checkbox" id="st-tgcast"'+(st.tgCast!==false?' checked':'')+'> ابعت إعلان تلقائي لكل مشتركين البوت لما تضيف منتج جديد أو كمية جديدة أو يرجع منتج متوفر أو ينزل سعر</label><label class="field"><span>قناة تيليجرام <em>(اختياري: البوت لازم يكون أدمن فيها)</em></span><input class="inp ltr" id="st-tgchan" placeholder="@HazemStore" value="'+esc(st.tgChannel||'')+'"></label><label class="check"><input type="checkbox" id="st-tgchanauto"'+(st.tgChanAuto!==false?' checked':'')+'> انشر الإعلانات التلقائية والعروض بالقناة كمان</label><label class="field"><span>ادعُ صاحبك: الخصم والرصيد <em>(شيكل، 0 بيوقف البرنامج)</em></span><input class="inp ltr" id="st-refoff" type="number" inputmode="decimal" min="0" max="50" step="0.5" value="'+esc(st.refOff==null||st.refOff===''?1:st.refOff)+'"></label><p class="hint">صاحب الزبون بياخد هالمبلغ خصم على أول طلب من البوت، والزبون اللي دعاه بياخد نفس المبلغ رصيد لما صاحبه يستلم طلبه.</p></section>'+
    '<section class="card"><h2>نظام الرصيد</h2><label class="check"><input type="checkbox" id="st-wallet"'+(st.walletEnabled!==false?' checked':'')+'> فعّل حسابات الزبائن والدفع من الرصيد</label><label class="check"><input type="checkbox" id="st-reqlogin"'+(st.requireLogin!==false?' checked':'')+'> لازم الزبون يسجّل دخول قبل ما يشتري (طلباته والأكواد بتنحفظ بحسابه)</label><label class="field"><span>أقل مبلغ لشحن الرصيد</span><input class="inp ltr" id="st-mintop" inputmode="decimal" value="'+esc(st.minTopup||10)+'"></label></section>'+
    '<div class="savebar"><button class="btn primary" data-act="saveSettings">'+svg('check',18)+' حفظ الإعدادات</button></div>'+
    '<section class="card"><h2>الحساب والاتصال</h2>'+(CLOUD?'<p class="hint">متصل بقاعدة البيانات. داخل بحساب <b dir="ltr">'+esc(S.user&&S.user.email)+'</b>.</p>':'<p class="hint">اللوحة مش مربوطة بقاعدة البيانات لسا، وكل شي محفوظ على هذا الجهاز. اتبع دليل التشغيل لربطها.</p>')+'</section>'+
@@ -4507,6 +4522,7 @@ var ACT={
   payGo:payGo,payNow:payNow,paySwitch:paySwitch,payOpen:payOpen,payDrop:payDrop,payResume:payResume,payCheckA:payCheckA,payPing:payPing,notifyTest:notifyTest,
   account:function(el){openAccount(el.dataset.tab)},
   atab:function(el){S.atab=el.dataset.id;refreshAccount(true)},
+  tgLink:function(el){tgLink(el)},
   otab:function(el){S.atab='orders';S.otab=el.dataset.id;refreshAccount(true)},
   ordJump:function(el){var id=el.dataset.id;S.atab='orders';S.otab='all';refreshAccount(true);setTimeout(function(){var r=$('#mo-'+(window.CSS&&CSS.escape?CSS.escape(id):id));if(!r)return;r.scrollIntoView({behavior:smooth(),block:'start'});r.classList.add('flash');setTimeout(function(){r.classList.remove('flash')},1600)},60)},
   authMode:function(){S.authMode=S.authMode==='signup'?'login':'signup';refreshAccount(true)},
@@ -4648,7 +4664,7 @@ var ACT={
     st.features=$$('#st-feats .lrow').map(function(r){return {t:$('.ft-t',r).value.trim(),d:$('.ft-d',r).value.trim(),icon:$('.ft-i',r).value}}).filter(function(f){return f.t});
     st.faq=$$('#st-faq .lrow').map(function(r){return {q:$('.f-q',r).value.trim(),a:$('.f-a',r).value.trim()}}).filter(function(f){return f.q});
     st.reviews=$$('#st-rev .lrow').map(function(r){return {name:$('.r-name',r).value.trim(),city:$('.r-city',r).value.trim(),text:$('.r-text',r).value.trim()}}).filter(function(r){return r.name&&r.text});
-    st.siteOrders=$('#st-orders').checked;if($('#st-tgcast'))st.tgCast=$('#st-tgcast').checked;if($('#st-tgsup')){var tgu=function(v){return String(v||'').trim().replace(/^.*t\.me\//i,'').replace(/^@/,'').replace(/[^A-Za-z0-9_,،\s]/g,'').trim()};st.tgSupport=tgu($('#st-tgsup').value).split(/[\s,،]+/)[0]||'hazemstoresupport';st.tgAdmins=tgu($('#st-tgadm').value).split(/[\s,،]+/).filter(Boolean).join(', ')||'hazemstoresupport';var chv=String(($('#st-tgchan')||{}).value||'').trim().replace(/^.*t\.me\//i,'').replace(/^@/,'').replace(/[^A-Za-z0-9_-]/g,'');st.tgChannel=chv?(/^-100\d+$/.test(chv)?chv:'@'+chv):'';st.tgChanAuto=!!($('#st-tgchanauto')||{}).checked}st.walletEnabled=$('#st-wallet').checked;st.requireLogin=$('#st-reqlogin').checked;st.minTopup=Math.max(1,num($('#st-mintop').value)||10);
+    st.siteOrders=$('#st-orders').checked;if($('#st-tgcast'))st.tgCast=$('#st-tgcast').checked;if($('#st-tgsup')){var tgu=function(v){return String(v||'').trim().replace(/^.*t\.me\//i,'').replace(/^@/,'').replace(/[^A-Za-z0-9_,،\s]/g,'').trim()};st.tgSupport=tgu($('#st-tgsup').value).split(/[\s,،]+/)[0]||'hazemstoresupport';st.tgAdmins=tgu($('#st-tgadm').value).split(/[\s,،]+/).filter(Boolean).join(', ')||'hazemstoresupport';var chv=String(($('#st-tgchan')||{}).value||'').trim().replace(/^.*t\.me\//i,'').replace(/^@/,'').replace(/[^A-Za-z0-9_-]/g,'');st.tgChannel=chv?(/^-100\d+$/.test(chv)?chv:'@'+chv):'';st.tgChanAuto=!!($('#st-tgchanauto')||{}).checked;var rf=$('#st-refoff');if(rf){var rv=+rf.value;st.refOff=isNaN(rv)?1:Math.max(0,Math.min(50,Math.round(rv*2)/2))}}st.walletEnabled=$('#st-wallet').checked;st.requireLogin=$('#st-reqlogin').checked;st.minTopup=Math.max(1,num($('#st-mintop').value)||10);
     el.disabled=true;DB.saveSettings(st).then(function(){cachePublic();el.disabled=false;toast('انحفظت الإعدادات');renderAdmin()}).catch(function(e){el.disabled=false;fail(e)})},
   exportData:function(){openSheet({title:'تصدير البيانات',body:'<p class="hint">انسخ النص واحفظه بمكان آمن'+(FRAMED?'':'، أو نزّله كملف')+'.</p><textarea class="inp ltr" id="exp-ta" readonly style="min-height:180px;font-size:12px">'+esc(exportJSON())+'</textarea><div class="row2"><button class="btn primary" data-act="copyExport">'+svg('copy',18)+' نسخ</button>'+(FRAMED?'':'<button class="btn" data-act="downloadExport">'+svg('download',18)+' تنزيل ملف</button>')+'</div>'})},
   copyExport:function(){copyText($('#exp-ta').value,null)},
