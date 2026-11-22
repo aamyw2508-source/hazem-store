@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-21T00:03:55Z",
+ "fetchedAt": "2026-11-22T19:52:11Z",
  "storeName": "حازم ستور",
  "cats": [
   {
@@ -185,7 +185,7 @@
     {
      "id": "1m",
      "name": "شهر",
-     "price": 70,
+     "price": 120,
      "compare": 0,
      "war": "yes",
      "out": false,
