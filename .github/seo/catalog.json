@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-24T22:37:30Z",
+ "fetchedAt": "2026-11-26T21:44:55Z",
  "storeName": "حازم ستور",
  "cats": [
   {
@@ -252,7 +252,7 @@
    "note": "",
    "domain": "gemini.google.com",
    "active": true,
-   "soldOut": true,
+   "soldOut": false,
    "sort": 5,
    "badge": "",
    "plans": [
@@ -262,16 +262,16 @@
      "price": 20,
      "compare": 0,
      "war": "no",
-     "out": false,
+     "out": true,
      "instant": false,
      "acct": "none"
     },
     {
      "id": "h4v3og",
-     "name": "gemini plus 6 اشهر",
-     "price": 15,
+     "name": "GEMIMI PLUS 12 MONTH",
+     "price": 20,
      "compare": 0,
-     "war": "",
+     "war": "no",
      "out": false,
      "instant": false,
      "acct": "email"
@@ -301,7 +301,7 @@
     {
      "id": "1m",
      "name": "شهر",
-     "price": 20,
+     "price": 15,
      "compare": 0,
      "war": "yes",
      "out": false,
